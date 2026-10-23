@@ -1,0 +1,102 @@
+name: CI
+
+# Gate obligatorio: corre en cada push a dev/main y en cada PR.
+# main está protegida: sin este workflow en verde no se puede fusionar.
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [dev, main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verificar:
+    name: verificar
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: eduplatform
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d eduplatform"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # Mismos roles que en local: el runtime va con app_user (sujeto a RLS) y
+      # el esquema lo crea app_migrator. Los tests e2e necesitan ambos.
+      DATABASE_URL: postgresql://app_user:app_user_dev@localhost:5432/eduplatform
+      MIGRATOR_URL: postgresql://app_migrator:app_migrator_dev@localhost:5432/eduplatform
+      TOKEN_PEPPER: ci-pepper-0123456789abcdef0123456789abcdef
+      NEXT_PUBLIC_API_URL: http://localhost:4000/api
+      NODE_ENV: test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: pnpm 9.12
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - name: Instalar dependencias
+        run: pnpm install --frozen-lockfile --prod=false
+
+      - name: Crear roles de base de datos
+        run: PGPASSWORD=postgres psql -h localhost -U postgres -d eduplatform -v ON_ERROR_STOP=1 -f packages/database/sql/0000_roles.sql
+
+      - name: Esquema (drizzle push como app_migrator)
+        run: pnpm --filter @eduplatform/database exec drizzle-kit push --force
+        env:
+          DATABASE_URL: ${{ env.MIGRATOR_URL }}
+
+      - name: RLS + seed de permisos
+        run: pnpm --filter @eduplatform/database run db:rls
+        env:
+          DATABASE_URL: ${{ env.MIGRATOR_URL }}
+
+      - name: Formato
+        run: pnpm format:check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Tipos
+        run: pnpm typecheck
+
+      - name: Tests
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+        env:
+          NODE_ENV: production
+
+      - name: Guardar reporte de tests
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reportes
+          path: |
+            **/coverage/**
+            **/test-results/**
+          if-no-files-found: ignore
+          retention-days: 7

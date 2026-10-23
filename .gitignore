@@ -35,6 +35,7 @@ Thumbs.db
 # El repo de GitHub es únicamente la fuente de despliegue (Render/Vercel).
 /docs/
 /diseno/
-/scripts/
+/scripts/*
+!/scripts/preflight.mjs
 /AGENTS.md
 /apps/web/server.mjs
