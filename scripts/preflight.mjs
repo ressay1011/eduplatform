@@ -122,6 +122,7 @@ titulo('5. Formato, lint, tipos y tests');
 correr('formato (prettier --check)', 'pnpm format:check');
 correr('lint (eslint)', 'pnpm lint');
 correr('tipos (tsc --noEmit en todo el monorepo)', 'pnpm typecheck');
+correr('tipos (e2e / Playwright)', 'pnpm e2e:types');
 correr('tests (vitest de todos los paquetes)', 'pnpm test');
 
 // ── 6. Build ──────────────────────────────────────────────────────────────────

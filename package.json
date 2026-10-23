@@ -22,7 +22,12 @@
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml}\"",
     "clean": "turbo run clean",
     "coverage": "turbo run test:coverage",
-    "coverage:check": "node scripts/coverage-floor.mjs"
+    "coverage:check": "node scripts/coverage-floor.mjs",
+    "e2e": "playwright test",
+    "e2e:changed": "playwright test --only-changed",
+    "e2e:ui": "playwright test --ui",
+    "e2e:types": "tsc -p tsconfig.e2e.json",
+    "e2e:install": "playwright install --with-deps chromium"
   },
   "pnpm": {
     "overrides": {
@@ -32,7 +37,9 @@
   "devDependencies": {
     "@eslint/js": "^9.39.5",
     "@next/eslint-plugin-next": "^16.4.2",
+    "@playwright/test": "^1.56.0",
     "@sonar/scan": "^5.0.2",
+    "@types/node": "^22",
     "eslint": "^9",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react-hooks": "^7.1.1",
