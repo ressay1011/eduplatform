@@ -86,7 +86,9 @@ export const ListarUsuariosQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
 });
-export type ListarUsuariosQuery = z.input<typeof ListarUsuariosQuerySchema>;
+// zod 4: el input de `z.coerce.number()` es `unknown`; el servicio usa ya los
+// valores parseados (con defaults), así que el tipo correcto es el de salida.
+export type ListarUsuariosQuery = z.output<typeof ListarUsuariosQuerySchema>;
 
 /** Usuario tal como lo lista/entrega la API (sin hash ni PII sensible extra). */
 export interface UsuarioListado {

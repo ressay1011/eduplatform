@@ -128,4 +128,6 @@ export const ListarPersonasQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
 });
-export type ListarPersonasQuery = z.input<typeof ListarPersonasQuerySchema>;
+// zod 4: `z.coerce.number()` tiene input `unknown`; ya se trabaja con los
+// valores parseados (defaults aplicados), así que el tipo es el de salida.
+export type ListarPersonasQuery = z.output<typeof ListarPersonasQuerySchema>;
