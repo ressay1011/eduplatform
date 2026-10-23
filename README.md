@@ -48,13 +48,13 @@ cp apps/api/.env.example apps/api/.env
 cp apps/web/.env.example apps/web/.env.local
 ```
 
-| Variable | Dónde | Notas |
-|---|---|---|
-| `DATABASE_URL` | `apps/api/.env` | Rol **`app_user`** (RLS activa) |
-| `TOKEN_PEPPER` | `apps/api/.env` | ≥16 caracteres; `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
-| `CORS_ORIGINS` | `apps/api/.env` | Origen exacto de la web, sin barra final |
-| `COOKIE_SAMESITE` | `apps/api/.env` | `lax` con dominio propio; `none` si web y API están en dominios distintos (exige HTTPS) |
-| `NEXT_PUBLIC_API_URL` | `apps/web/.env.local` | Incluye `/api`; se fija en **build** |
+| Variable              | Dónde                 | Notas                                                                                      |
+| --------------------- | --------------------- | ------------------------------------------------------------------------------------------ |
+| `DATABASE_URL`        | `apps/api/.env`       | Rol **`app_user`** (RLS activa)                                                            |
+| `TOKEN_PEPPER`        | `apps/api/.env`       | ≥16 caracteres; `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
+| `CORS_ORIGINS`        | `apps/api/.env`       | Origen exacto de la web, sin barra final                                                   |
+| `COOKIE_SAMESITE`     | `apps/api/.env`       | `lax` con dominio propio; `none` si web y API están en dominios distintos (exige HTTPS)    |
+| `NEXT_PUBLIC_API_URL` | `apps/web/.env.local` | Incluye `/api`; se fija en **build**                                                       |
 
 ## Puesta en marcha
 

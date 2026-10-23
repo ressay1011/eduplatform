@@ -23,7 +23,7 @@ services:
     startCommand: node apps/api/dist/main.js
     envVars:
       - key: NODE_VERSION
-        value: "22"
+        value: '22'
       - key: NODE_ENV
         value: production
       # Web y API no comparten dominio registrable (Vercel + onrender.com):
