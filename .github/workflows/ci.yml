@@ -63,10 +63,22 @@ jobs:
       - name: Crear roles de base de datos
         run: PGPASSWORD=postgres psql -h localhost -U postgres -d eduplatform -v ON_ERROR_STOP=1 -f packages/database/sql/0000_roles.sql
 
+      # drizzle-kit importa el esquema, que importa @eduplatform/types desde
+      # dist/: sin compilarlo antes, el push muere con MODULE_NOT_FOUND.
+      - name: Compilar paquetes para el esquema
+        run: pnpm --filter @eduplatform/types run build
+
       - name: Esquema (drizzle push como app_migrator)
         run: pnpm --filter @eduplatform/database exec drizzle-kit push --force
         env:
           DATABASE_URL: ${{ env.MIGRATOR_URL }}
+
+      # drizzle-kit puede salir con 0 aunque falle: se comprueba la tabla.
+      - name: Verificar que el esquema existe
+        run: |
+          TABLA=$(PGPASSWORD=postgres psql -h localhost -U postgres -d eduplatform -tAc "select to_regclass('public.sedes')")
+          echo "to_regclass(public.sedes) = $TABLA"
+          test "$TABLA" = "sedes" || { echo "::error::drizzle push no creó el esquema"; exit 1; }
 
       - name: RLS + seed de permisos
         run: pnpm --filter @eduplatform/database run db:rls
@@ -82,15 +94,15 @@ jobs:
       - name: Tipos
         run: pnpm typecheck
 
-      - name: Tests
-        run: pnpm test
+      - name: Tests con cobertura
+        run: pnpm coverage
 
       - name: Build
         run: pnpm build
         env:
           NODE_ENV: production
 
-      - name: Guardar reporte de tests
+      - name: Guardar reportes (cobertura para Sonar)
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -98,5 +110,31 @@ jobs:
           path: |
             **/coverage/**
             **/test-results/**
-          if-no-files-found: ignore
+          if-no-files-found: warn
           retention-days: 7
+
+  # Sonar solo corre si el repositorio tiene configurado SONAR_ENABLED=true y
+  # los secretos SONAR_TOKEN + SONAR_HOST_URL (requiere servidor propio o
+  # SonarCloud de pago: el repo es privado).
+  sonar:
+    name: sonar
+    runs-on: ubuntu-latest
+    needs: verificar
+    if: ${{ vars.SONAR_ENABLED == 'true' }}
+    timeout-minutes: 15
+    steps:
+      - name: Checkout (historial completo para el blame)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Descargar cobertura
+        uses: actions/download-artifact@v4
+        with:
+          name: reportes
+
+      - name: Escanear con SonarQube
+        uses: SonarSource/sonarqube-scan-action@v5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}

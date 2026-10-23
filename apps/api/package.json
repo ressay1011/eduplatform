@@ -8,7 +8,8 @@
     "start": "node dist/main.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@eduplatform/database": "workspace:*",
@@ -36,6 +37,7 @@
     "@types/express": "^5.0.0",
     "@types/node": "^22.10.0",
     "@types/supertest": "^6.0.0",
+    "@vitest/coverage-v8": "^2.1.9",
     "supertest": "^7.0.0",
     "typescript": "^5.6.0",
     "unplugin-swc": "^1.5.1",
