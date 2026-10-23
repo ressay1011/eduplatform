@@ -1,4 +1,6 @@
 /** Constantes del módulo de autenticación. */
+import { hashSync } from 'bcrypt';
+import { randomBytes } from 'node:crypto';
 
 /** Nombre de la cookie httpOnly que transporta la sesión. */
 export const SESION_COOKIE = 'eduplatform_sesion';
@@ -18,9 +20,20 @@ export const ACTIVIDAD_THROTTLE_MS = 5 * 60 * 1000;
 export const BCRYPT_ROUNDS = 12;
 
 /**
- * Hash señuelo (coste 12, de una contraseña aleatoria ya descartada).
+ * Hash señuelo (coste 12, generado al primer uso desde bytes aleatorios).
  * Se compara contra él cuando el correo no existe, para que el tiempo de
  * respuesta sea el mismo que con una cuenta real y no se puedan enumerar
  * usuarios por timing (S3 del informe).
+ *
+ * Se genera en memoria a propósito: un hash bcrypt literal en el código es un
+ * secreto embebido (Sonar `secrets:S8215`) y además no aporta nada, porque el
+ * señuelo solo tiene que costar lo mismo que un hash real.
  */
-export const HASH_SENUELO = '$2b$12$WkFfutUPIr6AOpFkO1b/9eDkNTdKe6nMn/t2tRo8.bBmYFhBiS.uq';
+let cacheSenuelo: string | null = null;
+
+export function hashSenuelo(): string {
+  if (cacheSenuelo === null) {
+    cacheSenuelo = hashSync(randomBytes(32).toString('base64'), BCRYPT_ROUNDS);
+  }
+  return cacheSenuelo;
+}

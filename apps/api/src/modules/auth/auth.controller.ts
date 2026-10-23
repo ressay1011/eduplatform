@@ -35,9 +35,9 @@ import { Public } from './decorators/public.decorator';
 
 const THROTTLE_TTL_MS = 60_000;
 
-/** ETag fuerte del payload (sha1 en base64) para revalidación con 304. */
+/** ETag fuerte del payload (sha256 en base64) para revalidación con 304. */
 function calcularEtag(data: ContextoColegioPublico): string {
-  return `"${createHash('sha1').update(JSON.stringify(data)).digest('base64')}"`;
+  return `"${createHash('sha256').update(JSON.stringify(data)).digest('base64')}"`;
 }
 
 @Controller('auth')
