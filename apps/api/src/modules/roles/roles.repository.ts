@@ -69,7 +69,7 @@ export class RolesRepository extends BaseRepository {
 
       return filas.map((fila) => ({
         ...fila,
-        permisos: (permisosPorRol.get(fila.id) ?? []).sort(),
+        permisos: (permisosPorRol.get(fila.id) ?? []).sort((a, b) => a.localeCompare(b)),
         personas: personasPorRol.get(fila.id) ?? 0,
       }));
     });

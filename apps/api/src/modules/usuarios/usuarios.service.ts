@@ -531,7 +531,7 @@ export class UsuariosService {
       activo: fila.activo,
       debeCambiarPassword: fila.debeCambiarPassword,
       ultimoAcceso: fila.ultimoAcceso === null ? null : fila.ultimoAcceso.toISOString(),
-      permisos: [...permisos].sort(),
+      permisos: [...permisos].sort((a, b) => a.localeCompare(b)),
       rolId: fila.rolId,
       rolNombre: fila.rolId === null ? null : (rolPorId.get(fila.rolId) ?? null),
       alcance: fila.alcance,
