@@ -38,9 +38,9 @@ export function nombreModulo(modulo: string): string {
   return NOMBRES_MODULO[modulo] ?? modulo;
 }
 
-/** Texto del alcance para la tabla de empleados. */
+/** Texto del alcance para la tabla de empleados (el diseño dice «Todas»). */
 export function textoAlcance(alcance: 'TODAS' | 'ESPECIFICAS', sedes: readonly string[]): string {
-  if (alcance === 'TODAS') return 'Todas las sedes';
+  if (alcance === 'TODAS') return 'Todas';
   if (sedes.length === 0) return 'Sin sede asignada';
   return sedes.join(', ');
 }

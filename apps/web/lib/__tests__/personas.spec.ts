@@ -30,7 +30,7 @@ describe('nombreModulo', () => {
 
 describe('textoAlcance', () => {
   it('resume el alcance por sede', () => {
-    expect(textoAlcance('TODAS', [])).toBe('Todas las sedes');
+    expect(textoAlcance('TODAS', [])).toBe('Todas');
     expect(textoAlcance('ESPECIFICAS', [])).toBe('Sin sede asignada');
     expect(textoAlcance('ESPECIFICAS', ['Sede A', 'Sede B'])).toBe('Sede A, Sede B');
   });
