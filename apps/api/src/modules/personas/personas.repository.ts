@@ -118,6 +118,16 @@ export class PersonasRepository extends BaseRepository {
           codigoMatricula: estudiantes.codigoMatricula,
           estado: estudiantes.estado,
           activo: usuarios.activo,
+          // Acudiente principal del estudiante: el primero marcado como tal.
+          acudiente: sql<string | null>`(
+            select ua.nombres || ' ' || ua.apellidos
+            from acudientes_estudiantes ae
+            join usuarios ua on ua.id = ae.acudiente_id
+            where ae.estudiante_id = ${estudiantes.id}
+              and ae.colegio_id = ${ctx.colegioId}
+            order by ae.es_principal desc, ua.nombres
+            limit 1
+          )`,
           total: sql<number>`count(*) over ()`,
         })
         .from(estudiantes)
@@ -159,6 +169,7 @@ export class PersonasRepository extends BaseRepository {
           email: usuarios.email,
           activo: usuarios.activo,
           estudiantes: sql<string[]>`array_agg(${usuarioEstudiante.nombres} || ' ' || ${usuarioEstudiante.apellidos})`,
+          telefono: sql<string | null>`max(${acudientesEstudiantes.telefono})`,
           total: sql<number>`count(*) over ()`,
         })
         .from(acudientesEstudiantes)
@@ -178,6 +189,7 @@ export class PersonasRepository extends BaseRepository {
           apellidos: fila.apellidos,
           numeroDocumento: fila.numeroDocumento,
           email: fila.email,
+          telefono: fila.telefono,
           activo: fila.activo,
           estudiantes: fila.estudiantes.filter((nombre): nombre is string => nombre !== null),
         })),

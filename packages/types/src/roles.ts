@@ -97,6 +97,8 @@ export interface PersonaEstudiante {
   codigoMatricula: string;
   estado: string;
   curso: string | null;
+  /** Acudiente principal (nombre completo) si ya está vinculado. */
+  acudiente: string | null;
   activo: boolean;
 }
 
@@ -107,6 +109,8 @@ export interface PersonaAcudiente {
   apellidos: string;
   numeroDocumento: string;
   email: string;
+  /** Teléfono declarado en el vínculo con el estudiante (si lo hay). */
+  telefono: string | null;
   activo: boolean;
   estudiantes: string[];
 }
