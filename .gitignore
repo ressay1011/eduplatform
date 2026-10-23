@@ -16,6 +16,9 @@ coverage/
 .env.*.local
 !.env.example
 
+# CLI de Vercel (project.json y entorno local)
+.vercel
+
 # Sistema / editores
 .DS_Store
 Thumbs.db

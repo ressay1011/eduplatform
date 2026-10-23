@@ -87,9 +87,10 @@ pnpm --filter @eduplatform/database run test
 
 ## Base de datos y despliegue
 
-**Producción actual:** API en `https://eduplatform-api-0yrs.onrender.com`
-(Render free, Virginia, health `/api/health`) sobre PostgreSQL en Neon
-(`aws-us-east-1`). Web: pendiente de Vercel.
+**Producción actual:** web en `https://eduplatform-ivory.vercel.app` (Vercel,
+root `apps/web`, deploy automático desde `main`) y API en
+`https://eduplatform-api-0yrs.onrender.com` (Render free, Virginia, health
+`/api/health`) sobre PostgreSQL en Neon (`aws-us-east-1`).
 
 ```bash
 # Bootstrap de Neon (crea app_migrator/app_user y la base; imprime las URLs)
