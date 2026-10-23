@@ -1,0 +1,37 @@
+# Dependencias
+node_modules/
+
+# Builds
+.turbo/
+dist/
+.next/
+out/
+build/
+coverage/
+*.tsbuildinfo
+
+# Entorno (NUNCA commitear secretos — copiar de .env.example)
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Sistema / editores
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Datos locales de Docker (si se llegan a montar)
+.docker-data/scripts/*.log
+
+# === Solo local: no se publica en el remoto de producción ===
+# El repo de GitHub es únicamente la fuente de despliegue (Render/Vercel).
+/docs/
+/diseno/
+/scripts/
+/AGENTS.md
+/apps/web/server.mjs

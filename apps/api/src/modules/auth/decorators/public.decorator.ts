@@ -1,0 +1,6 @@
+/** Marca un endpoint como público (sin sesión) para el AuthGuard global. */
+import { SetMetadata } from '@nestjs/common';
+
+export const IS_PUBLIC_KEY = 'is_public';
+
+export const Public = (): MethodDecorator & ClassDecorator => SetMetadata(IS_PUBLIC_KEY, true);

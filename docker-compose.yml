@@ -1,0 +1,40 @@
+# =============================================================================
+# Docker Compose — entorno de DESARROLLO (PostgreSQL 16)
+# Uso:
+#   docker compose up -d            # levanta PostgreSQL
+#   pnpm db:push && pnpm db:rls     # crea el esquema y aplica RLS + seed
+#   docker compose down             # detiene (los datos quedan en el volumen)
+#   docker compose down -v          # detiene y BORRA los datos
+# =============================================================================
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: eduplatform-postgres
+    environment:
+      # Superusuario SOLO para init/administración local del contenedor.
+      # La API se conecta con app_user (sujeto a RLS) y las migraciones con
+      # app_migrator — creados por 0000_roles.sql en el primer arranque.
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: eduplatform
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./packages/database/sql/0000_roles.sql:/docker-entrypoint-initdb.d/0000_roles.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d eduplatform"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - eduplatform-net
+
+networks:
+  eduplatform-net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    name: eduplatform-postgres-data
