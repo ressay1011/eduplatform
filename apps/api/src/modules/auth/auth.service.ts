@@ -22,7 +22,7 @@ import { AuditService } from '../../shared/audit.service';
 import { platformTenantContext } from '../../shared/platform-context';
 import {
   BLOQUEO_MINUTOS,
-  HASH_SENUELO,
+  hashSenuelo,
   MAX_INTENTOS_FALLIDOS,
   SESION_TTL_MS,
   SESION_TTL_RECORDAR_MS,
@@ -195,7 +195,7 @@ export class AuthService {
     const usuario = await this.repo.findUsuarioPorEmail(ctx, dto.email);
     if (usuario === null) {
       // Comparación contra un hash señuelo: mismo coste que una cuenta real.
-      await this.passwords.verify(dto.password, HASH_SENUELO);
+      await this.passwords.verify(dto.password, hashSenuelo());
       await this.audit.registrar({
         accion: 'LOGIN_FAILED',
         entidad: 'auth',
@@ -207,7 +207,7 @@ export class AuthService {
     }
     if (!usuario.activo) {
       // Misma respuesta que una clave errada: no revela que la cuenta existe.
-      await this.passwords.verify(dto.password, HASH_SENUELO);
+      await this.passwords.verify(dto.password, hashSenuelo());
       await this.audit.registrar({
         accion: 'LOGIN_FAILED',
         entidad: 'auth',
@@ -291,7 +291,7 @@ export class AuthService {
     const usuario = await this.repo.findPlataformaUsuarioPorEmail(ctx, dto.email);
     if (usuario === null || !usuario.activo) {
       // Mismo coste y mismo mensaje que una clave errada (anti-enumeración).
-      await this.passwords.verify(dto.password, HASH_SENUELO);
+      await this.passwords.verify(dto.password, hashSenuelo());
       await this.audit.registrar({
         accion: 'LOGIN_FAILED',
         entidad: 'auth.plataforma',
