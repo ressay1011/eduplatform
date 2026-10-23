@@ -1,5 +1,5 @@
 /** Campo de texto M3 (outlined, label flotante, helper/error accesible). */
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 
 interface TextFieldProps {
   id: string;
@@ -37,9 +37,17 @@ export function TextField({
   const helperId = `${id}-helper`;
   const mensaje = error ?? ayuda;
 
+  // `autoFocus` en el atributo lo marca Sonar (S9379) por accesibilidad y
+  // porque React no siempre lo aplica tras la hidratación: el ref es determinista.
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (autoFocus) ref.current?.focus();
+  }, [autoFocus]);
+
   return (
     <div className={`m3-textfield${error !== null ? ' error' : ''}`}>
       <input
+        ref={ref}
         id={id}
         name={id}
         type={tipo}
@@ -49,7 +57,6 @@ export function TextField({
         onChange={(e) => onChange(e.target.value)}
         onBlur={onBlur}
         autoComplete={autoComplete}
-        autoFocus={autoFocus}
         disabled={disabled}
         aria-invalid={error !== null ? true : undefined}
         aria-describedby={mensaje !== undefined ? helperId : undefined}

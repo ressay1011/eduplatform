@@ -13,9 +13,9 @@ function parseHex(hex: string): Rgb | null {
   const limpio = hex.trim().replace('#', '');
   if (!/^[0-9a-fA-F]{6}$/.test(limpio)) return null;
   return {
-    r: parseInt(limpio.slice(0, 2), 16),
-    g: parseInt(limpio.slice(2, 4), 16),
-    b: parseInt(limpio.slice(4, 6), 16),
+    r: Number.parseInt(limpio.slice(0, 2), 16),
+    g: Number.parseInt(limpio.slice(2, 4), 16),
+    b: Number.parseInt(limpio.slice(4, 6), 16),
   };
 }
 

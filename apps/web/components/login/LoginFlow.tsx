@@ -23,9 +23,7 @@ import { SESION_KEY } from '@/hooks/useSesion';
 import { ApiError, getContextoPorDominio, iniciarSesion, type ContextoConSede } from '@/lib/api';
 import { aplicarBranding } from '@/lib/branding';
 import { inicialesDe } from '@/lib/subdominio';
-
-/** Mismo formato que valida Zod en el API (el servidor SIEMPRE revalida). */
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+import { esEmailValido } from '@/lib/validacion';
 
 /** Clave de caché del contexto: por dominio, la llave del login unificado. */
 function claveContexto(dominio: string) {
@@ -73,7 +71,7 @@ export function LoginFlow() {
         setErrorEmail('Ingresa tu correo institucional.');
         return;
       }
-      if (!EMAIL_REGEX.test(valor)) {
+      if (!esEmailValido(valor)) {
         setErrorEmail('Formato de correo inválido.');
         return;
       }
