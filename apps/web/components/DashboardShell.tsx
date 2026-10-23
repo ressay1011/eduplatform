@@ -12,9 +12,9 @@
  */
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { SESION_KEY, useSesion } from '@/hooks/useSesion';
-import { cerrarSesion } from '@/lib/api';
+import { cerrarSesion, getOnboarding } from '@/lib/api';
 import { inicialesDe } from '@/lib/subdominio';
 
 interface ItemNav {
@@ -54,6 +54,15 @@ export function DashboardShell({ seccion, breadcrumb, children }: DashboardShell
   const router = useRouter();
   const queryClient = useQueryClient();
   const { data: sesion, isError } = useSesion();
+  const esAdminColegio = sesion?.tipo === 'colegio' && sesion.usuario.esAdmin;
+  // El wizard es obligatorio para el admin hasta cerrarlo (mínimo: sede+curso).
+  const { data: onboarding } = useQuery({
+    queryKey: ['onboarding'],
+    queryFn: getOnboarding,
+    enabled: esAdminColegio,
+    retry: false,
+    staleTime: 30_000,
+  });
   const [aviso, setAviso] = useState<string | null>(null);
   const [saliendo, setSaliendo] = useState(false);
   const [menuAbierto, setMenuAbierto] = useState(false);
@@ -61,6 +70,13 @@ export function DashboardShell({ seccion, breadcrumb, children }: DashboardShell
   useEffect(() => {
     if (isError) router.replace('/login');
   }, [isError, router]);
+
+  // Primer administrador: antes del dashboard, la configuración inicial.
+  useEffect(() => {
+    if (esAdminColegio && onboarding !== undefined && !onboarding.completado) {
+      router.replace('/onboarding');
+    }
+  }, [esAdminColegio, onboarding, router]);
 
   // Primer login: la contraseña temporal debe cambiarse antes de seguir.
   useEffect(() => {

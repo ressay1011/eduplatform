@@ -17,6 +17,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { M3Button } from '@/components/M3Button';
+import { OnboardingChecklist } from '@/components/OnboardingChecklist';
 import { SESION_KEY, useSesion } from '@/hooks/useSesion';
 import { cerrarSesion } from '@/lib/api';
 import { inicialesDe } from '@/lib/subdominio';
@@ -287,6 +288,8 @@ export default function DashboardPage() {
             </h1>
             <p>Resumen institucional · Período 1 (en curso) · cierre el 30 de abril</p>
           </section>
+
+          <OnboardingChecklist />
 
           <section className="dash-kpis" aria-label="Indicadores">
             {KPIS.map((kpi) => (
