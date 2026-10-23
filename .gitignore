@@ -37,6 +37,6 @@ Thumbs.db
 /diseno/
 /scripts/*
 !/scripts/preflight.mjs
-!/scripts/sonar-local.mjs
+!/scripts/sonar.mjs
 /AGENTS.md
 /apps/web/server.mjs
