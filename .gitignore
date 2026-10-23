@@ -40,3 +40,6 @@ Thumbs.db
 !/scripts/sonar.mjs
 /AGENTS.md
 /apps/web/server.mjs
+
+# Salida del escaner de Sonar
+.scannerwork/

@@ -5,6 +5,7 @@ dist/
 .vercel/
 coverage/
 .turbo/
+.scannerwork/
 
 # Diseño (Figma, exports) y lockfile: tienen su propio formato
 diseno/
