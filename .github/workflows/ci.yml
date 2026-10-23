@@ -5,8 +5,8 @@ name: CI
 on:
   push:
     branches: [dev, main]
+  # Cualquier PR, también los apilados sobre otra rama de trabajo.
   pull_request:
-    branches: [dev, main]
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -134,7 +134,7 @@ jobs:
           name: reportes
 
       - name: Escanear con SonarQube
-        uses: SonarSource/sonarqube-scan-action@v5
+        uses: SonarSource/sonarqube-scan-action@v6
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}

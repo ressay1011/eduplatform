@@ -21,6 +21,7 @@ export default tseslint.config(
       '**/node_modules/**',
       '**/coverage/**',
       '**/.vercel/**',
+      '**/.scannerwork/**',
       '**/*.d.ts',
       // Diseño, documentación y utilidades sueltas no son código de la app.
       'diseno/**',
