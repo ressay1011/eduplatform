@@ -16,7 +16,7 @@ services:
     buildCommand: >-
       export COREPACK_ENABLE_DOWNLOAD_PROMPT=0 &&
       corepack enable &&
-      pnpm install --frozen-lockfile &&
+      pnpm install --frozen-lockfile --prod=false &&
       pnpm --filter @eduplatform/types run build &&
       pnpm --filter @eduplatform/database run build &&
       pnpm --filter @eduplatform/api run build
