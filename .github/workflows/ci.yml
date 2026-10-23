@@ -125,7 +125,10 @@ jobs:
     name: sonar
     runs-on: ubuntu-latest
     needs: verificar
-    if: ${{ vars.SONAR_ENABLED == 'true' }}
+    # Dependabot no recibe secretos de Actions, así que su análisis se salta;
+    # para fusionar a dev solo hace falta `verificar` y las PR a main las abre
+    # una persona (con secretos).
+    if: ${{ vars.SONAR_ENABLED == 'true' && github.actor != 'dependabot[bot]' }}
     timeout-minutes: 15
     steps:
       - name: Checkout (historial completo para el blame)
