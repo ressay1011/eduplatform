@@ -1,19 +1,22 @@
 'use client';
 
 /**
- * Personas → Editor de rol (también crea roles nuevos).
+ * Personas → Editor de rol — réplica del frame «Personas · Editor de rol».
  *
- * El rol agrupa permisos del catálogo; al guardar, la API resincroniza la
+ * Dos tarjetas: «Datos del rol» (nombre, descripción, pestaña, disponible) y
+ * «Permisos del rol» agrupados por módulo. Al guardar, la API resincroniza la
  * proyección `usuarios_permisos` de todas las personas con ese rol.
+ * La misma pantalla crea roles nuevos (`/roles/nuevo`).
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useAviso } from '@/components/DashboardShell';
 import { ErrorBanner } from '@/components/ErrorBanner';
-import { M3Button } from '@/components/M3Button';
-import { TextField } from '@/components/TextField';
+import { PersonasHeader } from '@/components/personas/PersonasHeader';
 import {
   useActualizarRol,
   useCrearRol,
+  useDuplicarRol,
   useEliminarRol,
   useRoles,
 } from '@/hooks/usePersonas';
@@ -23,13 +26,14 @@ import { agruparPermisos, nombreModulo } from '@/lib/personas';
 import type { TipoPersonaRol } from '@eduplatform/types';
 
 const TIPOS: Array<{ valor: TipoPersonaRol; texto: string }> = [
-  { valor: 'EMPLEADO', texto: 'Empleado (pestaña Empleados)' },
-  { valor: 'ESTUDIANTE', texto: 'Estudiante (pestaña Estudiantes)' },
-  { valor: 'ACUDIENTE', texto: 'Acudiente (pestaña Acudientes)' },
+  { valor: 'EMPLEADO', texto: 'Empleados' },
+  { valor: 'ESTUDIANTE', texto: 'Estudiantes' },
+  { valor: 'ACUDIENTE', texto: 'Acudientes' },
 ];
 
 export default function EditorRolPage() {
   const router = useRouter();
+  const aviso = useAviso();
   const parametros = useParams<{ id: string }>();
   const id = parametros.id ?? '';
   const esNuevo = id === 'nuevo';
@@ -39,6 +43,7 @@ export default function EditorRolPage() {
   const { data: catalogo } = useCatalogoPermisos();
   const crear = useCrearRol();
   const actualizar = useActualizarRol(esNuevo ? '' : id);
+  const duplicar = useDuplicarRol();
   const eliminar = useEliminarRol();
 
   const [nombre, setNombre] = useState('');
@@ -47,22 +52,20 @@ export default function EditorRolPage() {
   const [activo, setActivo] = useState(true);
   const [permisos, setPermisos] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [guardado, setGuardado] = useState(false);
+  const [cargado, setCargado] = useState(false);
 
-  const rol = useMemo(
-    () => (roles?.items ?? []).find((item) => item.id === id),
-    [roles, id],
-  );
+  const rol = useMemo(() => (roles?.items ?? []).find((item) => item.id === id), [roles, id]);
 
   // Carga los valores del rol una sola vez, cuando llega de la API.
   useEffect(() => {
-    if (rol === undefined) return;
+    if (rol === undefined || cargado) return;
     setNombre(rol.nombre);
     setDescripcion(rol.descripcion ?? '');
     setTipoPersona(rol.tipoPersona);
     setActivo(rol.activo);
     setPermisos(rol.permisos);
-  }, [rol]);
+    setCargado(true);
+  }, [rol, cargado]);
 
   const grupos = useMemo(() => agruparPermisos(catalogo ?? []), [catalogo]);
   const sesionColegio = sesion !== undefined && sesion.tipo === 'colegio' ? sesion : null;
@@ -85,10 +88,7 @@ export default function EditorRolPage() {
     const dto = { nombre: nombre.trim(), descripcion: descripcion.trim(), tipoPersona, permisos };
     if (esNuevo) {
       crear.mutate(dto, {
-        onSuccess: () => {
-          setGuardado(true);
-          router.push('/dashboard/personas/roles');
-        },
+        onSuccess: () => router.push('/dashboard/personas/roles'),
         onError: (fallo) => setError(fallo.message),
       });
       return;
@@ -96,16 +96,13 @@ export default function EditorRolPage() {
     actualizar.mutate(
       { ...dto, activo },
       {
-        onSuccess: () => {
-          setGuardado(true);
-          router.push('/dashboard/personas/roles');
-        },
+        onSuccess: () => router.push('/dashboard/personas/roles'),
         onError: (fallo) => setError(fallo.message),
       },
     );
   };
 
-  if (!puedeEditar && sesion !== undefined) {
+  if (sesion !== undefined && !puedeEditar) {
     return (
       <ErrorBanner
         tono="aviso"
@@ -121,126 +118,162 @@ export default function EditorRolPage() {
     return <ErrorBanner titulo="Rol no encontrado" mensaje="Puede que lo hayan eliminado." />;
   }
 
+  const subtitulo = esNuevo
+    ? 'Crea el rol y elige sus permisos'
+    : `${rol?.esPredeterminado === true ? 'Rol predeterminado' : 'Rol personalizado'} · ${
+        rol?.personas ?? 0
+      } ${(rol?.personas ?? 0) === 1 ? 'persona' : 'personas'} · ${permisos.length} permisos`;
+
+  const titulo = esNuevo ? 'Nuevo rol' : (rol?.nombre ?? 'Rol');
+
   return (
-    <>
-      <div className="page-topbar">
-        <M3Button variante="text" icono="arrow_back" onClick={() => router.push('/dashboard/personas/roles')}>
-          Roles
-        </M3Button>
-        <h2 className="m3-title-large" style={{ margin: 0, flex: 1 }}>
-          {esNuevo ? 'Nuevo rol' : `Editar ${rol?.nombre ?? 'rol'}`}
-        </h2>
-        {!esNuevo && rol?.esPredeterminado === true ? (
-          <span className="m3-chip small selected">
-            <span className="m3-label-medium">PREDETERMINADO</span>
-          </span>
-        ) : null}
-      </div>
+    <div className="per-bloque">
+      <PersonasHeader
+        titulo={titulo}
+        subtitulo={subtitulo}
+        volver={{ href: '/dashboard/personas/roles', texto: 'Volver a Roles' }}
+      />
 
-      {error !== null ? <ErrorBanner titulo="No se pudo guardar" mensaje={error} /> : null}
-      {guardado ? (
-        <div className="aviso-inline">
-          Rol guardado. Las personas con este rol ya tienen sus permisos actualizados.
-        </div>
-      ) : null}
+      {error !== null ? <p className="per-error">{error}</p> : null}
 
-      <div className="form-grid">
-        <TextField
-          id="rol-nombre"
-          label="Nombre del rol"
-          tipo="text"
-          value={nombre}
-          onChange={setNombre}
-          autoComplete="off"
-        />
-        <div className="campo">
-          <label htmlFor="rol-tipo">Aparece en la pestaña</label>
-          <select
-            id="rol-tipo"
-            value={tipoPersona}
-            onChange={(evento) => setTipoPersona(evento.target.value as TipoPersonaRol)}
-          >
-            {TIPOS.map((tipo) => (
-              <option key={tipo.valor} value={tipo.valor}>
-                {tipo.texto}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="ancho-total">
-          <TextField
-            id="rol-descripcion"
-            label="Descripción (opcional)"
-            tipo="text"
-            value={descripcion}
-            onChange={setDescripcion}
-            autoComplete="off"
-          />
-        </div>
-        {!esNuevo ? (
-          <label className="radio-opcion ancho-total">
+      <div className="per-form">
+        <section className="per-card-form" aria-label="Datos del rol">
+          <h2>Datos del rol</h2>
+
+          <div className="per-campo">
+            <label htmlFor="rol-nombre">Nombre</label>
+            <input
+              id="rol-nombre"
+              type="text"
+              value={nombre}
+              onChange={(evento) => setNombre(evento.target.value)}
+              autoComplete="off"
+              maxLength={60}
+            />
+          </div>
+
+          <div className="per-campo">
+            <label htmlFor="rol-descripcion">Descripción</label>
+            <input
+              id="rol-descripcion"
+              type="text"
+              value={descripcion}
+              onChange={(evento) => setDescripcion(evento.target.value)}
+              autoComplete="off"
+              maxLength={200}
+            />
+          </div>
+
+          <div className="per-campo">
+            <label htmlFor="rol-tipo">Aparece en la pestaña</label>
+            <select
+              id="rol-tipo"
+              value={tipoPersona}
+              onChange={(evento) => setTipoPersona(evento.target.value as TipoPersonaRol)}
+            >
+              {TIPOS.map((tipo) => (
+                <option key={tipo.valor} value={tipo.valor}>
+                  {tipo.texto}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <label className="per-interruptor">
             <input
               type="checkbox"
               checked={activo}
               onChange={(evento) => setActivo(evento.target.checked)}
             />
-            Rol activo (se puede asignar a nuevas personas)
+            Disponible para asignar
           </label>
-        ) : null}
-      </div>
 
-      <section className="form-seccion">
-        <h3>Permisos del rol ({permisos.length})</h3>
-        {grupos.length === 0 ? (
-          <p className="m3-body-medium">Cargando catálogo de permisos…</p>
-        ) : (
-          grupos.map((grupo) => (
-            <div key={grupo.modulo} className="grupo-permisos">
-              <h4>{nombreModulo(grupo.modulo)}</h4>
-              <div className="permisos-lista">
-                {grupo.permisos.map((permiso) => (
-                  <label key={permiso.codigo} className="permiso-check">
-                    <input
-                      type="checkbox"
-                      checked={permisos.includes(permiso.codigo)}
-                      onChange={() => alternar(permiso.codigo)}
-                    />
-                    <span>{permiso.nombre}</span>
-                  </label>
-                ))}
-              </div>
+          <p className="per-nota">
+            El alcance (todas las sedes o una específica) se define al asignar el rol a cada
+            persona, no en el rol.
+          </p>
+
+          <div className="per-acciones">
+            <button
+              type="button"
+              className="per-btn"
+              onClick={guardar}
+              disabled={crear.isPending || actualizar.isPending}
+            >
+              {esNuevo ? 'Crear rol' : 'Guardar rol'}
+            </button>
+            {!esNuevo ? (
+              <button
+                type="button"
+                className="per-btn per-btn--tonal"
+                onClick={() =>
+                  duplicar.mutate(id, {
+                    onSuccess: () => router.push('/dashboard/personas/roles'),
+                    onError: (fallo) => setError(fallo.message),
+                  })
+                }
+                disabled={duplicar.isPending}
+              >
+                Duplicar
+              </button>
+            ) : null}
+            {!esNuevo && rol !== undefined && !rol.esPredeterminado ? (
+              <button
+                type="button"
+                className="per-btn per-btn--peligro"
+                onClick={() => {
+                  if (rol.personas > 0) {
+                    setError(`El rol tiene ${rol.personas} persona(s); reasígnalas antes de eliminarlo.`);
+                    return;
+                  }
+                  if (!window.confirm(`¿Eliminar el rol «${rol.nombre}»?`)) return;
+                  eliminar.mutate(rol.id, {
+                    onSuccess: () => router.push('/dashboard/personas/roles'),
+                    onError: (fallo) => setError(fallo.message),
+                  });
+                }}
+              >
+                Eliminar rol
+              </button>
+            ) : null}
+          </div>
+        </section>
+
+        <section className="per-card-form" aria-label="Permisos del rol">
+          <h2>Permisos del rol</h2>
+          <p>{permisos.length} permisos seleccionados</p>
+
+          {grupos.length === 0 ? (
+            <p>Cargando catálogo de permisos…</p>
+          ) : (
+            <div className="per-permisos">
+              {grupos.map((grupo) => (
+                <div key={grupo.modulo} className="per-grupo">
+                  <h3>{nombreModulo(grupo.modulo)}</h3>
+                  {grupo.permisos.map((permiso) => (
+                    <label key={permiso.codigo} className="per-permiso">
+                      <input
+                        type="checkbox"
+                        checked={permisos.includes(permiso.codigo)}
+                        onChange={() => alternar(permiso.codigo)}
+                      />
+                      {permiso.nombre}
+                    </label>
+                  ))}
+                </div>
+              ))}
             </div>
-          ))
-        )}
-      </section>
+          )}
 
-      <div className="form-acciones">
-        <M3Button onClick={guardar} icono="save" disabled={crear.isPending || actualizar.isPending}>
-          {esNuevo ? 'Crear rol' : 'Guardar cambios'}
-        </M3Button>
-        <M3Button variante="text" onClick={() => router.push('/dashboard/personas/roles')}>
-          Cancelar
-        </M3Button>
-        {!esNuevo && rol !== undefined && !rol.esPredeterminado ? (
-          <M3Button
-            variante="text"
-            icono="delete"
-            onClick={() => {
-              if (rol.personas > 0) {
-                setError(`El rol tiene ${rol.personas} persona(s); reasígnalas antes de eliminarlo.`);
-                return;
-              }
-              if (!window.confirm(`¿Eliminar el rol «${rol.nombre}»?`)) return;
-              eliminar.mutate(rol.id, {
-                onSuccess: () => router.push('/dashboard/personas/roles'),
-                onError: (fallo) => setError(fallo.message),
-              });
-            }}
+          <button
+            type="button"
+            className="per-enlace"
+            onClick={() => aviso('El catálogo de permisos lo administra la plataforma')}
           >
-            Eliminar rol
-          </M3Button>
-        ) : null}
+            ¿Qué hace cada permiso?
+          </button>
+        </section>
       </div>
-    </>
+    </div>
   );
 }

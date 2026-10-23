@@ -1,18 +1,30 @@
 'use client';
 
 /**
- * Personas → Estudiantes.
- * Listado de solo lectura; el alta y la matrícula llegan con su módulo.
+ * Personas → Estudiantes — réplica del frame «Personas · Estudiantes».
+ * CURSO queda vacío hasta que exista el módulo de matrículas (la BD todavía
+ * no vincula estudiante ↔ grupo); el acudiente sí es real.
  */
 import { useEffect, useState } from 'react';
+import { useAviso } from '@/components/DashboardShell';
 import { ErrorBanner } from '@/components/ErrorBanner';
-import { TextField } from '@/components/TextField';
+import { PersonasHeader } from '@/components/personas/PersonasHeader';
 import { useEstudiantes } from '@/hooks/usePersonas';
 import { iniciales } from '@/lib/personas';
 
+type FiltroEstado = 'todos' | 'activos' | 'inactivos';
+
+const FILTROS: Array<{ id: FiltroEstado; texto: string }> = [
+  { id: 'todos', texto: 'Todos' },
+  { id: 'activos', texto: 'Activos' },
+  { id: 'inactivos', texto: 'Inactivos' },
+];
+
 export default function EstudiantesPage() {
+  const aviso = useAviso();
   const [texto, setTexto] = useState('');
   const [busqueda, setBusqueda] = useState('');
+  const [filtro, setFiltro] = useState<FiltroEstado>('todos');
 
   useEffect(() => {
     const temporizador = setTimeout(() => setBusqueda(texto.trim()), 300);
@@ -20,18 +32,59 @@ export default function EstudiantesPage() {
   }, [texto]);
 
   const { data, isLoading, isError, error } = useEstudiantes(busqueda);
+  const items = (data?.items ?? []).filter((persona) => {
+    if (filtro === 'activos') return persona.activo;
+    if (filtro === 'inactivos') return !persona.activo;
+    return true;
+  });
+  const total = data?.total ?? 0;
 
   return (
-    <>
-      <div className="toolbar">
-        <TextField
-          id="buscar-estudiantes"
-          label="Buscar por nombre, documento o matrícula"
-          tipo="text"
-          value={texto}
-          onChange={setTexto}
-          autoComplete="off"
-        />
+    <div className="per-bloque">
+      <PersonasHeader
+        titulo="Estudiantes"
+        subtitulo={`Estudiantes matriculados · ${total} ${total === 1 ? 'estudiante' : 'estudiantes'}`}
+        tabs
+        accion={{
+          texto: 'Nuevo estudiante',
+          icono: 'person_add',
+          onClick: () => aviso('Alta de estudiantes: llega con el módulo de matrículas'),
+        }}
+      />
+
+      <div className="per-filtros">
+        <div className="per-buscar">
+          <span className="material-symbols-outlined" aria-hidden="true">
+            search
+          </span>
+          <input
+            id="buscar-estudiantes"
+            type="search"
+            value={texto}
+            onChange={(evento) => setTexto(evento.target.value)}
+            placeholder="Buscar por nombre, documento o curso"
+            aria-label="Buscar estudiantes por nombre, documento o curso"
+            autoComplete="off"
+          />
+        </div>
+        <div className="per-estados" role="group" aria-label="Filtrar por estado">
+          {FILTROS.map((opcion) => (
+            <button
+              key={opcion.id}
+              type="button"
+              className={`per-chip${filtro === opcion.id ? ' per-chip--activo' : ''}`}
+              aria-pressed={filtro === opcion.id}
+              onClick={() => setFiltro(opcion.id)}
+            >
+              {opcion.texto}
+              {filtro === opcion.id ? (
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  check
+                </span>
+              ) : null}
+            </button>
+          ))}
+        </div>
       </div>
 
       {isError ? (
@@ -39,60 +92,90 @@ export default function EstudiantesPage() {
           titulo="No pudimos cargar los estudiantes"
           mensaje={error instanceof Error ? error.message : 'Intenta de nuevo.'}
         />
-      ) : isLoading ? (
-        <p className="m3-body-medium">Cargando estudiantes…</p>
-      ) : data === undefined || data.items.length === 0 ? (
-        <p className="vacio m3-body-medium">
-          {busqueda === ''
-            ? 'Todavía no hay estudiantes. Se cargarán con el módulo de matrículas.'
-            : 'No encontramos estudiantes con ese criterio.'}
-        </p>
       ) : (
-        <table className="tabla">
-          <thead>
-            <tr>
-              <th scope="col">Estudiante</th>
-              <th scope="col">Documento</th>
-              <th scope="col">Matrícula</th>
-              <th scope="col">Curso</th>
-              <th scope="col">Estado</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.items.map((estudiante) => (
-              <tr key={estudiante.id}>
-                <td>
-                  <div className="celda-persona">
-                    <div className="avatar-circle" aria-hidden="true">
-                      {iniciales(estudiante.nombres, estudiante.apellidos)}
-                    </div>
-                    <div>
-                      <div className="persona-nombre">
-                        {estudiante.nombres} {estudiante.apellidos}
-                      </div>
-                      <div className="persona-detalle">{estudiante.email}</div>
-                    </div>
-                  </div>
-                </td>
-                <td>{estudiante.numeroDocumento}</td>
-                <td>{estudiante.codigoMatricula}</td>
-                <td>{estudiante.curso ?? '—'}</td>
-                <td>
-                  <span className={`m3-chip small${estudiante.activo ? '' : ' estado-inactivo'}`}>
-                    <span className="m3-label-medium">{estudiante.estado}</span>
-                  </span>
-                </td>
+        <section className="per-card per-card--tabla" aria-label="Estudiantes del colegio">
+          <table className="per-tabla">
+            <thead>
+              <tr>
+                <th scope="col">Estudiante</th>
+                <th scope="col" className="per-col-doc">Documento</th>
+                <th scope="col" className="per-col-doc">Curso</th>
+                <th scope="col">Acudiente</th>
+                <th scope="col" className="per-col-estado">Estado</th>
+                <th scope="col" className="per-col-accion">
+                  <span className="sr-only">Acciones</span>
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {isLoading ? (
+                <tr>
+                  <td colSpan={6} className="per-celda-nota">
+                    Cargando estudiantes…
+                  </td>
+                </tr>
+              ) : items.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="per-celda-nota">
+                    {busqueda === ''
+                      ? 'Aún no hay estudiantes matriculados.'
+                      : 'No encontramos estudiantes con ese criterio.'}
+                  </td>
+                </tr>
+              ) : (
+                items.map((persona) => (
+                  <tr key={persona.id}>
+                    <td>
+                      <div className="per-persona">
+                        <div className="per-avatar" aria-hidden="true">
+                          {iniciales(persona.nombres, persona.apellidos)}
+                        </div>
+                        <div className="per-persona-textos">
+                          <span className="per-persona-nombre">
+                            {persona.nombres} {persona.apellidos}
+                          </span>
+                          <span className="per-persona-detalle">{persona.email}</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td>{persona.numeroDocumento}</td>
+                    <td>{persona.curso ?? '—'}</td>
+                    <td>{persona.acudiente ?? '—'}</td>
+                    <td>
+                      <span className="per-chip per-chip--solo">
+                        {persona.activo ? 'Activo' : 'Inactivo'}
+                      </span>
+                    </td>
+                    <td className="per-col-chevron">
+                      <button
+                        type="button"
+                        className="per-chevron"
+                        aria-label={`Ver ficha de ${persona.nombres} ${persona.apellidos}`}
+                        onClick={() => aviso('Ficha del estudiante: llega con matrículas')}
+                      >
+                        <span className="material-symbols-outlined" aria-hidden="true">
+                          chevron_right
+                        </span>
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </section>
       )}
 
       {data !== undefined ? (
-        <p className="m3-body-small" style={{ marginTop: 12, color: 'var(--md-sys-color-on-surface-variant)' }}>
-          {data.total} {data.total === 1 ? 'estudiante' : 'estudiantes'} · el curso se asigna en Matrículas
-        </p>
+        <div className="per-pie">
+          <span>
+            Mostrando {items.length} de {total} {total === 1 ? 'estudiante' : 'estudiantes'}
+          </span>
+          <span>
+            1–{items.length} de {total}
+          </span>
+        </div>
       ) : null}
-    </>
+    </div>
   );
 }

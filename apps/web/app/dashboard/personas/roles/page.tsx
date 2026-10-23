@@ -1,138 +1,138 @@
 'use client';
 
 /**
- * Personas → Roles.
- * Tarjetas con cada rol del colegio: tipo de persona, permisos y personas
- * asignadas; acciones de editar, duplicar y eliminar (los predeterminados no
- * se borran y un rol en uso tampoco).
+ * Personas → Roles — réplica del frame «Personas · Roles».
+ * Nota gris de cabecera y tabla ROL / PERMISOS / PERSONAS / ORIGEN. Cada fila
+ * abre el editor del rol; los predeterminados se editan pero no se borran.
  */
-import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAviso } from '@/components/DashboardShell';
 import { ErrorBanner } from '@/components/ErrorBanner';
-import { M3Button } from '@/components/M3Button';
-import { useDuplicarRol, useEliminarRol, useRoles } from '@/hooks/usePersonas';
+import { PersonasHeader } from '@/components/personas/PersonasHeader';
+import { useRoles } from '@/hooks/usePersonas';
 import { useSesion } from '@/hooks/useSesion';
-
-const ETIQUETA_TIPO: Record<string, string> = {
-  EMPLEADO: 'Empleado',
-  ESTUDIANTE: 'Estudiante',
-  ACUDIENTE: 'Acudiente',
-};
 
 export default function RolesPage() {
   const router = useRouter();
+  const aviso = useAviso();
   const { data: sesion } = useSesion();
   const { data, isLoading, isError, error } = useRoles();
-  const duplicar = useDuplicarRol();
-  const eliminar = useEliminarRol();
-  const [errorAccion, setErrorAccion] = useState<string | null>(null);
 
   const sesionColegio = sesion !== undefined && sesion.tipo === 'colegio' ? sesion : null;
   const puedeEditar =
     sesionColegio !== null &&
     (sesionColegio.esAdmin || sesionColegio.permisos.includes('configuracion.editar'));
 
-  const borrar = (id: string, nombre: string): void => {
-    setErrorAccion(null);
-    const confirmado = window.confirm(`¿Eliminar el rol «${nombre}»? Esta acción no se puede deshacer.`);
-    if (!confirmado) return;
-    eliminar.mutate(id, {
-      onError: (fallo) => setErrorAccion(fallo.message),
-    });
-  };
+  const roles = data?.items ?? [];
+  const predeterminados = roles.filter((rol) => rol.esPredeterminado).length;
 
   return (
-    <>
-      <div className="toolbar">
-        <p className="m3-body-medium" style={{ flex: 1, margin: 0, color: 'var(--md-sys-color-on-surface-variant)' }}>
-          Un rol agrupa permisos. Cada persona tiene un solo rol y el alcance por sede se asigna aparte.
-        </p>
-        {puedeEditar ? (
-          <M3Button onClick={() => router.push('/dashboard/personas/roles/nuevo')} icono="add">
-            Nuevo rol
-          </M3Button>
-        ) : null}
-      </div>
+    <div className="per-bloque">
+      <PersonasHeader
+        titulo="Roles"
+        subtitulo="Roles del colegio y sus permisos"
+        tabs
+        {...(puedeEditar
+          ? {
+              accion: {
+                texto: 'Nuevo rol',
+                icono: 'add',
+                onClick: () => router.push('/dashboard/personas/roles/nuevo'),
+              },
+            }
+          : {})}
+      />
 
-      {errorAccion !== null ? (
-        <ErrorBanner tono="aviso" titulo="No se pudo completar la acción" mensaje={errorAccion} />
-      ) : null}
+      <p className="per-nota">
+        Cada persona tiene UN rol. Estos roles vienen por defecto y se pueden editar, duplicar o
+        eliminar. El alcance por sede se define al asignar el rol a la persona.
+      </p>
 
       {isError ? (
         <ErrorBanner
           titulo="No pudimos cargar los roles"
           mensaje={error instanceof Error ? error.message : 'Intenta de nuevo.'}
         />
-      ) : isLoading ? (
-        <p className="m3-body-medium">Cargando roles…</p>
-      ) : data === undefined || data.items.length === 0 ? (
-        <p className="vacio m3-body-medium">El colegio aún no tiene roles.</p>
       ) : (
-        <div className="roles-grid">
-          {data.items.map((rol) => (
-            <article key={rol.id} className="rol-card">
-              <h3>{rol.nombre}</h3>
-              <p className="rol-desc">{rol.descripcion ?? 'Sin descripción'}</p>
-              <div className="rol-meta">
-                <span className="m3-chip small">
-                  <span className="m3-label-medium">{ETIQUETA_TIPO[rol.tipoPersona] ?? rol.tipoPersona}</span>
-                </span>
-                <span className="m3-chip small">
-                  <span className="m3-label-medium">{rol.permisos.length} permisos</span>
-                </span>
-                <span className="m3-chip small">
-                  <span className="m3-label-medium">
-                    {rol.personas} {rol.personas === 1 ? 'persona' : 'personas'}
-                  </span>
-                </span>
-                {rol.esPredeterminado ? (
-                  <span className="m3-chip small selected">
-                    <span className="m3-label-medium">PREDETERMINADO</span>
-                  </span>
-                ) : null}
-                {!rol.activo ? (
-                  <span className="m3-chip small estado-inactivo">
-                    <span className="m3-label-medium">INACTIVO</span>
-                  </span>
-                ) : null}
-              </div>
-              <div className="rol-acciones">
-                <M3Button
-                  variante="tonal"
-                  icono="edit"
-                  onClick={() => router.push(`/dashboard/personas/roles/${rol.id}`)}
-                >
-                  Editar
-                </M3Button>
-                {puedeEditar ? (
-                  <>
-                    <M3Button
-                      variante="text"
-                      icono="content_copy"
-                      onClick={() =>
-                        duplicar.mutate(rol.id, { onError: (fallo) => setErrorAccion(fallo.message) })
-                      }
-                    >
-                      Duplicar
-                    </M3Button>
-                    {!rol.esPredeterminado ? (
-                      <M3Button variante="text" icono="delete" onClick={() => borrar(rol.id, rol.nombre)}>
-                        Eliminar
-                      </M3Button>
-                    ) : null}
-                  </>
-                ) : null}
-              </div>
-            </article>
-          ))}
-        </div>
+        <section className="per-card per-card--tabla" aria-label="Roles del colegio">
+          <table className="per-tabla">
+            <thead>
+              <tr>
+                <th scope="col">Rol</th>
+                <th scope="col" className="per-col-permisos">Permisos</th>
+                <th scope="col" className="per-col-personas">Personas</th>
+                <th scope="col" className="per-col-origen">Origen</th>
+                <th scope="col" className="per-col-accion">
+                  <span className="sr-only">Acciones</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {isLoading ? (
+                <tr>
+                  <td colSpan={5} className="per-celda-nota">
+                    Cargando roles…
+                  </td>
+                </tr>
+              ) : roles.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="per-celda-nota">
+                    El colegio aún no tiene roles.
+                  </td>
+                </tr>
+              ) : (
+                roles.map((rol) => (
+                  <tr key={rol.id}>
+                    <td>
+                      <div className="per-celda-doble">
+                        <span className="per-celda-fuerte">{rol.nombre}</span>
+                        <span className="per-celda-nota">{rol.descripcion ?? 'Sin descripción'}</span>
+                      </div>
+                    </td>
+                    <td>{rol.permisos.length} permisos</td>
+                    <td>
+                      {rol.personas} {rol.personas === 1 ? 'persona' : 'personas'}
+                    </td>
+                    <td>
+                      <span className={`per-chip per-chip--solo${rol.esPredeterminado ? '' : ' per-chip--activo'}`}>
+                        {rol.esPredeterminado ? 'Predeterminado' : 'Personalizado'}
+                      </span>
+                    </td>
+                    <td className="per-col-chevron">
+                      <button
+                        type="button"
+                        className="per-chevron"
+                        aria-label={`Editar el rol ${rol.nombre}`}
+                        onClick={() => router.push(`/dashboard/personas/roles/${rol.id}`)}
+                      >
+                        <span className="material-symbols-outlined" aria-hidden="true">
+                          chevron_right
+                        </span>
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </section>
       )}
 
       {data !== undefined ? (
-        <p className="m3-body-small" style={{ marginTop: 16, color: 'var(--md-sys-color-on-surface-variant)' }}>
-          {data.items.length} roles · los predeterminados se pueden editar pero no eliminar
-        </p>
+        <div className="per-pie">
+          <span>
+            {roles.length} {roles.length === 1 ? 'rol' : 'roles'} · {predeterminados}{' '}
+            {predeterminados === 1 ? 'predeterminado' : 'predeterminados'}
+          </span>
+          <button
+            type="button"
+            className="per-enlace"
+            onClick={() => aviso('Restaurar roles por defecto: próximamente')}
+          >
+            Restaurar roles por defecto
+          </button>
+        </div>
       ) : null}
-    </>
+    </div>
   );
 }

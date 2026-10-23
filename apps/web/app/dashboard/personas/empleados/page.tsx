@@ -1,24 +1,34 @@
 'use client';
 
 /**
- * Personas → Empleados.
- * Personal del colegio con su rol y su alcance por sede. La edición de datos
- * vive en el detalle de usuario; aquí se listan y se crean.
+ * Personas → Empleados — réplica del frame «Personas · Empleados».
+ *
+ * Encabezado (28 Fraunces + acción primaria), pestañas en chips, buscador de
+ * 50 px con chips de estado y tarjeta de tabla con avatar de 36 px. Las filas
+ * muestran el rol y el alcance reales de cada cuenta.
  */
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ErrorBanner } from '@/components/ErrorBanner';
-import { M3Button } from '@/components/M3Button';
-import { TextField } from '@/components/TextField';
+import { PersonasHeader } from '@/components/personas/PersonasHeader';
 import { useEmpleados } from '@/hooks/usePersonas';
 import { useSesion } from '@/hooks/useSesion';
 import { iniciales, textoAlcance } from '@/lib/personas';
+
+type FiltroEstado = 'todos' | 'activos' | 'inactivos';
+
+const FILTROS: Array<{ id: FiltroEstado; texto: string }> = [
+  { id: 'todos', texto: 'Todos' },
+  { id: 'activos', texto: 'Activos' },
+  { id: 'inactivos', texto: 'Inactivos' },
+];
 
 export default function EmpleadosPage() {
   const router = useRouter();
   const { data: sesion } = useSesion();
   const [texto, setTexto] = useState('');
   const [busqueda, setBusqueda] = useState('');
+  const [filtro, setFiltro] = useState<FiltroEstado>('todos');
 
   useEffect(() => {
     const temporizador = setTimeout(() => setBusqueda(texto.trim()), 300);
@@ -31,23 +41,63 @@ export default function EmpleadosPage() {
     (sesionColegio.esAdmin || sesionColegio.permisos.includes('usuarios.crear'));
 
   const { data, isLoading, isError, error } = useEmpleados(busqueda);
+  const items = (data?.items ?? []).filter((persona) => {
+    if (filtro === 'activos') return persona.activo;
+    if (filtro === 'inactivos') return !persona.activo;
+    return true;
+  });
+  const total = data?.total ?? 0;
 
   return (
-    <>
-      <div className="toolbar">
-        <TextField
-          id="buscar-empleados"
-          label="Buscar por nombre, correo o documento"
-          tipo="text"
-          value={texto}
-          onChange={setTexto}
-          autoComplete="off"
-        />
-        {puedeCrear ? (
-          <M3Button onClick={() => router.push('/dashboard/personas/empleados/nuevo')} icono="person_add">
-            Nuevo empleado
-          </M3Button>
-        ) : null}
+    <div className="per-bloque">
+      <PersonasHeader
+        titulo="Empleados"
+        subtitulo={`Personal del colegio · ${total} ${total === 1 ? 'empleado' : 'empleados'}`}
+        tabs
+        {...(puedeCrear
+          ? {
+              accion: {
+                texto: 'Nuevo empleado',
+                icono: 'person_add',
+                onClick: () => router.push('/dashboard/personas/empleados/nuevo'),
+              },
+            }
+          : {})}
+      />
+
+      <div className="per-filtros">
+        <div className="per-buscar">
+          <span className="material-symbols-outlined" aria-hidden="true">
+            search
+          </span>
+          <input
+            id="buscar-empleados"
+            type="search"
+            value={texto}
+            onChange={(evento) => setTexto(evento.target.value)}
+            placeholder="Buscar por nombre, correo o documento"
+            aria-label="Buscar empleados por nombre, correo o documento"
+            autoComplete="off"
+          />
+        </div>
+        <div className="per-estados" role="group" aria-label="Filtrar por estado">
+          {FILTROS.map((opcion) => (
+            <button
+              key={opcion.id}
+              type="button"
+              className={`per-chip${filtro === opcion.id ? ' per-chip--activo' : ''}`}
+              aria-pressed={filtro === opcion.id}
+              onClick={() => setFiltro(opcion.id)}
+            >
+              {opcion.texto}
+              {filtro === opcion.id ? (
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  check
+                </span>
+              ) : null}
+            </button>
+          ))}
+        </div>
       </div>
 
       {isError ? (
@@ -55,75 +105,96 @@ export default function EmpleadosPage() {
           titulo="No pudimos cargar los empleados"
           mensaje={error instanceof Error ? error.message : 'Intenta de nuevo.'}
         />
-      ) : isLoading ? (
-        <p className="m3-body-medium">Cargando empleados…</p>
-      ) : data === undefined || data.items.length === 0 ? (
-        <p className="vacio m3-body-medium">
-          {busqueda === ''
-            ? 'Aún no hay empleados. Crea el primero con «Nuevo empleado».'
-            : 'No encontramos empleados con ese criterio.'}
-        </p>
       ) : (
-        <table className="tabla">
-          <thead>
-            <tr>
-              <th scope="col">Empleado</th>
-              <th scope="col">Documento</th>
-              <th scope="col">Rol</th>
-              <th scope="col">Alcance</th>
-              <th scope="col">Estado</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.items.map((persona) => (
-              <tr
-                key={persona.id}
-                onClick={() => router.push(`/dashboard/usuarios/${persona.id}`)}
-                tabIndex={0}
-                onKeyDown={(evento) => {
-                  if (evento.key === 'Enter') router.push(`/dashboard/usuarios/${persona.id}`);
-                }}
-              >
-                <td>
-                  <div className="celda-persona">
-                    <div className="avatar-circle" aria-hidden="true">
-                      {iniciales(persona.nombres, persona.apellidos)}
-                    </div>
-                    <div>
-                      <div className="persona-nombre">
-                        {persona.nombres} {persona.apellidos}
-                      </div>
-                      <div className="persona-detalle">{persona.email}</div>
-                    </div>
-                  </div>
-                </td>
-                <td>{persona.numeroDocumento}</td>
-                <td>
-                  {persona.esAdmin ? (
-                    <span className="m3-chip small selected">
-                      <span className="m3-label-medium">ADMIN</span>
-                    </span>
-                  ) : (
-                    (persona.rolNombre ?? 'Sin rol')
-                  )}
-                </td>
-                <td>{textoAlcance(persona.alcance, persona.sedes.map((sede) => sede.nombre))}</td>
-                <td>
-                  <span className={`m3-chip small${persona.activo ? '' : ' estado-inactivo'}`}>
-                    <span className="m3-label-medium">{persona.activo ? 'ACTIVO' : 'INACTIVO'}</span>
-                  </span>
-                </td>
+        <section className="per-card per-card--tabla" aria-label="Empleados del colegio">
+          <table className="per-tabla">
+            <thead>
+              <tr>
+                <th scope="col">Usuario</th>
+                <th scope="col" className="per-col-doc">Documento</th>
+                <th scope="col" className="per-col-rol">Rol</th>
+                <th scope="col">Sede</th>
+                <th scope="col" className="per-col-estado">Estado</th>
+                <th scope="col" className="per-col-accion">
+                  <span className="sr-only">Acciones</span>
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {isLoading ? (
+                <tr>
+                  <td colSpan={6} className="per-celda-nota">
+                    Cargando empleados…
+                  </td>
+                </tr>
+              ) : items.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="per-celda-nota">
+                    {busqueda === ''
+                      ? 'Aún no hay empleados. Crea el primero con «Nuevo empleado».'
+                      : 'No encontramos empleados con ese criterio.'}
+                  </td>
+                </tr>
+              ) : (
+                items.map((persona) => (
+                  <tr key={persona.id}>
+                    <td>
+                      <div className="per-persona">
+                        <div className="per-avatar" aria-hidden="true">
+                          {iniciales(persona.nombres, persona.apellidos)}
+                        </div>
+                        <div className="per-persona-textos">
+                          <span className="per-persona-nombre">
+                            {persona.nombres} {persona.apellidos}
+                          </span>
+                          <span className="per-persona-detalle">{persona.email}</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      {persona.tipoDocumento} {persona.numeroDocumento}
+                    </td>
+                    <td>
+                      <span className={`per-chip per-chip--solo${persona.esAdmin ? ' per-chip--activo' : ''}`}>
+                        {persona.esAdmin ? 'ADMIN' : (persona.rolNombre ?? 'Sin rol')}
+                      </span>
+                    </td>
+                    <td>{textoAlcance(persona.alcance, persona.sedes.map((sede) => sede.nombre))}</td>
+                    <td>
+                      <span className="per-chip per-chip--solo">
+                        {persona.activo ? 'Activo' : 'Inactivo'}
+                      </span>
+                    </td>
+                    <td className="per-col-chevron">
+                      <button
+                        type="button"
+                        className="per-chevron"
+                        aria-label={`Ver ficha de ${persona.nombres} ${persona.apellidos}`}
+                        onClick={() => router.push(`/dashboard/usuarios/${persona.id}`)}
+                      >
+                        <span className="material-symbols-outlined" aria-hidden="true">
+                          chevron_right
+                        </span>
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </section>
       )}
 
       {data !== undefined ? (
-        <p className="m3-body-small" style={{ marginTop: 12, color: 'var(--md-sys-color-on-surface-variant)' }}>
-          {data.total} {data.total === 1 ? 'empleado' : 'empleados'}
-        </p>
+        <div className="per-pie">
+          <span>
+            Mostrando {items.length} de {total} {total === 1 ? 'empleado' : 'empleados'}
+          </span>
+          <span>
+            1–{items.length} de {total}
+          </span>
+        </div>
       ) : null}
-    </>
+    </div>
   );
 }

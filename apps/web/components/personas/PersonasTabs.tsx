@@ -1,8 +1,8 @@
 'use client';
 
 /**
- * Pestañas del módulo Personas. Navegación por URL (cada pestaña es una ruta),
- * con `aria-selected` para lectores de pantalla.
+ * Pestañas del módulo Personas (chips de 32 px del diseño aprobado).
+ * Navegación por URL: cada pestaña es una ruta y `aria-selected` marca la activa.
  */
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -17,7 +17,7 @@ const PESTANAS = [
 export function PersonasTabs() {
   const ruta = usePathname();
   return (
-    <nav className="personas-tabs" role="tablist" aria-label="Secciones de Personas">
+    <nav className="per-tabs" role="tablist" aria-label="Secciones de Personas">
       {PESTANAS.map((pestana) => {
         const activa = ruta.startsWith(pestana.href);
         return (
@@ -26,9 +26,14 @@ export function PersonasTabs() {
             href={pestana.href}
             role="tab"
             aria-selected={activa}
-            className="personas-tab"
+            className="per-tab"
           >
             {pestana.texto}
+            {activa ? (
+              <span className="material-symbols-outlined" aria-hidden="true">
+                check
+              </span>
+            ) : null}
           </Link>
         );
       })}
