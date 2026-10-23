@@ -97,9 +97,7 @@ export class ApiExceptionFilter implements ExceptionFilter {
  * con paquetes CJS (dist del workspace) zod puede cargarse en DOS copias de
  * módulo y `instanceof` falla entre ellas. Devuelve los issues normalizados.
  */
-function issuesDeZodError(
-  exception: unknown,
-): Array<{ path: string; message: string }> | null {
+function issuesDeZodError(exception: unknown): Array<{ path: string; message: string }> | null {
   if (!(exception instanceof Error) || exception.name !== 'ZodError') return null;
   const issues: unknown = Reflect.get(exception, 'issues');
   if (!Array.isArray(issues)) return null;

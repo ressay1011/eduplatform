@@ -7,7 +7,7 @@
  * previa de permisos del rol elegido (derecha 360). La contraseña temporal se
  * muestra UNA sola vez tras crear la cuenta.
  */
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ErrorBanner } from '@/components/ErrorBanner';
 import { PersonasHeader } from '@/components/personas/PersonasHeader';
@@ -47,12 +47,13 @@ export default function NuevoEmpleadoPage() {
   );
   const rolElegido = rolesEmpleado.find((rol) => rol.id === rolId);
 
-  /** Nombres legibles de los permisos del rol elegido. */
-  const permisosDelRol = useMemo(() => {
-    if (rolElegido === undefined) return [];
-    const porCodigo = new Map((catalogo ?? []).map((item) => [item.codigo, item.nombre]));
-    return rolElegido.permisos.map((codigo) => porCodigo.get(codigo) ?? codigo);
-  }, [rolElegido, catalogo]);
+  /** Nombres legibles de los permisos del rol elegido (cálculo barato, sin memo). */
+  const permisosDelRol =
+    rolElegido === undefined
+      ? []
+      : rolElegido.permisos.map(
+          (codigo) => (catalogo ?? []).find((item) => item.codigo === codigo)?.nombre ?? codigo,
+        );
 
   const alternarSede = (id: string): void => {
     setSedesIds((actuales) =>
@@ -212,7 +213,11 @@ export default function NuevoEmpleadoPage() {
 
             <div className="per-campo">
               <label htmlFor="emp-rol">Rol</label>
-              <select id="emp-rol" value={rolId} onChange={(evento) => setRolId(evento.target.value)}>
+              <select
+                id="emp-rol"
+                value={rolId}
+                onChange={(evento) => setRolId(evento.target.value)}
+              >
                 <option value="">— Elige un rol —</option>
                 {rolesEmpleado.map((rol) => (
                   <option key={rol.id} value={rol.id}>
@@ -287,7 +292,11 @@ export default function NuevoEmpleadoPage() {
               <div className="per-permisos">
                 {permisosDelRol.map((texto) => (
                   <span key={texto} className="per-permiso per-permiso--bloqueado">
-                    <span className="material-symbols-outlined" aria-hidden="true" style={{ fontSize: 20 }}>
+                    <span
+                      className="material-symbols-outlined"
+                      aria-hidden="true"
+                      style={{ fontSize: 20 }}
+                    >
                       check_box
                     </span>
                     {texto}

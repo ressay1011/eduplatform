@@ -122,7 +122,11 @@ describe('LoginFlow', () => {
 
   it('dominio sin colegio registrado (404) → error en el campo, sin avanzar', async () => {
     vi.mocked(getContextoPorDominio).mockRejectedValue(
-      new ApiError(404, 'NOT_FOUND', 'No encontramos un colegio registrado con ese dominio de correo'),
+      new ApiError(
+        404,
+        'NOT_FOUND',
+        'No encontramos un colegio registrado con ese dominio de correo',
+      ),
     );
     renderFlow();
     await userEvent.type(screen.getByLabelText(/^correo electrónico/i), 'alguien@desconocido.test');
@@ -192,7 +196,9 @@ describe('LoginFlow', () => {
     await userEvent.type(screen.getByLabelText(/^contraseña/i), 'corta');
     await userEvent.click(screen.getByRole('button', { name: /ingresar/i }));
 
-    expect(await screen.findByText('La contraseña debe tener al menos 8 caracteres.')).toBeInTheDocument();
+    expect(
+      await screen.findByText('La contraseña debe tener al menos 8 caracteres.'),
+    ).toBeInTheDocument();
     expect(vi.mocked(iniciarSesion)).not.toHaveBeenCalled();
   });
 

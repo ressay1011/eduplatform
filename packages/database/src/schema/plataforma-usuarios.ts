@@ -12,7 +12,9 @@ import { RolPlataforma } from '@eduplatform/types';
 import { timestamps } from './_tenant';
 
 export const plataformaUsuarios = pgTable('plataforma_usuarios', {
-  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  id: uuid('id')
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
   email: text('email').notNull().unique(),
   passwordHash: text('password_hash').notNull(),
   nombreCompleto: text('nombre_completo').notNull(),

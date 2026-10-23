@@ -1,0 +1,22 @@
+#!/bin/sh
+# Bloquea el push directo a `main`.
+#
+# La protección de rama del servidor necesita GitHub Pro (el repo es privado),
+# así que el freno vive aquí: `main` solo recibe merges de PR.
+# Para una emergencia real y consciente:
+#   ALLOW_MAIN_PUSH=1 git push origin main
+protegida="refs/heads/main"
+
+while read -r local_ref local_sha remoto_ref remoto_sha; do
+  if [ "$remoto_ref" = "$protegida" ]; then
+    if [ "${ALLOW_MAIN_PUSH:-0}" != "1" ]; then
+      echo "✗ Push a main bloqueado." >&2
+      echo "  Trabaja en dev o en feat/*, corre 'pnpm preflight' y abre un PR." >&2
+      echo "  Emergencia: ALLOW_MAIN_PUSH=1 git push origin main" >&2
+      exit 1
+    fi
+    echo "⚠ Push a main permitido por ALLOW_MAIN_PUSH=1" >&2
+  fi
+done
+
+exit 0

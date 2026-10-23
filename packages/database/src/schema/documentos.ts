@@ -20,7 +20,9 @@ import { timestamps } from './_tenant';
 export const plantillasCertificados = pgTable(
   'plantillas_certificados',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     colegioId: uuid('colegio_id')
       .notNull()
       .references(() => colegios.id, { onDelete: 'cascade' }),
@@ -45,7 +47,9 @@ export const plantillasCertificados = pgTable(
 export const certificados = pgTable(
   'certificados',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     colegioId: uuid('colegio_id')
       .notNull()
       .references(() => colegios.id, { onDelete: 'restrict' }),

@@ -7,14 +7,24 @@ import { TextField } from '../TextField';
 describe('TextField', () => {
   it('renderiza el label flotante y propaga los cambios', async () => {
     const onChange = vi.fn();
-    render(<TextField id="email" label="Correo electrónico" value="" onChange={onChange} tipo="email" />);
+    render(
+      <TextField id="email" label="Correo electrónico" value="" onChange={onChange} tipo="email" />,
+    );
     const input = screen.getByLabelText(/^correo electrónico/i);
     await userEvent.type(input, 'a');
     expect(onChange).toHaveBeenCalledWith('a');
   });
 
   it('muestra el error con role=alert y aria-invalid', () => {
-    render(<TextField id="email" label="Correo" value="x" onChange={() => {}} error="Formato de correo inválido." />);
+    render(
+      <TextField
+        id="email"
+        label="Correo"
+        value="x"
+        onChange={() => {}}
+        error="Formato de correo inválido."
+      />,
+    );
     expect(screen.getByRole('alert')).toHaveTextContent('Formato de correo inválido.');
     expect(screen.getByLabelText(/^correo/i)).toHaveAttribute('aria-invalid', 'true');
   });

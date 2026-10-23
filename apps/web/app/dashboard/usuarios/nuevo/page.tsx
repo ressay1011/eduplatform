@@ -115,8 +115,22 @@ export default function NuevoUsuarioPage() {
               {error !== null ? <ErrorBanner titulo="No se pudo crear" mensaje={error} /> : null}
 
               <div className="form-grid">
-                <TextField id="nombres" label="Nombres" tipo="text" value={nombres} onChange={setNombres} autoComplete="given-name" />
-                <TextField id="apellidos" label="Apellidos" tipo="text" value={apellidos} onChange={setApellidos} autoComplete="family-name" />
+                <TextField
+                  id="nombres"
+                  label="Nombres"
+                  tipo="text"
+                  value={nombres}
+                  onChange={setNombres}
+                  autoComplete="given-name"
+                />
+                <TextField
+                  id="apellidos"
+                  label="Apellidos"
+                  tipo="text"
+                  value={apellidos}
+                  onChange={setApellidos}
+                  autoComplete="family-name"
+                />
               </div>
 
               <TextField
@@ -167,7 +181,9 @@ export default function NuevoUsuarioPage() {
                   <span className="m3-checkbox-box" aria-hidden="true">
                     <span className="material-symbols-outlined">check</span>
                   </span>
-                  <span className="m3-body-medium">Administrador del colegio (todos los permisos)</span>
+                  <span className="m3-body-medium">
+                    Administrador del colegio (todos los permisos)
+                  </span>
                 </label>
               ) : null}
 

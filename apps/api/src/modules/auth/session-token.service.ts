@@ -18,6 +18,8 @@ export class SessionTokenService {
 
   /** Lo que se persiste y busca en `sesiones.token_hash` (hex de sha256). */
   hash(token: string): string {
-    return createHash('sha256').update(token + env.TOKEN_PEPPER).digest('hex');
+    return createHash('sha256')
+      .update(token + env.TOKEN_PEPPER)
+      .digest('hex');
   }
 }

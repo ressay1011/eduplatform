@@ -18,7 +18,11 @@ export function ErrorBanner({ titulo, mensaje, tono = 'error', icono }: ErrorBan
 
   return (
     <div role="alert" className="m3-banner" style={estilo}>
-      <span className="material-symbols-outlined" aria-hidden="true" style={{ color: estilo.color }}>
+      <span
+        className="material-symbols-outlined"
+        aria-hidden="true"
+        style={{ color: estilo.color }}
+      >
         {iconoNombre}
       </span>
       <div>

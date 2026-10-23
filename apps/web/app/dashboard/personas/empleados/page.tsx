@@ -111,10 +111,16 @@ export default function EmpleadosPage() {
             <thead>
               <tr>
                 <th scope="col">Usuario</th>
-                <th scope="col" className="per-col-doc">Documento</th>
-                <th scope="col" className="per-col-rol">Rol</th>
+                <th scope="col" className="per-col-doc">
+                  Documento
+                </th>
+                <th scope="col" className="per-col-rol">
+                  Rol
+                </th>
                 <th scope="col">Sede</th>
-                <th scope="col" className="per-col-estado">Estado</th>
+                <th scope="col" className="per-col-estado">
+                  Estado
+                </th>
                 <th scope="col" className="per-col-accion">
                   <span className="sr-only">Acciones</span>
                 </th>
@@ -155,11 +161,18 @@ export default function EmpleadosPage() {
                       {persona.tipoDocumento} {persona.numeroDocumento}
                     </td>
                     <td>
-                      <span className={`per-chip per-chip--solo${persona.esAdmin ? ' per-chip--activo' : ''}`}>
+                      <span
+                        className={`per-chip per-chip--solo${persona.esAdmin ? ' per-chip--activo' : ''}`}
+                      >
                         {persona.esAdmin ? 'ADMIN' : (persona.rolNombre ?? 'Sin rol')}
                       </span>
                     </td>
-                    <td>{textoAlcance(persona.alcance, persona.sedes.map((sede) => sede.nombre))}</td>
+                    <td>
+                      {textoAlcance(
+                        persona.alcance,
+                        persona.sedes.map((sede) => sede.nombre),
+                      )}
+                    </td>
                     <td>
                       <span className="per-chip per-chip--solo">
                         {persona.activo ? 'Activo' : 'Inactivo'}

@@ -75,7 +75,9 @@ export default function EditorRolPage() {
 
   const alternar = (codigo: string): void => {
     setPermisos((actuales) =>
-      actuales.includes(codigo) ? actuales.filter((item) => item !== codigo) : [...actuales, codigo],
+      actuales.includes(codigo)
+        ? actuales.filter((item) => item !== codigo)
+        : [...actuales, codigo],
     );
   };
 
@@ -223,7 +225,9 @@ export default function EditorRolPage() {
                 className="per-btn per-btn--peligro"
                 onClick={() => {
                   if (rol.personas > 0) {
-                    setError(`El rol tiene ${rol.personas} persona(s); reasígnalas antes de eliminarlo.`);
+                    setError(
+                      `El rol tiene ${rol.personas} persona(s); reasígnalas antes de eliminarlo.`,
+                    );
                     return;
                   }
                   if (!window.confirm(`¿Eliminar el rol «${rol.nombre}»?`)) return;

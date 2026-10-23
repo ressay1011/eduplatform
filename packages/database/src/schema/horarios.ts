@@ -9,16 +9,7 @@
  */
 
 import { sql } from 'drizzle-orm';
-import {
-  boolean,
-  index,
-  pgTable,
-  smallint,
-  text,
-  time,
-  unique,
-  uuid,
-} from 'drizzle-orm/pg-core';
+import { boolean, index, pgTable, smallint, text, time, unique, uuid } from 'drizzle-orm/pg-core';
 import { Jornada, TipoBloque } from '@eduplatform/types';
 import { colegios } from './colegios';
 import { usuarios } from './usuarios';
@@ -29,7 +20,9 @@ import { timestamps } from './_tenant';
 export const aulas = pgTable(
   'aulas',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     colegioId: uuid('colegio_id')
       .notNull()
       .references(() => colegios.id, { onDelete: 'cascade' }),
@@ -48,7 +41,9 @@ export const aulas = pgTable(
 export const bloquesHorarios = pgTable(
   'bloques_horarios',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     colegioId: uuid('colegio_id')
       .notNull()
       .references(() => colegios.id, { onDelete: 'cascade' }),
@@ -68,9 +63,7 @@ export const bloquesHorarios = pgTable(
       .default(TipoBloque.CLASE),
     ...timestamps,
   },
-  (t) => [
-    unique('bloques_unique').on(t.anioLectivoId, t.jornada, t.diaSemana, t.numeroBloque),
-  ],
+  (t) => [unique('bloques_unique').on(t.anioLectivoId, t.jornada, t.diaSemana, t.numeroBloque)],
 );
 
 /**
@@ -81,7 +74,9 @@ export const bloquesHorarios = pgTable(
 export const horarios = pgTable(
   'horarios',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     colegioId: uuid('colegio_id')
       .notNull()
       .references(() => colegios.id, { onDelete: 'restrict' }),

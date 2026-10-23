@@ -19,12 +19,12 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: eduplatform
     ports:
-      - "5432:5432"
+      - '5432:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./packages/database/sql/0000_roles.sql:/docker-entrypoint-initdb.d/0000_roles.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d eduplatform"]
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d eduplatform']
       interval: 5s
       timeout: 5s
       retries: 10

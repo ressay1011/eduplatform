@@ -45,11 +45,8 @@ export class PermissionsGuard implements CanActivate {
       usuarioId: auth.usuario.id,
       metadata: { motivo: `Permisos faltantes: ${faltantes.join(', ')}` },
     });
-    throw apiError(
-      ErrorCodes.FORBIDDEN,
-      403,
-      'No tienes permisos para realizar esta acción',
-      { requiere: requeridos },
-    );
+    throw apiError(ErrorCodes.FORBIDDEN, 403, 'No tienes permisos para realizar esta acción', {
+      requiere: requeridos,
+    });
   }
 }

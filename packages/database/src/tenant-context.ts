@@ -28,7 +28,6 @@ export const NO_TENANT: unique symbol = Symbol('NO_TENANT');
 export type NoTenant = typeof NO_TENANT;
 
 declare global {
-  // eslint-disable-next-line no-var -- la fusión de declaraciones requiere `var`
   var __eduplatform_tenant_ctx__: TenantContext | NoTenant | undefined;
 }
 

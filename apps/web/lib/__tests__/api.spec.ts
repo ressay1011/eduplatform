@@ -52,7 +52,11 @@ describe('lib/api', () => {
 
   it('el login unificado no envía header de subdominio (el colegio sale del correo)', async () => {
     fetchMock.mockResolvedValue(respuesta(200, { success: true, data: { sessionToken: 't' } }));
-    await iniciarSesion({ email: 'a@colegio-sur.edu.co', password: 'Clave1234', rememberMe: false });
+    await iniciarSesion({
+      email: 'a@colegio-sur.edu.co',
+      password: 'Clave1234',
+      rememberMe: false,
+    });
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining('/auth/login'),
       expect.objectContaining({
@@ -86,9 +90,7 @@ describe('lib/api', () => {
     );
     await listarUsuarios({ q: 'maría lópez', estado: 'activo', page: 2, limit: 10 });
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining(
-        '/usuarios?q=mar%C3%ADa+l%C3%B3pez&estado=activo&page=2&limit=10',
-      ),
+      expect.stringContaining('/usuarios?q=mar%C3%ADa+l%C3%B3pez&estado=activo&page=2&limit=10'),
       expect.anything(),
     );
   });

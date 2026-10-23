@@ -16,17 +16,19 @@
     "db:rls": "node scripts/apply-rls.mjs",
     "db:neon": "node scripts/neon-bootstrap.mjs",
     "db:seed": "node scripts/seed-demo.mjs",
-    "db:verify": "node scripts/verify-rls.mjs"
+    "db:verify": "node scripts/verify-rls.mjs",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@eduplatform/types": "workspace:*",
-    "drizzle-orm": "^0.36.0",
+    "drizzle-orm": "^0.45.4",
     "postgres": "^3.4.5"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
-    "drizzle-kit": "^0.28.0",
+    "@vitest/coverage-v8": "^4.1.12",
+    "drizzle-kit": "^0.31.11",
     "typescript": "^5.6.0",
-    "vitest": "^2.1.9"
+    "vitest": "^4.1.12"
   }
 }

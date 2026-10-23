@@ -125,8 +125,15 @@ export function DashboardShell({ seccion, breadcrumb, children }: DashboardShell
             Sesión de plataforma ({sesion.plataformaUsuario.rol}). La consola SaaS llega en otra
             iteración.
           </p>
-          <button type="button" className="per-btn per-btn--tonal" onClick={onSalir} disabled={saliendo}>
-            <span className="material-symbols-outlined" aria-hidden="true">logout</span>
+          <button
+            type="button"
+            className="per-btn per-btn--tonal"
+            onClick={onSalir}
+            disabled={saliendo}
+          >
+            <span className="material-symbols-outlined" aria-hidden="true">
+              logout
+            </span>
             {saliendo ? 'Saliendo…' : 'Cerrar sesión'}
           </button>
         </div>

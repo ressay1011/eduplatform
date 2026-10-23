@@ -49,7 +49,7 @@ describe('esquema de base de datos', () => {
   });
 
   it('exporta exactamente 34 tablas (modelo + roles + auditoría + asistencia)', () => {
-      const tablas = Object.values(schema).filter((v) => is(v, PgTable));
-      expect(tablas).toHaveLength(34);
-    });
+    const tablas = Object.values(schema).filter((v) => is(v, PgTable));
+    expect(tablas).toHaveLength(34);
+  });
 });

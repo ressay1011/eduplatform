@@ -4,16 +4,7 @@
  */
 
 import { sql } from 'drizzle-orm';
-import {
-  boolean,
-  index,
-  integer,
-  jsonb,
-  numeric,
-  pgTable,
-  text,
-  uuid,
-} from 'drizzle-orm/pg-core';
+import { boolean, index, integer, jsonb, numeric, pgTable, text, uuid } from 'drizzle-orm/pg-core';
 import { Calendario, EstadoColegio } from '@eduplatform/types';
 import { timestamps, softDelete } from './_tenant';
 
@@ -31,7 +22,9 @@ export const DEFAULT_NIVELES_DESEMPENO = {
 export const colegios = pgTable(
   'colegios',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     nombre: text('nombre').notNull(),
     /** NIT — nullable: algunos colegios públicos no lo reportan. */
     nit: text('nit').unique(),
@@ -77,7 +70,9 @@ export const colegios = pgTable(
  * de certificados, resolución oficial, módulo de asistencia, etc.
  */
 export const configuracionColegio = pgTable('configuracion_colegio', {
-  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  id: uuid('id')
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
   colegioId: uuid('colegio_id')
     .notNull()
     .unique()
@@ -88,9 +83,7 @@ export const configuracionColegio = pgTable('configuracion_colegio', {
   escalaNumericaMax: numeric('escala_numerica_max', { precision: 3, scale: 1 })
     .notNull()
     .default('5.0'),
-  notaAprobatoria: numeric('nota_aprobatoria', { precision: 3, scale: 1 })
-    .notNull()
-    .default('3.0'),
+  notaAprobatoria: numeric('nota_aprobatoria', { precision: 3, scale: 1 }).notNull().default('3.0'),
   /** 2, 3 o 4 períodos por año (normativa permite los tres). */
   periodosPorAnio: integer('periodos_por_anio').notNull().default(4),
   /** Rangos editables de niveles de desempeño (D.1290 art. 5). */
@@ -126,7 +119,9 @@ export const configuracionColegio = pgTable('configuracion_colegio', {
 export const sedes = pgTable(
   'sedes',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     colegioId: uuid('colegio_id')
       .notNull()
       .references(() => colegios.id, { onDelete: 'cascade' }),

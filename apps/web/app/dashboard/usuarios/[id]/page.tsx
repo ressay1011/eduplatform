@@ -7,10 +7,7 @@
  */
 import { useEffect, useState, type FormEvent } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import {
-  ActualizarUsuarioSchema,
-  TIPOS_DOCUMENTO,
-} from '@eduplatform/types';
+import { ActualizarUsuarioSchema, TIPOS_DOCUMENTO } from '@eduplatform/types';
 import { ErrorBanner } from '@/components/ErrorBanner';
 import { M3Button } from '@/components/M3Button';
 import { PaperBg } from '@/components/PaperBg';
@@ -141,7 +138,9 @@ export default function EditarUsuarioPage() {
           ) : isError || usuario === undefined ? (
             <ErrorBanner
               titulo="No pudimos cargar el usuario"
-              mensaje={error instanceof Error ? error.message : 'Verifica el enlace e intenta de nuevo.'}
+              mensaje={
+                error instanceof Error ? error.message : 'Verifica el enlace e intenta de nuevo.'
+              }
             />
           ) : !puedeEditar ? (
             <ErrorBanner
@@ -157,7 +156,9 @@ export default function EditarUsuarioPage() {
                   {mensaje}
                 </p>
               ) : null}
-              {errorForm !== null ? <ErrorBanner titulo="No se pudo guardar" mensaje={errorForm} /> : null}
+              {errorForm !== null ? (
+                <ErrorBanner titulo="No se pudo guardar" mensaje={errorForm} />
+              ) : null}
 
               {reset.data !== undefined ? (
                 <PantallaPasswordTemporal
@@ -171,11 +172,29 @@ export default function EditarUsuarioPage() {
 
               <form onSubmit={(e) => void onSubmit(e)} className="login-form" noValidate>
                 <div className="form-grid">
-                  <TextField id="nombres" label="Nombres" tipo="text" value={nombres} onChange={setNombres} />
-                  <TextField id="apellidos" label="Apellidos" tipo="text" value={apellidos} onChange={setApellidos} />
+                  <TextField
+                    id="nombres"
+                    label="Nombres"
+                    tipo="text"
+                    value={nombres}
+                    onChange={setNombres}
+                  />
+                  <TextField
+                    id="apellidos"
+                    label="Apellidos"
+                    tipo="text"
+                    value={apellidos}
+                    onChange={setApellidos}
+                  />
                 </div>
 
-                <TextField id="email" label="Correo institucional" tipo="email" value={email} onChange={setEmail} />
+                <TextField
+                  id="email"
+                  label="Correo institucional"
+                  tipo="email"
+                  value={email}
+                  onChange={setEmail}
+                />
 
                 <div className="form-grid">
                   <div>
@@ -223,8 +242,8 @@ export default function EditarUsuarioPage() {
                 {esAdminObjetivo ? (
                   <div className="note-box">
                     <p className="m3-body-medium" style={{ margin: 0 }}>
-                      <strong>Administrador del colegio:</strong> tiene todos los permisos por ser el
-                      admin. No requiere asignación individual.
+                      <strong>Administrador del colegio:</strong> tiene todos los permisos por ser
+                      el admin. No requiere asignación individual.
                     </p>
                   </div>
                 ) : usuario?.rolId != null ? (
@@ -281,7 +300,10 @@ export default function EditarUsuarioPage() {
                 className="m3-body-small"
                 style={{ marginTop: 16, color: 'var(--md-sys-color-on-surface-variant)' }}
               >
-                Último acceso: {usuario.ultimoAcceso === null ? 'nunca' : new Date(usuario.ultimoAcceso).toLocaleString('es-CO')}
+                Último acceso:{' '}
+                {usuario.ultimoAcceso === null
+                  ? 'nunca'
+                  : new Date(usuario.ultimoAcceso).toLocaleString('es-CO')}
               </p>
             </>
           )}

@@ -181,7 +181,11 @@ describe('Usuarios (e2e)', () => {
       };
 
       await tx.insert(usuariosPermisos).values([
-        { colegioId: colegioAId, usuarioId: idUsuario(lectorEmail), permisoId: idDe('usuarios.ver') },
+        {
+          colegioId: colegioAId,
+          usuarioId: idUsuario(lectorEmail),
+          permisoId: idDe('usuarios.ver'),
+        },
         {
           colegioId: colegioAId,
           usuarioId: idUsuario(gestorEmail),
@@ -197,7 +201,11 @@ describe('Usuarios (e2e)', () => {
           usuarioId: idUsuario(gestorEmail),
           permisoId: idDe('usuarios.editar'),
         },
-        { colegioId: colegioAId, usuarioId: idUsuario(portalEmail), permisoId: idDe('portal.consultar') },
+        {
+          colegioId: colegioAId,
+          usuarioId: idUsuario(portalEmail),
+          permisoId: idDe('portal.consultar'),
+        },
       ]);
     });
   }, 30000);

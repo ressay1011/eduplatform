@@ -59,9 +59,15 @@ export default function RolesPage() {
             <thead>
               <tr>
                 <th scope="col">Rol</th>
-                <th scope="col" className="per-col-permisos">Permisos</th>
-                <th scope="col" className="per-col-personas">Personas</th>
-                <th scope="col" className="per-col-origen">Origen</th>
+                <th scope="col" className="per-col-permisos">
+                  Permisos
+                </th>
+                <th scope="col" className="per-col-personas">
+                  Personas
+                </th>
+                <th scope="col" className="per-col-origen">
+                  Origen
+                </th>
                 <th scope="col" className="per-col-accion">
                   <span className="sr-only">Acciones</span>
                 </th>
@@ -86,7 +92,9 @@ export default function RolesPage() {
                     <td>
                       <div className="per-celda-doble">
                         <span className="per-celda-fuerte">{rol.nombre}</span>
-                        <span className="per-celda-nota">{rol.descripcion ?? 'Sin descripción'}</span>
+                        <span className="per-celda-nota">
+                          {rol.descripcion ?? 'Sin descripción'}
+                        </span>
                       </div>
                     </td>
                     <td>{rol.permisos.length} permisos</td>
@@ -94,7 +102,9 @@ export default function RolesPage() {
                       {rol.personas} {rol.personas === 1 ? 'persona' : 'personas'}
                     </td>
                     <td>
-                      <span className={`per-chip per-chip--solo${rol.esPredeterminado ? '' : ' per-chip--activo'}`}>
+                      <span
+                        className={`per-chip per-chip--solo${rol.esPredeterminado ? '' : ' per-chip--activo'}`}
+                      >
                         {rol.esPredeterminado ? 'Predeterminado' : 'Personalizado'}
                       </span>
                     </td>

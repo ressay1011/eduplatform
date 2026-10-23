@@ -27,11 +27,16 @@ export class PersonasService {
     return { colegioId: actor.colegioId, isPlatformAdmin: false, userId: actor.usuarioId };
   }
 
-  private normalizar(filtros: ListarPersonasQuery): ListarPersonasQuery & { page: number; limit: number } {
+  private normalizar(
+    filtros: ListarPersonasQuery,
+  ): ListarPersonasQuery & { page: number; limit: number } {
     return { ...filtros, page: filtros.page ?? 1, limit: filtros.limit ?? 20 };
   }
 
-  empleados(actor: ActorPersonas, filtros: ListarPersonasQuery): Promise<ListaPersonas<PersonaEmpleado>> {
+  empleados(
+    actor: ActorPersonas,
+    filtros: ListarPersonasQuery,
+  ): Promise<ListaPersonas<PersonaEmpleado>> {
     return this.repo.empleados(this.contexto(actor), this.normalizar(filtros));
   }
 
@@ -49,7 +54,9 @@ export class PersonasService {
     return this.repo.acudientes(this.contexto(actor), this.normalizar(filtros));
   }
 
-  resumen(actor: ActorPersonas): Promise<{ empleados: number; estudiantes: number; acudientes: number }> {
+  resumen(
+    actor: ActorPersonas,
+  ): Promise<{ empleados: number; estudiantes: number; acudientes: number }> {
     return this.repo.resumen(this.contexto(actor));
   }
 }

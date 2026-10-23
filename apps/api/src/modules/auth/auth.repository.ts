@@ -141,7 +141,9 @@ export class AuthRepository extends BaseRepository {
   }
 
   /** Normaliza una fila cruda de `colegios_publico` al contrato interno. */
-  private mapearColegioPublico(fila: Record<string, unknown> | undefined): ColegioPublicoRow | null {
+  private mapearColegioPublico(
+    fila: Record<string, unknown> | undefined,
+  ): ColegioPublicoRow | null {
     if (fila === undefined) return null;
     const logo = fila['logo_url'];
     const color = fila['primary_color'];

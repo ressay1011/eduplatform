@@ -23,7 +23,6 @@ async function bootstrap(): Promise<void> {
 }
 
 bootstrap().catch((err: unknown) => {
-  // eslint-disable-next-line no-console -- el fallo de arranque debe verse en consola
   console.error('Fallo al arrancar la API:', err);
   process.exit(1);
 });

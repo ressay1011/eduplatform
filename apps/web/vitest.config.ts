@@ -21,5 +21,17 @@ export default defineConfig({
     include: ['**/*.spec.{ts,tsx}'],
     exclude: ['node_modules', '.next'],
     setupFiles: ['./vitest.setup.ts'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text-summary', 'lcov'],
+      reportsDirectory: './coverage',
+      include: [
+        'app/**/*.{ts,tsx}',
+        'components/**/*.{ts,tsx}',
+        'hooks/**/*.{ts,tsx}',
+        'lib/**/*.{ts,tsx}',
+      ],
+      exclude: ['**/*.spec.{ts,tsx}', '**/__tests__/**'],
+    },
   },
 });
