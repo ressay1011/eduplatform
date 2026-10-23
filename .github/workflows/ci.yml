@@ -5,8 +5,8 @@ name: CI
 on:
   push:
     branches: [dev, main]
+  # Cualquier PR, también los apilados sobre otra rama de trabajo.
   pull_request:
-    branches: [dev, main]
 
 concurrency:
   group: ci-${{ github.ref }}
