@@ -137,7 +137,13 @@ export const grupos = pgTable(
     ...timestamps,
   },
   (t) => [
-    unique('grupos_anio_grado_letra_unique').on(t.anioLectivoId, t.gradoId, t.letra),
+    unique('grupos_anio_sede_grado_letra_jornada_unique').on(
+      t.anioLectivoId,
+      t.sedeId,
+      t.gradoId,
+      t.letra,
+      t.jornada,
+    ),
     index('grupos_colegio_anio_idx').on(t.colegioId, t.anioLectivoId),
     index('grupos_colegio_director_idx').on(t.colegioId, t.directorGrupoId),
   ],

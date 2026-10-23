@@ -1,0 +1,143 @@
+/**
+ * Onboarding del primer admin — contratos compartidos API ↔ web.
+ *
+ * Seis pasos: Colegio → Sedes y jornadas → Estructura → Personal → Estudiantes
+ * → Resumen. El mínimo para finalizar es 1 sede con jornada + 1 curso; personal
+ * y estudiantes pueden quedar pendientes (checklist «Completa tu colegio»).
+ */
+import { z } from 'zod';
+import { Calendario, Jornada } from './entities/enums';
+
+const FECHA_ISO = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'La fecha debe ser AAAA-MM-DD');
+const JORNADAS = Object.values(Jornada) as [Jornada, ...Jornada[]];
+
+/** Período académico tal como llega del wizard (fechas ISO sin hora). */
+export const PeriodoOnboardingSchema = z.object({
+  numero: z.number().int().min(1).max(4),
+  nombre: z.string().trim().min(3).max(40),
+  fechaInicio: FECHA_ISO,
+  fechaFin: FECHA_ISO,
+});
+export type PeriodoOnboardingRequest = z.input<typeof PeriodoOnboardingSchema>;
+
+/** Paso 1: identidad del colegio, calendario, año lectivo y períodos. */
+export const ColegioOnboardingSchema = z.object({
+  nombre: z.string().trim().min(3).max(160),
+  nit: z.string().trim().max(20).optional(),
+  codigoDane: z
+    .string()
+    .trim()
+    .regex(/^\d{12}$/, 'El código DANE tiene 12 dígitos'),
+  subdominio: z
+    .string()
+    .trim()
+    .regex(/^[a-z0-9][a-z0-9-]{2,38}[a-z0-9]$/, 'Subdominio en minúsculas, sin espacios'),
+  dominioEmail: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(/^[a-z0-9.-]+\.[a-z]{2,}$/, 'Dominio de correo inválido')
+    .optional(),
+  municipio: z.string().trim().min(2).max(80),
+  departamento: z.string().trim().min(2).max(80),
+  direccion: z.string().trim().max(160).optional(),
+  telefono: z.string().trim().max(30).optional(),
+  email: z.string().trim().email().max(160),
+  calendario: z.enum([Calendario.A, Calendario.B]),
+  anioLectivo: z.number().int().min(2020).max(2100),
+  periodos: z.array(PeriodoOnboardingSchema).min(2).max(4),
+});
+export type ColegioOnboardingRequest = z.input<typeof ColegioOnboardingSchema>;
+
+/** Paso 2: sede con las jornadas que ofrece. */
+export const SedeOnboardingSchema = z.object({
+  id: z.string().uuid().optional(),
+  nombre: z.string().trim().min(2).max(120),
+  codigoDaneSede: z.string().trim().max(20).optional(),
+  direccion: z.string().trim().max(160).optional(),
+  jornadas: z.array(z.enum(JORNADAS)).min(1, 'Elige al menos una jornada').max(5),
+});
+export type SedeOnboardingRequest = z.input<typeof SedeOnboardingSchema>;
+
+/** Paso 3: generador de cursos (producto cartesiano grados × letras). */
+export const EstructuraOnboardingSchema = z.object({
+  sedeId: z.string().uuid(),
+  jornada: z.enum(JORNADAS),
+  grados: z.array(z.number().int().min(0).max(11)).min(1).max(12),
+  letras: z
+    .array(
+      z
+        .string()
+        .trim()
+        .regex(/^[A-Z]$/, 'La letra es una sola mayúscula'),
+    )
+    .min(1)
+    .max(10),
+});
+export type EstructuraOnboardingRequest = z.input<typeof EstructuraOnboardingSchema>;
+
+/** Sede tal como la devuelve la API. */
+export interface SedeOnboarding {
+  id: string;
+  nombre: string;
+  codigoDaneSede: string | null;
+  direccion: string | null;
+  jornadas: Jornada[];
+}
+
+export interface PeriodoOnboarding {
+  numero: number;
+  nombre: string;
+  fechaInicio: string;
+  fechaFin: string;
+}
+
+export interface ColegioOnboarding {
+  id: string;
+  nombre: string;
+  nit: string | null;
+  codigoDane: string;
+  subdominio: string;
+  dominioEmail: string | null;
+  municipio: string;
+  departamento: string;
+  direccion: string | null;
+  telefono: string | null;
+  email: string;
+  calendario: Calendario;
+}
+
+export interface AnioLectivoOnboarding {
+  id: string;
+  anio: number;
+  fechaInicio: string;
+  fechaFin: string;
+}
+
+/** Ítem del checklist «Completa tu colegio» (dashboard y paso 6). */
+export interface ChecklistOnboardingItem {
+  clave: string;
+  titulo: string;
+  detalle: string;
+  hecho: boolean;
+}
+
+/** Estado completo del wizard: una sola llamada alimenta los 6 pasos. */
+export interface EstadoOnboarding {
+  completado: boolean;
+  paso: number;
+  colegio: ColegioOnboarding;
+  sedes: SedeOnboarding[];
+  anioLectivo: AnioLectivoOnboarding | null;
+  periodos: PeriodoOnboarding[];
+  estructura: { grados: number; cursos: number };
+  personal: { total: number };
+  estudiantes: { total: number; matriculados: number };
+  checklist: ChecklistOnboardingItem[];
+}
+
+/** Resultado de finalizar (el mínimo no cumplido se explica con 409). */
+export interface ResultadoOnboarding {
+  completado: boolean;
+  estado: EstadoOnboarding;
+}

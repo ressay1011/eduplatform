@@ -46,9 +46,16 @@ try {
     SELECT id FROM sedes WHERE colegio_id = ${colegioId} AND nombre = 'Sede Principal' LIMIT 1
   `;
   if (sede.length === 0) {
-    await sql`INSERT INTO sedes (colegio_id, nombre) VALUES (${colegioId}, 'Sede Principal')`;
+    await sql`INSERT INTO sedes (colegio_id, nombre, jornadas)
+      VALUES (${colegioId}, 'Sede Principal', '["MANANA"]'::jsonb)`;
     console.log('# sede creada: Sede Principal');
   }
+
+  // El colegio demo ya está operativo: no debe caer en el wizard de onboarding.
+  await sql`UPDATE colegios
+            SET onboarding_paso = 6,
+                onboarding_completado_en = COALESCE(onboarding_completado_en, now())
+            WHERE id = ${colegioId}`;
 
   const [admin] = await sql`
     INSERT INTO usuarios (colegio_id, email, password_hash, nombres, apellidos, tipo_documento,

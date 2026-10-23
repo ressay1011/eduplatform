@@ -10,6 +10,11 @@ import type {
   ContextoColegioPublico,
   CrearRolRequest,
   CrearUsuarioRequest,
+  ColegioOnboardingRequest,
+  EstadoOnboarding,
+  EstructuraOnboardingRequest,
+  ResultadoOnboarding,
+  SedeOnboardingRequest,
   ListaPersonas,
   ListaRoles,
   ListaUsuarios,
@@ -268,4 +273,33 @@ export function listarAcudientes(params: {
   limit?: number;
 }): Promise<ListaPersonas<PersonaAcudiente>> {
   return request(`/personas/acudientes${queryPersonas(params)}`);
+}
+
+// ── Onboarding (configuración inicial del colegio) ───────────────────────────
+
+/** Estado completo del wizard (una llamada alimenta los 6 pasos). */
+export function getOnboarding(): Promise<EstadoOnboarding> {
+  return request('/onboarding');
+}
+
+export function guardarColegioOnboarding(dto: ColegioOnboardingRequest): Promise<EstadoOnboarding> {
+  return request('/onboarding/colegio', { method: 'PATCH', body: dto });
+}
+
+export function guardarSedeOnboarding(dto: SedeOnboardingRequest): Promise<EstadoOnboarding> {
+  return request('/onboarding/sedes', { method: 'PUT', body: dto });
+}
+
+export function generarEstructuraOnboarding(
+  dto: EstructuraOnboardingRequest,
+): Promise<EstadoOnboarding> {
+  return request('/onboarding/estructura', { method: 'POST', body: dto });
+}
+
+export function guardarPasoOnboarding(paso: number): Promise<EstadoOnboarding> {
+  return request('/onboarding/paso', { method: 'PATCH', body: { paso } });
+}
+
+export function finalizarOnboarding(): Promise<ResultadoOnboarding> {
+  return request('/onboarding/finalizar', { method: 'POST' });
 }

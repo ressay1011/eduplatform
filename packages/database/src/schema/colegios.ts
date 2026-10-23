@@ -4,8 +4,19 @@
  */
 
 import { sql } from 'drizzle-orm';
-import { boolean, index, integer, jsonb, numeric, pgTable, text, uuid } from 'drizzle-orm/pg-core';
-import { Calendario, EstadoColegio } from '@eduplatform/types';
+import {
+  boolean,
+  index,
+  integer,
+  jsonb,
+  numeric,
+  pgTable,
+  smallint,
+  text,
+  timestamp,
+  uuid,
+} from 'drizzle-orm/pg-core';
+import { Calendario, EstadoColegio, type Jornada } from '@eduplatform/types';
 import { timestamps, softDelete } from './_tenant';
 
 /**
@@ -55,6 +66,16 @@ export const colegios = pgTable(
       .default('BASICO'),
     /** Override del color semilla Material Design 3 por colegio (hex). */
     primaryColor: text('primary_color'),
+    /**
+     * Wizard de configuración inicial: paso 1..6 mientras está en curso.
+     * Se guarda para poder reanudar («Guardar y salir»).
+     */
+    onboardingPaso: smallint('onboarding_paso').notNull().default(1),
+    /** null hasta que el admin termina el wizard (mínimo: sede + jornada + curso). */
+    onboardingCompletadoEn: timestamp('onboarding_completado_en', {
+      withTimezone: true,
+      mode: 'date',
+    }),
     ...timestamps,
     ...softDelete,
   },
@@ -129,6 +150,14 @@ export const sedes = pgTable(
     codigoDaneSede: text('codigo_dane_sede'),
     direccion: text('direccion'),
     activa: boolean('activa').notNull().default(true),
+    /**
+     * Jornadas que ofrece la sede (Mañana/Tarde/Noche/Única/Sabatina).
+     * Cada curso elige una de estas; una sede sin jornadas no puede tener cursos.
+     */
+    jornadas: jsonb('jornadas')
+      .$type<Jornada[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
     ...timestamps,
     ...softDelete,
   },
