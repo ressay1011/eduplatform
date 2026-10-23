@@ -44,3 +44,11 @@ Thumbs.db
 
 # Salida del escáner de Sonar
 .scannerwork/
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+# Videos de prueba (se regeneran y se sobrescriben; no van al repo)
+/pruebas-video/
