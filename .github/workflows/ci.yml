@@ -97,6 +97,11 @@ jobs:
       - name: Tests con cobertura
         run: pnpm coverage
 
+      # El gate de SonarCloud no es editable en el plan Free: el umbral real
+      # (por paquete y global) se exige aquí.
+      - name: Umbral de cobertura
+        run: pnpm coverage:check
+
       - name: Build
         run: pnpm build
         env:
