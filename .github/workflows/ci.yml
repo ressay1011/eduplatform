@@ -140,6 +140,12 @@ jobs:
 
       - name: Escanear con SonarQube
         uses: SonarSource/sonarqube-scan-action@v6
+        with:
+          # Cada análisis es una versión: la ventana de «código nuevo» pasa a ser
+          # el diff desde el análisis anterior en vez de arrastrar todo el
+          # backlog del proyecto (con el gate fijo del plan Free en 80 %, el
+          # backlog entero nunca cumpliría y el badge quedaría rojo para siempre).
+          args: -Dsonar.projectVersion=${{ github.run_number }}
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
