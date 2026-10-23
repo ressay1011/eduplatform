@@ -38,6 +38,7 @@ Thumbs.db
 /scripts/*
 !/scripts/preflight.mjs
 !/scripts/sonar.mjs
+!/scripts/coverage-floor.mjs
 /AGENTS.md
 /apps/web/server.mjs
 
