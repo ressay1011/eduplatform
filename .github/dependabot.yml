@@ -22,7 +22,8 @@ updates:
       - dependencias
       - automatizado
     commit-message:
-      prefix: 'chore(deps)'
+      # `include: scope` añade "(deps)"; el prefijo no debe repetirlo.
+      prefix: 'chore'
       include: scope
     groups:
       produccion-menor:
@@ -36,17 +37,11 @@ updates:
           - minor
           - patch
     ignore:
-      - dependency-name: next
-        update-types: ['version-update:semver-major']
-      - dependency-name: react
-        update-types: ['version-update:semver-major']
-      - dependency-name: react-dom
-        update-types: ['version-update:semver-major']
-      - dependency-name: '@nestjs/*'
-        update-types: ['version-update:semver-major']
-      - dependency-name: vitest
-        update-types: ['version-update:semver-major']
-      - dependency-name: '@vitest/*'
+      # Política del repo: un salto de versión MAYOR se hace a mano, con su
+      # migración y sus pruebas (Next, React, Nest, TypeScript, Vite…).
+      # Dependabot solo propone minor y patch; las alertas de seguridad siguen
+      # activas por su cuenta.
+      - dependency-name: '*'
         update-types: ['version-update:semver-major']
 
   - package-ecosystem: github-actions
@@ -62,7 +57,8 @@ updates:
       - dependencias
       - automatizado
     commit-message:
-      prefix: 'ci(actions)'
+      prefix: 'ci'
+      include: scope
     groups:
       actions:
         patterns:
