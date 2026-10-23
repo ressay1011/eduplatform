@@ -30,20 +30,28 @@ function repositorioFalso(roles: RolListado[]) {
   const estado = { roles: [...roles] };
   const repo = {
     listar: vi.fn(async (_ctx: TenantContext) => estado.roles),
-    findPorId: vi.fn(async (_ctx: TenantContext, id: string) => estado.roles.find((r) => r.id === id) ?? null),
+    findPorId: vi.fn(
+      async (_ctx: TenantContext, id: string) => estado.roles.find((r) => r.id === id) ?? null,
+    ),
     existeNombre: vi.fn(async (_ctx: TenantContext, nombre: string, exceptoId?: string) =>
       estado.roles.some(
         (r) => r.nombre.toLowerCase() === nombre.toLowerCase() && r.id !== exceptoId,
       ),
     ),
     crear: vi.fn(async (_ctx: TenantContext, datos: { nombre: string }) => {
-      const nuevo = rol({ id: `r${estado.roles.length + 1}`, nombre: datos.nombre, esPredeterminado: false });
+      const nuevo = rol({
+        id: `r${estado.roles.length + 1}`,
+        nombre: datos.nombre,
+        esPredeterminado: false,
+      });
       estado.roles.push(nuevo);
       return nuevo;
     }),
     actualizar: vi.fn(async () => estado.roles[0] ?? null),
     eliminar: vi.fn(async () => true),
-    reemplazarPermisos: vi.fn(async (_ctx: TenantContext, _id: string, codigos: readonly string[]) => [...codigos]),
+    reemplazarPermisos: vi.fn(
+      async (_ctx: TenantContext, _id: string, codigos: readonly string[]) => [...codigos],
+    ),
     sincronizarProyeccion: vi.fn(async () => undefined),
     sedes: vi.fn(async () => []),
   };
@@ -76,7 +84,9 @@ describe('RolesService', () => {
       permisos: ['usuarios.ver'],
     });
     expect(creado.nombre).toBe('Bibliotecario');
-    expect(audit.registrar).toHaveBeenCalledWith(expect.objectContaining({ accion: 'CREATE', entidad: 'roles' }));
+    expect(audit.registrar).toHaveBeenCalledWith(
+      expect.objectContaining({ accion: 'CREATE', entidad: 'roles' }),
+    );
   });
 
   it('rechaza permisos que no existen en el catálogo', async () => {
@@ -98,7 +108,10 @@ describe('RolesService', () => {
   });
 
   it('duplicar genera un nombre libre cuando ya existe la copia', async () => {
-    const { service, estado } = servicio([rol(), rol({ id: 'r2', nombre: 'Copia de Docente', esPredeterminado: false })]);
+    const { service, estado } = servicio([
+      rol(),
+      rol({ id: 'r2', nombre: 'Copia de Docente', esPredeterminado: false }),
+    ]);
     const copia = await service.duplicar(ACTOR, 'r1');
     expect(copia.nombre).toBe('Copia de Docente (2)');
     expect(estado.roles).toHaveLength(3);

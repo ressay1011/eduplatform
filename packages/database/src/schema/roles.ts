@@ -26,7 +26,9 @@ export const tiposPersonaRol = ['EMPLEADO', 'ESTUDIANTE', 'ACUDIENTE'] as const;
 export const roles = pgTable(
   'roles',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     colegioId: uuid('colegio_id')
       .notNull()
       .references(() => colegios.id, { onDelete: 'cascade' }),
@@ -52,7 +54,9 @@ export const roles = pgTable(
 export const rolesPermisos = pgTable(
   'roles_permisos',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     colegioId: uuid('colegio_id')
       .notNull()
       .references(() => colegios.id, { onDelete: 'cascade' }),

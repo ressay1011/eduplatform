@@ -20,7 +20,10 @@ function parseHex(hex: string): Rgb | null {
 }
 
 function aHex({ r, g, b }: Rgb): string {
-  const canal = (v: number): string => Math.round(Math.min(255, Math.max(0, v))).toString(16).padStart(2, '0');
+  const canal = (v: number): string =>
+    Math.round(Math.min(255, Math.max(0, v)))
+      .toString(16)
+      .padStart(2, '0');
   return `#${canal(r)}${canal(g)}${canal(b)}`;
 }
 

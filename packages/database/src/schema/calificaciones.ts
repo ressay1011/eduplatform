@@ -31,7 +31,9 @@ import { timestamps } from './_tenant';
 export const evaluaciones = pgTable(
   'evaluaciones',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     colegioId: uuid('colegio_id')
       .notNull()
       .references(() => colegios.id, { onDelete: 'restrict' }),
@@ -64,7 +66,9 @@ export const evaluaciones = pgTable(
 export const calificaciones = pgTable(
   'calificaciones',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     colegioId: uuid('colegio_id')
       .notNull()
       .references(() => colegios.id, { onDelete: 'restrict' }),
@@ -96,7 +100,9 @@ export const calificaciones = pgTable(
 export const notasPeriodo = pgTable(
   'notas_periodo',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     colegioId: uuid('colegio_id')
       .notNull()
       .references(() => colegios.id, { onDelete: 'restrict' }),
@@ -157,7 +163,9 @@ export const notasPeriodo = pgTable(
 export const promociones = pgTable(
   'promociones',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     colegioId: uuid('colegio_id')
       .notNull()
       .references(() => colegios.id, { onDelete: 'restrict' }),

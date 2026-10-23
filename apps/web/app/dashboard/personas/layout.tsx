@@ -33,8 +33,7 @@ export default function PersonasLayout({ children }: { children: React.ReactNode
       sesionColegio.permisos.includes('usuarios.ver') ||
       sesionColegio.permisos.includes('estudiantes.ver'));
 
-  const nombreColegio =
-    sesionColegio?.colegio.nombre ?? 'EduPlatform';
+  const nombreColegio = sesionColegio?.colegio.nombre ?? 'EduPlatform';
   const breadcrumb = `${nombreColegio} · Personas · ${seccionDeRuta(ruta)}`;
 
   return (

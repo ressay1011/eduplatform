@@ -6,6 +6,5 @@ import { SetMetadata } from '@nestjs/common';
 
 export const REQUIRE_PERMISSION_KEY = 'require_permission';
 
-export const RequirePermission = (
-  ...permisos: string[]
-): MethodDecorator & ClassDecorator => SetMetadata(REQUIRE_PERMISSION_KEY, permisos);
+export const RequirePermission = (...permisos: string[]): MethodDecorator & ClassDecorator =>
+  SetMetadata(REQUIRE_PERMISSION_KEY, permisos);

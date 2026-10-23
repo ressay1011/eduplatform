@@ -88,7 +88,11 @@ export class RolesRepository extends BaseRepository {
         sql`lower(${roles.nombre}) = lower(${nombre})`,
       ];
       if (exceptoId !== undefined) condiciones.push(ne(roles.id, exceptoId));
-      const filas = await tx.select({ id: roles.id }).from(roles).where(and(...condiciones)).limit(1);
+      const filas = await tx
+        .select({ id: roles.id })
+        .from(roles)
+        .where(and(...condiciones))
+        .limit(1);
       return filas.length > 0;
     });
   }
@@ -170,9 +174,7 @@ export class RolesRepository extends BaseRepository {
 
       await tx
         .insert(rolesPermisos)
-        .values(
-          filas.map((fila) => ({ colegioId: ctx.colegioId, rolId, permisoId: fila.id })),
-        );
+        .values(filas.map((fila) => ({ colegioId: ctx.colegioId, rolId, permisoId: fila.id })));
       return filas.map((fila) => fila.codigo);
     });
   }
@@ -182,7 +184,11 @@ export class RolesRepository extends BaseRepository {
    * que lo tienen. SQL crudo justificado: es una proyección masiva que Drizzle
    * no expresa sin N+1.
    */
-  async sincronizarProyeccion(ctx: TenantContext, rolId: string, asignadoPorId: string): Promise<void> {
+  async sincronizarProyeccion(
+    ctx: TenantContext,
+    rolId: string,
+    asignadoPorId: string,
+  ): Promise<void> {
     await this.withTenant(ctx, async (tx) => {
       await tx.execute(sql`
         DELETE FROM usuarios_permisos up

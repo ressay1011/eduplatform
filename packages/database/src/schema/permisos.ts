@@ -12,7 +12,9 @@ import { index, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 export const permisos = pgTable(
   'permisos',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     codigo: text('codigo').notNull().unique(),
     nombre: text('nombre').notNull(),
     descripcion: text('descripcion'),

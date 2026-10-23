@@ -57,7 +57,11 @@ export class UsuariosRepository extends BaseRepository {
   /** Página de usuarios + total (búsqueda por nombre, correo o documento). */
   async listar(
     ctx: TenantContext,
-    filtros: ListarUsuariosQuery & { page: number; limit: number; estado: 'todos' | 'activo' | 'inactivo' },
+    filtros: ListarUsuariosQuery & {
+      page: number;
+      limit: number;
+      estado: 'todos' | 'activo' | 'inactivo';
+    },
   ): Promise<{ filas: UsuarioRow[]; total: number }> {
     return this.withTenant(ctx, async (tx) => {
       const condiciones = [eq(usuarios.colegioId, ctx.colegioId), isNull(usuarios.deletedAt)];
@@ -90,7 +94,10 @@ export class UsuariosRepository extends BaseRepository {
   }
 
   /** Códigos de permiso por usuario (solo para los ids pedidos). */
-  async permisosPorUsuario(ctx: TenantContext, ids: readonly string[]): Promise<Map<string, string[]>> {
+  async permisosPorUsuario(
+    ctx: TenantContext,
+    ids: readonly string[],
+  ): Promise<Map<string, string[]>> {
     const mapa = new Map<string, string[]>();
     if (ids.length === 0) return mapa;
 
@@ -120,7 +127,11 @@ export class UsuariosRepository extends BaseRepository {
         .select(USUARIO_COLUMNS)
         .from(usuarios)
         .where(
-          and(eq(usuarios.id, id), eq(usuarios.colegioId, ctx.colegioId), isNull(usuarios.deletedAt)),
+          and(
+            eq(usuarios.id, id),
+            eq(usuarios.colegioId, ctx.colegioId),
+            isNull(usuarios.deletedAt),
+          ),
         )
         .limit(1);
       return filas[0] ?? null;
@@ -175,7 +186,11 @@ export class UsuariosRepository extends BaseRepository {
         isNull(usuarios.deletedAt),
       ];
       if (exceptoId !== undefined) condiciones.push(ne(usuarios.id, exceptoId));
-      const filas = await tx.select({ id: usuarios.id }).from(usuarios).where(and(...condiciones)).limit(1);
+      const filas = await tx
+        .select({ id: usuarios.id })
+        .from(usuarios)
+        .where(and(...condiciones))
+        .limit(1);
       return filas.length > 0;
     });
   }
@@ -198,7 +213,9 @@ export class UsuariosRepository extends BaseRepository {
   }
 
   /** Dominio institucional del colegio (para validar correos). */
-  async dominioDelColegio(ctx: TenantContext): Promise<{ nombre: string; dominioEmail: string | null }> {
+  async dominioDelColegio(
+    ctx: TenantContext,
+  ): Promise<{ nombre: string; dominioEmail: string | null }> {
     return this.withTenant(ctx, async (tx) => {
       const filas = await tx
         .select({ nombre: colegios.nombre, dominioEmail: colegios.dominioEmail })
@@ -270,9 +287,7 @@ export class UsuariosRepository extends BaseRepository {
           ...(cambios.nombres !== undefined ? { nombres: cambios.nombres } : {}),
           ...(cambios.apellidos !== undefined ? { apellidos: cambios.apellidos } : {}),
           ...(cambios.email !== undefined ? { email: cambios.email.toLowerCase() } : {}),
-          ...(cambios.tipoDocumento !== undefined
-            ? { tipoDocumento: cambios.tipoDocumento }
-            : {}),
+          ...(cambios.tipoDocumento !== undefined ? { tipoDocumento: cambios.tipoDocumento } : {}),
           ...(cambios.numeroDocumento !== undefined
             ? { numeroDocumento: cambios.numeroDocumento }
             : {}),
@@ -334,7 +349,11 @@ export class UsuariosRepository extends BaseRepository {
   }
 
   /** Nueva contraseña temporal: hash + flag de cambio + reset de bloqueo. */
-  async actualizarPasswordTemporal(ctx: TenantContext, id: string, passwordHash: string): Promise<void> {
+  async actualizarPasswordTemporal(
+    ctx: TenantContext,
+    id: string,
+    passwordHash: string,
+  ): Promise<void> {
     await this.withTenant(ctx, async (tx) => {
       await tx
         .update(usuarios)
@@ -427,7 +446,11 @@ export class UsuariosRepository extends BaseRepository {
   async findRol(
     ctx: TenantContext,
     rolId: string,
-  ): Promise<{ id: string; nombre: string; tipoPersona: 'EMPLEADO' | 'ESTUDIANTE' | 'ACUDIENTE' } | null> {
+  ): Promise<{
+    id: string;
+    nombre: string;
+    tipoPersona: 'EMPLEADO' | 'ESTUDIANTE' | 'ACUDIENTE';
+  } | null> {
     return this.withTenant(ctx, async (tx) => {
       const filas = await tx
         .select({ id: roles.id, nombre: roles.nombre, tipoPersona: roles.tipoPersona })

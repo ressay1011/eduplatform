@@ -71,7 +71,10 @@ export class UsuariosService {
     );
     const roles = await this.roles.listar(contexto);
     const rolPorId = new Map(roles.map((rol) => [rol.id, rol.nombre]));
-    const sedes = await this.repo.sedesPorUsuario(contexto, filas.map((fila) => fila.id));
+    const sedes = await this.repo.sedesPorUsuario(
+      contexto,
+      filas.map((fila) => fila.id),
+    );
     return {
       items: filas.map((fila) =>
         this.aListado(fila, permisos.get(fila.id) ?? [], rolPorId, sedes.get(fila.id) ?? []),
@@ -113,9 +116,15 @@ export class UsuariosService {
     this.validarDominio(dto.email, colegio.dominioEmail);
 
     if (await this.repo.existeEmail(contexto, dto.email)) {
-      throw apiError(ErrorCodes.ALREADY_EXISTS, 409, 'Ya existe un usuario con ese correo electrónico');
+      throw apiError(
+        ErrorCodes.ALREADY_EXISTS,
+        409,
+        'Ya existe un usuario con ese correo electrónico',
+      );
     }
-    if ((await this.repo.findPorDocumento(contexto, dto.tipoDocumento, dto.numeroDocumento)) !== null) {
+    if (
+      (await this.repo.findPorDocumento(contexto, dto.tipoDocumento, dto.numeroDocumento)) !== null
+    ) {
       throw apiError(ErrorCodes.ALREADY_EXISTS, 409, 'Ya existe un usuario con ese documento');
     }
     await this.validarPermisos(contexto, dto.permisos ?? []);
@@ -162,7 +171,12 @@ export class UsuariosService {
       await this.roles.sincronizarProyeccion(contexto, rolId, actor.usuarioId);
       permisos = await this.permisosDeUsuario(contexto, creado);
     } else {
-      permisos = await this.repo.reemplazarPermisos(contexto, creado.id, dto.permisos ?? [], actor.usuarioId);
+      permisos = await this.repo.reemplazarPermisos(
+        contexto,
+        creado.id,
+        dto.permisos ?? [],
+        actor.usuarioId,
+      );
     }
     await this.repo.reemplazarSedes(contexto, creado.id, dto.sedesIds ?? []);
 
@@ -174,21 +188,40 @@ export class UsuariosService {
       usuarioId: actor.usuarioId,
       metadata: {
         motivo: 'usuario creado',
-        cambios: { email: { antes: null, despues: creado.email }, esAdmin: { antes: null, despues: creado.esAdmin } },
+        cambios: {
+          email: { antes: null, despues: creado.email },
+          esAdmin: { antes: null, despues: creado.esAdmin },
+        },
       },
     });
     this.logger.log(`Usuario creado: ${creado.id} (colegio ${actor.colegioId})`);
 
-    return { usuario: this.aListado(creado, permisos, await this.mapaRoles(contexto), await this.sedesDe(contexto, creado.id)), passwordTemporal };
+    return {
+      usuario: this.aListado(
+        creado,
+        permisos,
+        await this.mapaRoles(contexto),
+        await this.sedesDe(contexto, creado.id),
+      ),
+      passwordTemporal,
+    };
   }
 
   /** Edita datos personales y/o activa-desactiva la cuenta. */
-  async actualizar(actor: ActorUsuarios, id: string, dto: ActualizarUsuarioRequest): Promise<UsuarioListado> {
+  async actualizar(
+    actor: ActorUsuarios,
+    id: string,
+    dto: ActualizarUsuarioRequest,
+  ): Promise<UsuarioListado> {
     const contexto = this.contexto(actor);
     const actual = await this.repo.findPorId(contexto, id);
     if (actual === null) throw apiError(ErrorCodes.NOT_FOUND, 404, 'Usuario no encontrado');
     if (actual.esAdmin && !actor.esAdmin) {
-      throw apiError(ErrorCodes.FORBIDDEN, 403, 'Solo un administrador puede editar a otro administrador');
+      throw apiError(
+        ErrorCodes.FORBIDDEN,
+        403,
+        'Solo un administrador puede editar a otro administrador',
+      );
     }
 
     if (dto.activo === false) {
@@ -208,7 +241,11 @@ export class UsuariosService {
       const colegio = await this.repo.dominioDelColegio(contexto);
       this.validarDominio(dto.email, colegio.dominioEmail);
       if (await this.repo.existeEmail(contexto, dto.email, id)) {
-        throw apiError(ErrorCodes.ALREADY_EXISTS, 409, 'Ya existe un usuario con ese correo electrónico');
+        throw apiError(
+          ErrorCodes.ALREADY_EXISTS,
+          409,
+          'Ya existe un usuario con ese correo electrónico',
+        );
       }
     }
 
@@ -223,7 +260,11 @@ export class UsuariosService {
 
     if (dto.rolId !== undefined) {
       if (!actor.esAdmin) {
-        throw apiError(ErrorCodes.FORBIDDEN, 403, 'Solo el administrador del colegio cambia el rol');
+        throw apiError(
+          ErrorCodes.FORBIDDEN,
+          403,
+          'Solo el administrador del colegio cambia el rol',
+        );
       }
       if (dto.rolId !== null && (await this.repo.findRol(contexto, dto.rolId)) === null) {
         throw apiError(ErrorCodes.VALIDATION_ERROR, 400, 'El rol indicado no existe en el colegio');
@@ -309,7 +350,12 @@ export class UsuariosService {
     }
     await this.validarPermisos(contexto, dto.permisos);
 
-    const aplicados = await this.repo.reemplazarPermisos(contexto, id, dto.permisos, actor.usuarioId);
+    const aplicados = await this.repo.reemplazarPermisos(
+      contexto,
+      id,
+      dto.permisos,
+      actor.usuarioId,
+    );
     await this.audit.registrar({
       accion: 'UPDATE',
       entidad: 'usuarios',
@@ -334,7 +380,11 @@ export class UsuariosService {
       );
     }
     if (actual.esAdmin && !actor.esAdmin) {
-      throw apiError(ErrorCodes.FORBIDDEN, 403, 'Solo un administrador puede resetear a otro administrador');
+      throw apiError(
+        ErrorCodes.FORBIDDEN,
+        403,
+        'Solo un administrador puede resetear a otro administrador',
+      );
     }
 
     const passwordTemporal = this.generarPasswordTemporal();
@@ -371,15 +421,23 @@ export class UsuariosService {
   }
 
   /** Todos los códigos deben existir en el catálogo (evita permisos fantasma). */
-  private async validarPermisos(contexto: TenantContext, codigos: readonly string[]): Promise<void> {
+  private async validarPermisos(
+    contexto: TenantContext,
+    codigos: readonly string[],
+  ): Promise<void> {
     if (codigos.length === 0) return;
     const catalogo = await this.repo.catalogoPermisos(contexto);
     const validos = new Set(catalogo.map((item) => item.codigo));
     const desconocidos = codigos.filter((codigo) => !validos.has(codigo));
     if (desconocidos.length > 0) {
-      throw apiError(ErrorCodes.VALIDATION_ERROR, 400, 'Hay permisos que no existen en el catálogo', {
-        permisos: desconocidos,
-      });
+      throw apiError(
+        ErrorCodes.VALIDATION_ERROR,
+        400,
+        'Hay permisos que no existen en el catálogo',
+        {
+          permisos: desconocidos,
+        },
+      );
     }
   }
 
@@ -391,7 +449,11 @@ export class UsuariosService {
   ): Promise<void> {
     if (alcance === 'TODAS') return;
     if (sedesIds.length === 0) {
-      throw apiError(ErrorCodes.VALIDATION_ERROR, 400, 'Elige al menos una sede para el alcance específico');
+      throw apiError(
+        ErrorCodes.VALIDATION_ERROR,
+        400,
+        'Elige al menos una sede para el alcance específico',
+      );
     }
     const disponibles = new Set((await this.repo.sedesDelColegio(contexto)).map((sede) => sede.id));
     const ajenas = sedesIds.filter((sedeId) => !disponibles.has(sedeId));
@@ -432,12 +494,7 @@ export class UsuariosService {
     const todos = mayusculas + minusculas + digitos;
     const elegir = (conjunto: string): string => conjunto[randomInt(conjunto.length)] ?? 'x';
 
-    const caracteres = [
-      elegir(mayusculas),
-      elegir(minusculas),
-      elegir(digitos),
-      elegir(simbolos),
-    ];
+    const caracteres = [elegir(mayusculas), elegir(minusculas), elegir(digitos), elegir(simbolos)];
     while (caracteres.length < 12) caracteres.push(elegir(todos));
 
     // Mezcla Fisher-Yates para que los obligatorios no queden al inicio.
@@ -452,11 +509,7 @@ export class UsuariosService {
 
   /** Traduce la violación UNIQUE de Postgres a un 409 del contrato. */
   private rechazarDuplicado(err: unknown): void {
-    if (
-      typeof err === 'object' &&
-      err !== null &&
-      Reflect.get(err, 'code') === '23505'
-    ) {
+    if (typeof err === 'object' && err !== null && Reflect.get(err, 'code') === '23505') {
       throw apiError(ErrorCodes.ALREADY_EXISTS, 409, 'Ya existe un usuario con esos datos');
     }
   }

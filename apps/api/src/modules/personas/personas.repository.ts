@@ -10,13 +10,14 @@ import { Injectable } from '@nestjs/common';
 import type { TenantContext } from '@eduplatform/database';
 import { and, asc, count, eq, ilike, isNull, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
-import {
-  acudientesEstudiantes,
-  estudiantes,
-  roles,
-  usuarios,
-} from '@eduplatform/database';
-import type { ListaPersonas, ListarPersonasQuery, PersonaAcudiente, PersonaEmpleado, PersonaEstudiante } from '@eduplatform/types';
+import { acudientesEstudiantes, estudiantes, roles, usuarios } from '@eduplatform/database';
+import type {
+  ListaPersonas,
+  ListarPersonasQuery,
+  PersonaAcudiente,
+  PersonaEmpleado,
+  PersonaEstudiante,
+} from '@eduplatform/types';
 import { BaseRepository } from '../../shared/base.repository';
 
 type Filtros = ListarPersonasQuery & { page: number; limit: number };
@@ -32,7 +33,10 @@ export class PersonasRepository extends BaseRepository {
       const condiciones = [
         eq(usuarios.colegioId, ctx.colegioId),
         isNull(usuarios.deletedAt),
-        or(eq(roles.tipoPersona, 'EMPLEADO'), and(isNull(usuarios.rolId), eq(usuarios.esAdmin, true))),
+        or(
+          eq(roles.tipoPersona, 'EMPLEADO'),
+          and(isNull(usuarios.rolId), eq(usuarios.esAdmin, true)),
+        ),
       ];
       if (filtros.q !== undefined && filtros.q !== '') {
         const patron = `%${filtros.q}%`;
@@ -93,7 +97,10 @@ export class PersonasRepository extends BaseRepository {
   }
 
   /** Estudiantes con su cuenta; el curso llega con el módulo de matrículas. */
-  async estudiantes(ctx: TenantContext, filtros: Filtros): Promise<ListaPersonas<PersonaEstudiante>> {
+  async estudiantes(
+    ctx: TenantContext,
+    filtros: Filtros,
+  ): Promise<ListaPersonas<PersonaEstudiante>> {
     return this.withTenant(ctx, async (tx) => {
       const condiciones = [eq(estudiantes.colegioId, ctx.colegioId), isNull(estudiantes.deletedAt)];
       if (filtros.q !== undefined && filtros.q !== '') {
@@ -168,7 +175,9 @@ export class PersonasRepository extends BaseRepository {
           numeroDocumento: usuarios.numeroDocumento,
           email: usuarios.email,
           activo: usuarios.activo,
-          estudiantes: sql<string[]>`array_agg(${usuarioEstudiante.nombres} || ' ' || ${usuarioEstudiante.apellidos})`,
+          estudiantes: sql<
+            string[]
+          >`array_agg(${usuarioEstudiante.nombres} || ' ' || ${usuarioEstudiante.apellidos})`,
           telefono: sql<string | null>`max(${acudientesEstudiantes.telefono})`,
           total: sql<number>`count(*) over ()`,
         })
@@ -177,7 +186,14 @@ export class PersonasRepository extends BaseRepository {
         .innerJoin(estudiantes, eq(estudiantes.id, acudientesEstudiantes.estudianteId))
         .innerJoin(usuarioEstudiante, eq(usuarioEstudiante.id, estudiantes.usuarioId))
         .where(and(eq(acudientesEstudiantes.colegioId, ctx.colegioId), ...condiciones))
-        .groupBy(usuarios.id, usuarios.nombres, usuarios.apellidos, usuarios.numeroDocumento, usuarios.email, usuarios.activo)
+        .groupBy(
+          usuarios.id,
+          usuarios.nombres,
+          usuarios.apellidos,
+          usuarios.numeroDocumento,
+          usuarios.email,
+          usuarios.activo,
+        )
         .orderBy(asc(usuarios.apellidos), asc(usuarios.nombres))
         .limit(filtros.limit)
         .offset((filtros.page - 1) * filtros.limit);
@@ -201,7 +217,9 @@ export class PersonasRepository extends BaseRepository {
   }
 
   /** Conteos de las pestañas para las tarjetas del encabezado. */
-  async resumen(ctx: TenantContext): Promise<{ empleados: number; estudiantes: number; acudientes: number }> {
+  async resumen(
+    ctx: TenantContext,
+  ): Promise<{ empleados: number; estudiantes: number; acudientes: number }> {
     return this.withTenant(ctx, async (tx) => {
       const [emp] = await tx
         .select({ total: count() })
@@ -211,7 +229,10 @@ export class PersonasRepository extends BaseRepository {
           and(
             eq(usuarios.colegioId, ctx.colegioId),
             isNull(usuarios.deletedAt),
-            or(eq(roles.tipoPersona, 'EMPLEADO'), and(isNull(usuarios.rolId), eq(usuarios.esAdmin, true))),
+            or(
+              eq(roles.tipoPersona, 'EMPLEADO'),
+              and(isNull(usuarios.rolId), eq(usuarios.esAdmin, true)),
+            ),
           ),
         );
       const [est] = await tx

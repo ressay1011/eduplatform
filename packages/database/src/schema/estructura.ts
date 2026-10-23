@@ -28,7 +28,9 @@ import { timestamps } from './_tenant';
 export const aniosLectivos = pgTable(
   'anios_lectivos',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     colegioId: uuid('colegio_id')
       .notNull()
       .references(() => colegios.id, { onDelete: 'restrict' }),
@@ -46,7 +48,9 @@ export const aniosLectivos = pgTable(
 export const periodos = pgTable(
   'periodos',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     colegioId: uuid('colegio_id')
       .notNull()
       .references(() => colegios.id, { onDelete: 'restrict' }),
@@ -87,7 +91,9 @@ export const periodos = pgTable(
 export const grados = pgTable(
   'grados',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     colegioId: uuid('colegio_id')
       .notNull()
       .references(() => colegios.id, { onDelete: 'cascade' }),
@@ -104,11 +110,15 @@ export const grados = pgTable(
 export const grupos = pgTable(
   'grupos',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     colegioId: uuid('colegio_id')
       .notNull()
       .references(() => colegios.id, { onDelete: 'restrict' }),
-    sedeId: uuid('sede_id').notNull().references(() => sedes.id, { onDelete: 'restrict' }),
+    sedeId: uuid('sede_id')
+      .notNull()
+      .references(() => sedes.id, { onDelete: 'restrict' }),
     anioLectivoId: uuid('anio_lectivo_id')
       .notNull()
       .references(() => aniosLectivos.id, { onDelete: 'cascade' }),
@@ -137,7 +147,9 @@ export const grupos = pgTable(
 export const areas = pgTable(
   'areas',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     colegioId: uuid('colegio_id')
       .notNull()
       .references(() => colegios.id, { onDelete: 'cascade' }),
@@ -152,7 +164,9 @@ export const areas = pgTable(
 export const asignaturas = pgTable(
   'asignaturas',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     colegioId: uuid('colegio_id')
       .notNull()
       .references(() => colegios.id, { onDelete: 'cascade' }),
@@ -174,7 +188,9 @@ export const asignaturas = pgTable(
 export const docentesAsignaturasGrupos = pgTable(
   'docentes_asignaturas_grupos',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     colegioId: uuid('colegio_id')
       .notNull()
       .references(() => colegios.id, { onDelete: 'restrict' }),
@@ -206,7 +222,9 @@ export const docentesAsignaturasGrupos = pgTable(
 export const matriculas = pgTable(
   'matriculas',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     colegioId: uuid('colegio_id')
       .notNull()
       .references(() => colegios.id, { onDelete: 'restrict' }),

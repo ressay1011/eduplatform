@@ -64,7 +64,11 @@ export default function UsuariosPage() {
               titulo="Módulo del colegio"
               mensaje="Esta sección es para el personal de un colegio."
             />
-            <M3Button variante="tonal" onClick={() => router.replace('/dashboard')} icono="arrow_back">
+            <M3Button
+              variante="tonal"
+              onClick={() => router.replace('/dashboard')}
+              icono="arrow_back"
+            >
               Volver al inicio
             </M3Button>
           </div>
@@ -79,7 +83,12 @@ export default function UsuariosPage() {
       <main className="stage" id="contenido-principal">
         <div className="stage-card page-card fade">
           <div className="page-topbar">
-            <M3Button variante="text" onClick={() => router.push('/dashboard')} icono="arrow_back" type="button">
+            <M3Button
+              variante="text"
+              onClick={() => router.push('/dashboard')}
+              icono="arrow_back"
+              type="button"
+            >
               Inicio
             </M3Button>
             <div style={{ flex: 1, minWidth: 200 }}>
@@ -184,7 +193,9 @@ export default function UsuariosPage() {
                           )}
                           {!usuario.esAdmin && usuario.permisos.length > 3 ? (
                             <span className="m3-chip small">
-                              <span className="m3-label-medium">+{usuario.permisos.length - 3}</span>
+                              <span className="m3-label-medium">
+                                +{usuario.permisos.length - 3}
+                              </span>
                             </span>
                           ) : null}
                           {usuario.debeCambiarPassword ? (
@@ -194,9 +205,7 @@ export default function UsuariosPage() {
                           ) : null}
                         </div>
                       </div>
-                      <span
-                        className={`m3-chip small${usuario.activo ? '' : ' estado-inactivo'}`}
-                      >
+                      <span className={`m3-chip small${usuario.activo ? '' : ' estado-inactivo'}`}>
                         <span className="m3-label-medium">
                           {usuario.activo ? 'ACTIVO' : 'INACTIVO'}
                         </span>

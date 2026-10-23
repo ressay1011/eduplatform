@@ -76,13 +76,20 @@ export class RolesService {
       entidadId: creado.id,
       colegioId: actor.colegioId,
       usuarioId: actor.usuarioId,
-      metadata: { motivo: 'rol creado', cambios: { nombre: { antes: null, despues: creado.nombre } } },
+      metadata: {
+        motivo: 'rol creado',
+        cambios: { nombre: { antes: null, despues: creado.nombre } },
+      },
     });
     this.logger.log(`Rol creado: ${creado.id}`);
     return this.exigirRol(contexto, creado.id);
   }
 
-  async actualizar(actor: ActorRoles, id: string, datos: ActualizarRolRequest): Promise<RolListado> {
+  async actualizar(
+    actor: ActorRoles,
+    id: string,
+    datos: ActualizarRolRequest,
+  ): Promise<RolListado> {
     const contexto = this.contexto(actor);
     const actual = await this.repo.findPorId(contexto, id);
     if (actual === null) throw apiError(ErrorCodes.NOT_FOUND, 404, 'Rol no encontrado');
@@ -162,7 +169,10 @@ export class RolesService {
       entidadId: id,
       colegioId: actor.colegioId,
       usuarioId: actor.usuarioId,
-      metadata: { motivo: 'rol eliminado', cambios: { nombre: { antes: rol.nombre, despues: null } } },
+      metadata: {
+        motivo: 'rol eliminado',
+        cambios: { nombre: { antes: rol.nombre, despues: null } },
+      },
     });
     return { id };
   }
@@ -171,7 +181,11 @@ export class RolesService {
   // Reglas y utilidades
   // ------------------------------------------------------------------
 
-  private async validarNombre(ctx: TenantContext, nombre: string, exceptoId?: string): Promise<void> {
+  private async validarNombre(
+    ctx: TenantContext,
+    nombre: string,
+    exceptoId?: string,
+  ): Promise<void> {
     if (await this.repo.existeNombre(ctx, nombre, exceptoId)) {
       throw apiError(ErrorCodes.ALREADY_EXISTS, 409, 'Ya existe un rol con ese nombre');
     }
@@ -182,7 +196,11 @@ export class RolesService {
       const candidato = intento === 1 ? base : `${base} (${intento})`;
       if (!(await this.repo.existeNombre(ctx, candidato))) return candidato;
     }
-    throw apiError(ErrorCodes.ALREADY_EXISTS, 409, 'No se pudo generar un nombre libre para la copia');
+    throw apiError(
+      ErrorCodes.ALREADY_EXISTS,
+      409,
+      'No se pudo generar un nombre libre para la copia',
+    );
   }
 
   /** Aplica permisos y resincroniza la proyección de las personas con el rol. */
@@ -196,9 +214,14 @@ export class RolesService {
     const aplicadosSet = new Set(aplicados);
     const desconocidos = codigos.filter((codigo) => !aplicadosSet.has(codigo));
     if (desconocidos.length > 0) {
-      throw apiError(ErrorCodes.VALIDATION_ERROR, 400, 'Hay permisos que no existen en el catálogo', {
-        permisos: desconocidos,
-      });
+      throw apiError(
+        ErrorCodes.VALIDATION_ERROR,
+        400,
+        'Hay permisos que no existen en el catálogo',
+        {
+          permisos: desconocidos,
+        },
+      );
     }
     await this.repo.sincronizarProyeccion(ctx, rolId, asignadoPorId);
   }

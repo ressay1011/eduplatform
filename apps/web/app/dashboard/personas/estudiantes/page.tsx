@@ -98,10 +98,16 @@ export default function EstudiantesPage() {
             <thead>
               <tr>
                 <th scope="col">Estudiante</th>
-                <th scope="col" className="per-col-doc">Documento</th>
-                <th scope="col" className="per-col-doc">Curso</th>
+                <th scope="col" className="per-col-doc">
+                  Documento
+                </th>
+                <th scope="col" className="per-col-doc">
+                  Curso
+                </th>
                 <th scope="col">Acudiente</th>
-                <th scope="col" className="per-col-estado">Estado</th>
+                <th scope="col" className="per-col-estado">
+                  Estado
+                </th>
                 <th scope="col" className="per-col-accion">
                   <span className="sr-only">Acciones</span>
                 </th>

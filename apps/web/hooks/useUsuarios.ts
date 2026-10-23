@@ -28,11 +28,7 @@ import {
 /** Prefijo de caché del módulo (invalidar ['usuarios'] refresca todo). */
 export const USUARIOS_KEY = ['usuarios'] as const;
 
-export function useUsuarios(
-  q: string,
-  estado: 'todos' | 'activo' | 'inactivo',
-  habilitado = true,
-) {
+export function useUsuarios(q: string, estado: 'todos' | 'activo' | 'inactivo', habilitado = true) {
   return useQuery<ListaUsuarios>({
     queryKey: [...USUARIOS_KEY, 'lista', q, estado],
     queryFn: () => listarUsuarios({ q, estado, limit: 100 }),

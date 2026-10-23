@@ -76,7 +76,11 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     if (err instanceof DOMException && err.name === 'AbortError') {
       throw new ApiError(0, 'NETWORK_ERROR', 'La solicitud tardó demasiado. Intenta de nuevo.');
     }
-    throw new ApiError(0, 'NETWORK_ERROR', 'No se pudo contactar el servidor. Verifica tu conexión.');
+    throw new ApiError(
+      0,
+      'NETWORK_ERROR',
+      'No se pudo contactar el servidor. Verifica tu conexión.',
+    );
   } finally {
     clearTimeout(temporizador);
   }
@@ -179,10 +183,7 @@ export function actualizarUsuario(
   return request(`/usuarios/${encodeURIComponent(id)}`, { method: 'PATCH', body: dto });
 }
 
-export function establecerPermisos(
-  id: string,
-  permisos: string[],
-): Promise<UsuarioListado> {
+export function establecerPermisos(id: string, permisos: string[]): Promise<UsuarioListado> {
   return request(`/usuarios/${encodeURIComponent(id)}/permisos`, {
     method: 'PUT',
     body: { permisos },

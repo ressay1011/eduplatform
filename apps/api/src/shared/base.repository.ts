@@ -6,12 +6,7 @@
  * HttpException: devuelven null/valores y el service decide el status.
  */
 import { Inject } from '@nestjs/common';
-import {
-  withTenant,
-  type Database,
-  type TenantContext,
-  type Tx,
-} from '@eduplatform/database';
+import { withTenant, type Database, type TenantContext, type Tx } from '@eduplatform/database';
 import { DATABASE } from './database.module';
 
 export abstract class BaseRepository {

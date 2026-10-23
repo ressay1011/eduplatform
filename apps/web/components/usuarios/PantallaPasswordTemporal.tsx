@@ -38,10 +38,17 @@ export function PantallaPasswordTemporal({
   return (
     <section className="password-card" aria-labelledby="password-temporal-titulo">
       <div>
-        <h2 id="password-temporal-titulo" className="m3-title-medium" style={{ margin: '0 0 4px 0' }}>
+        <h2
+          id="password-temporal-titulo"
+          className="m3-title-medium"
+          style={{ margin: '0 0 4px 0' }}
+        >
           {titulo}
         </h2>
-        <p className="m3-body-medium" style={{ margin: 0, color: 'var(--md-sys-color-on-surface-variant)' }}>
+        <p
+          className="m3-body-medium"
+          style={{ margin: 0, color: 'var(--md-sys-color-on-surface-variant)' }}
+        >
           {descripcion}
         </p>
       </div>
@@ -68,7 +75,10 @@ export function PantallaPasswordTemporal({
         </M3Button>
       </div>
 
-      <p className="m3-body-small" style={{ margin: 0, color: 'var(--md-sys-color-on-surface-variant)' }}>
+      <p
+        className="m3-body-small"
+        style={{ margin: 0, color: 'var(--md-sys-color-on-surface-variant)' }}
+      >
         No se volverá a mostrar. La persona deberá cambiarla al entrar por primera vez.
       </p>
     </section>

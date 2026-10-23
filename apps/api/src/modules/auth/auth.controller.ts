@@ -4,16 +4,7 @@
  * Rutas con sesión: logout, me, cambiar-password.
  * Rate limiting: global (100/min por IP) + estricto en los login (10/min).
  */
-import {
-  Body,
-  Controller,
-  Get,
-  HttpCode,
-  Post,
-  Query,
-  Req,
-  Res,
-} from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Post, Query, Req, Res } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { createHash } from 'node:crypto';
 import type { Response } from 'express';

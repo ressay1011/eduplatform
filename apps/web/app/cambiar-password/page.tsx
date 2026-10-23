@@ -103,19 +103,26 @@ export default function CambiarPasswordPage() {
 
               <div className="dashboard-header">
                 <div className="avatar-circle" aria-hidden="true">
-                  {inicialesDe(`${sesionColegio.usuario.nombres} ${sesionColegio.usuario.apellidos}`)}
+                  {inicialesDe(
+                    `${sesionColegio.usuario.nombres} ${sesionColegio.usuario.apellidos}`,
+                  )}
                 </div>
                 <div>
                   <p className="m3-title-medium" style={{ margin: 0 }}>
                     {sesionColegio.usuario.nombres} {sesionColegio.usuario.apellidos}
                   </p>
-                  <p className="m3-body-small" style={{ color: 'var(--md-sys-color-on-surface-variant)', margin: 0 }}>
+                  <p
+                    className="m3-body-small"
+                    style={{ color: 'var(--md-sys-color-on-surface-variant)', margin: 0 }}
+                  >
                     {sesionColegio.colegio.nombre}
                   </p>
                 </div>
               </div>
 
-              {banner !== null ? <ErrorBanner titulo="No se pudo guardar" mensaje={banner} /> : null}
+              {banner !== null ? (
+                <ErrorBanner titulo="No se pudo guardar" mensaje={banner} />
+              ) : null}
 
               <form onSubmit={onGuardar} className="login-form" noValidate>
                 <div>
@@ -135,8 +142,15 @@ export default function CambiarPasswordPage() {
                     {REGLAS.map((regla) => {
                       const cumplida = regla.cumple(passwordNueva);
                       return (
-                        <span key={regla.id} className={`m3-body-small regla${cumplida ? ' cumplida' : ''}`}>
-                          <span className="material-symbols-outlined" aria-hidden="true" style={{ fontSize: 16 }}>
+                        <span
+                          key={regla.id}
+                          className={`m3-body-small regla${cumplida ? ' cumplida' : ''}`}
+                        >
+                          <span
+                            className="material-symbols-outlined"
+                            aria-hidden="true"
+                            style={{ fontSize: 16 }}
+                          >
                             {cumplida ? 'check_circle' : 'circle'}
                           </span>
                           {regla.texto}

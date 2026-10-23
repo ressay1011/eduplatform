@@ -19,7 +19,9 @@ import { timestamps } from './_tenant';
 export const asistenciasDiarias = pgTable(
   'asistencias_diarias',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     colegioId: uuid('colegio_id')
       .notNull()
       .references(() => colegios.id, { onDelete: 'restrict' }),
@@ -56,7 +58,9 @@ export const asistenciasDiarias = pgTable(
 export const auditLog = pgTable(
   'audit_log',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     colegioId: uuid('colegio_id').references(() => colegios.id, { onDelete: 'set null' }),
     usuarioId: uuid('usuario_id').references(() => usuarios.id, { onDelete: 'set null' }),
     accion: text('accion', {

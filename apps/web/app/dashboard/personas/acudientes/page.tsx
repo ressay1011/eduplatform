@@ -98,10 +98,14 @@ export default function AcudientesPage() {
             <thead>
               <tr>
                 <th scope="col">Acudiente</th>
-                <th scope="col" className="per-col-doc">Documento</th>
+                <th scope="col" className="per-col-doc">
+                  Documento
+                </th>
                 <th scope="col">Contacto</th>
                 <th scope="col">A cargo</th>
-                <th scope="col" className="per-col-estado">Estado</th>
+                <th scope="col" className="per-col-estado">
+                  Estado
+                </th>
                 <th scope="col" className="per-col-accion">
                   <span className="sr-only">Acciones</span>
                 </th>
@@ -140,7 +144,9 @@ export default function AcudientesPage() {
                     </td>
                     <td>CC {persona.numeroDocumento}</td>
                     <td>{persona.telefono ?? persona.email}</td>
-                    <td>{persona.estudiantes.length === 0 ? '—' : persona.estudiantes.join(' · ')}</td>
+                    <td>
+                      {persona.estudiantes.length === 0 ? '—' : persona.estudiantes.join(' · ')}
+                    </td>
                     <td>
                       <span className="per-chip per-chip--solo">
                         {persona.activo ? 'Activo' : 'Inactivo'}

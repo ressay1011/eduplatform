@@ -45,10 +45,7 @@ export function toColegioSesion(colegio: ColegioSesionFuente): ColegioSesion {
   };
 }
 
-export function toLoginResponse(
-  usuario: UsuarioAuthRow,
-  colegio: ColegioAuthRow,
-): LoginResponse {
+export function toLoginResponse(usuario: UsuarioAuthRow, colegio: ColegioAuthRow): LoginResponse {
   return {
     usuario: toUsuarioSesion(usuario),
     colegio: toColegioSesion(colegio),

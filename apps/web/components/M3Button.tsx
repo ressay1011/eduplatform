@@ -21,11 +21,20 @@ export function M3Button({
   className,
   ...resto
 }: M3ButtonProps) {
-  const clases = ['m3-btn', `m3-btn-${variante}`, ...(grande ? ['m3-btn-large'] : []), ...(className !== undefined ? [className] : [])].join(' ');
+  const clases = [
+    'm3-btn',
+    `m3-btn-${variante}`,
+    ...(grande ? ['m3-btn-large'] : []),
+    ...(className !== undefined ? [className] : []),
+  ].join(' ');
 
   const iconoEl =
     icono !== undefined ? (
-      <span className="material-symbols-outlined" aria-hidden="true" style={{ fontSize: 20, position: 'relative' }}>
+      <span
+        className="material-symbols-outlined"
+        aria-hidden="true"
+        style={{ fontSize: 20, position: 'relative' }}
+      >
         {icono}
       </span>
     ) : null;

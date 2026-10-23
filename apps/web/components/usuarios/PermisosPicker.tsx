@@ -66,7 +66,11 @@ export function PermisosPicker({
         const codigos = permisosDelModulo.map((permiso) => permiso.codigo);
         const todos = codigos.every((codigo) => seleccionados.includes(codigo));
         return (
-          <section key={modulo} className="permiso-grupo" aria-label={NOMBRE_MODULO[modulo] ?? modulo}>
+          <section
+            key={modulo}
+            className="permiso-grupo"
+            aria-label={NOMBRE_MODULO[modulo] ?? modulo}
+          >
             <div className="permiso-grupo-header">
               <p className="m3-label-large" style={{ margin: 0 }}>
                 {NOMBRE_MODULO[modulo] ?? modulo}
@@ -91,7 +95,10 @@ export function PermisosPicker({
                 />
                 <span>
                   {permiso.nombre}
-                  <span className="m3-body-small" style={{ opacity: 0.6 }}> · {permiso.codigo}</span>
+                  <span className="m3-body-small" style={{ opacity: 0.6 }}>
+                    {' '}
+                    · {permiso.codigo}
+                  </span>
                 </span>
               </label>
             ))}

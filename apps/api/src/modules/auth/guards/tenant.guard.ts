@@ -17,7 +17,11 @@ export class TenantGuard implements CanActivate {
 
     const header = req.headers['x-colegio-subdominio'];
     const subdominio = Array.isArray(header) ? header[0] : header;
-    if (subdominio !== undefined && subdominio.length > 0 && subdominio !== auth.colegio.subdominio) {
+    if (
+      subdominio !== undefined &&
+      subdominio.length > 0 &&
+      subdominio !== auth.colegio.subdominio
+    ) {
       throw apiError(ErrorCodes.FORBIDDEN, 403, 'El subdominio no corresponde a la sesión activa');
     }
     return true;

@@ -41,7 +41,10 @@ export class LoginAttemptsService {
       return true;
     }
     // Bloqueo vencido (o entrada vieja): se descarta y se vuelve a contar.
-    if (entrada.bloqueadoHasta !== null || Date.now() - entrada.ultimoFallo > LoginAttemptsService.TTL_MS) {
+    if (
+      entrada.bloqueadoHasta !== null ||
+      Date.now() - entrada.ultimoFallo > LoginAttemptsService.TTL_MS
+    ) {
       this.intentos.delete(clave);
     }
     return false;
@@ -90,7 +93,8 @@ export class LoginAttemptsService {
     if (this.intentos.size < LoginAttemptsService.MAX_ENTRADAS) return;
     const limite = Date.now() - LoginAttemptsService.TTL_MS;
     for (const [clave, entrada] of this.intentos) {
-      const bloqueoVencido = entrada.bloqueadoHasta === null || entrada.bloqueadoHasta <= Date.now();
+      const bloqueoVencido =
+        entrada.bloqueadoHasta === null || entrada.bloqueadoHasta <= Date.now();
       if (entrada.ultimoFallo < limite && bloqueoVencido) {
         this.intentos.delete(clave);
       }

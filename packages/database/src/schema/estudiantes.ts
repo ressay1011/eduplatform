@@ -7,16 +7,7 @@
  */
 
 import { sql } from 'drizzle-orm';
-import {
-  boolean,
-  date,
-  index,
-  integer,
-  pgTable,
-  text,
-  unique,
-  uuid,
-} from 'drizzle-orm/pg-core';
+import { boolean, date, index, integer, pgTable, text, unique, uuid } from 'drizzle-orm/pg-core';
 import { EstadoEstudiante } from '@eduplatform/types';
 import { colegios } from './colegios';
 import { usuarios } from './usuarios';
@@ -25,7 +16,9 @@ import { timestamps, softDelete } from './_tenant';
 export const estudiantes = pgTable(
   'estudiantes',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     colegioId: uuid('colegio_id')
       .notNull()
       .references(() => colegios.id, { onDelete: 'restrict' }),
@@ -77,7 +70,9 @@ export const estudiantes = pgTable(
 export const acudientesEstudiantes = pgTable(
   'acudientes_estudiantes',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     colegioId: uuid('colegio_id')
       .notNull()
       .references(() => colegios.id, { onDelete: 'cascade' }),

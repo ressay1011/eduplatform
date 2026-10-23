@@ -30,7 +30,9 @@ import { timestamps, softDelete } from './_tenant';
 export const usuarios = pgTable(
   'usuarios',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     colegioId: uuid('colegio_id')
       .notNull()
       .references(() => colegios.id, { onDelete: 'restrict' }),
@@ -57,7 +59,9 @@ export const usuarios = pgTable(
      */
     rolId: uuid('rol_id').references(() => roles.id, { onDelete: 'set null' }),
     /** Alcance sobre sedes: TODAS o solo las listadas en `usuarios_sedes`. */
-    alcance: text('alcance', { enum: ['TODAS', 'ESPECIFICAS'] }).notNull().default('TODAS'),
+    alcance: text('alcance', { enum: ['TODAS', 'ESPECIFICAS'] })
+      .notNull()
+      .default('TODAS'),
     activo: boolean('activo').notNull().default(true),
     /** Primer login obliga a cambiar la contraseña (ADR-003). */
     debeCambiarPassword: boolean('debe_cambiar_password').notNull().default(true),
@@ -99,7 +103,9 @@ export const alcancePermisoEnumValues = [
 export const usuariosPermisos = pgTable(
   'usuarios_permisos',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     colegioId: uuid('colegio_id')
       .notNull()
       .references(() => colegios.id, { onDelete: 'cascade' }),
@@ -137,7 +143,9 @@ export const usuariosPermisos = pgTable(
 export const usuariosSedes = pgTable(
   'usuarios_sedes',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     colegioId: uuid('colegio_id')
       .notNull()
       .references(() => colegios.id, { onDelete: 'cascade' }),
@@ -161,7 +169,9 @@ export const usuariosSedes = pgTable(
 export const tiposUsuario = pgTable(
   'tipos_usuario',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     colegioId: uuid('colegio_id')
       .notNull()
       .references(() => colegios.id, { onDelete: 'cascade' }),
@@ -180,7 +190,9 @@ export const tiposUsuario = pgTable(
 export const usuariosTipos = pgTable(
   'usuarios_tipos',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     colegioId: uuid('colegio_id')
       .notNull()
       .references(() => colegios.id, { onDelete: 'cascade' }),

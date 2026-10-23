@@ -18,7 +18,9 @@ import { plataformaUsuarios } from './plataforma-usuarios';
 export const sesiones = pgTable(
   'sesiones',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     colegioId: uuid('colegio_id').references(() => colegios.id, { onDelete: 'cascade' }),
     usuarioId: uuid('usuario_id').references(() => usuarios.id, { onDelete: 'cascade' }),
     plataformaUsuarioId: uuid('plataforma_usuario_id').references(() => plataformaUsuarios.id, {

@@ -33,10 +33,16 @@ export function configureApp(app: INestApplication): void {
 
   // Toda respuesta autenticada es dato personal: que no la guarde ningún
   // proxy/CDN ni el caché del navegador (Ley 1581; S6 del informe).
-  app.use((_req: unknown, res: { setHeader(nombre: string, valor: string): void }, siguiente: () => void) => {
-    res.setHeader('Cache-Control', 'no-store');
-    siguiente();
-  });
+  app.use(
+    (
+      _req: unknown,
+      res: { setHeader(nombre: string, valor: string): void },
+      siguiente: () => void,
+    ) => {
+      res.setHeader('Cache-Control', 'no-store');
+      siguiente();
+    },
+  );
 
   // Toda respuesta de error sigue el contrato {success:false, error:{code,...}}
   app.useGlobalFilters(new ApiExceptionFilter());

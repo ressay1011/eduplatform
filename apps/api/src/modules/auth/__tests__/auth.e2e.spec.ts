@@ -271,7 +271,10 @@ describe('Auth (e2e)', () => {
     expect(res.status).toBe(401);
     expect(res.body.error.code).toBe('INVALID_CREDENTIALS');
     const filas = await withTenant(db, platformCtx, (tx) =>
-      tx.select({ intentos: usuarios.intentosFallidos }).from(usuarios).where(eq(usuarios.id, adminId)),
+      tx
+        .select({ intentos: usuarios.intentosFallidos })
+        .from(usuarios)
+        .where(eq(usuarios.id, adminId)),
     );
     expect(filas[0]?.intentos).toBe(1);
   });
@@ -295,7 +298,10 @@ describe('Auth (e2e)', () => {
     expect(cookie).toContain('eduplatform_sesion=');
     expect(cookie.toLowerCase()).toContain('httponly');
     const filas = await withTenant(db, platformCtx, (tx) =>
-      tx.select({ intentos: usuarios.intentosFallidos }).from(usuarios).where(eq(usuarios.id, adminId)),
+      tx
+        .select({ intentos: usuarios.intentosFallidos })
+        .from(usuarios)
+        .where(eq(usuarios.id, adminId)),
     );
     expect(filas[0]?.intentos).toBe(0);
   });
@@ -422,7 +428,8 @@ describe('Auth (e2e)', () => {
       .send({ email: emailStaffA, password: PASSWORD_STAFF });
     expect(viejo.status).toBe(401);
 
-    const nuevo = await request.agent(app.getHttpServer())
+    const nuevo = await request
+      .agent(app.getHttpServer())
       .post('/api/auth/login')
       .set('X-Colegio-Subdominio', subdominioA)
       .send({ email: emailStaffA, password: PASSWORD_NUEVA });
@@ -471,10 +478,8 @@ describe('Auth (e2e)', () => {
     expect(cruzado.status).toBe(403);
 
     // RLS de verdad: con el contexto de A, la BD solo devuelve usuarios de A.
-    const filas = await withTenant(
-      db,
-      { colegioId: colegioAId, isPlatformAdmin: false },
-      (tx) => tx.select({ id: usuarios.id }).from(usuarios),
+    const filas = await withTenant(db, { colegioId: colegioAId, isPlatformAdmin: false }, (tx) =>
+      tx.select({ id: usuarios.id }).from(usuarios),
     );
     expect(filas).toHaveLength(2);
     const idsVisibles = filas.map((f) => f.id);
@@ -510,7 +515,9 @@ describe('Auth (e2e)', () => {
     // 4) …y al invalidar (lo hará el módulo de colegios al editar), el nuevo
     //    valor sale YA — sin esperar ventanas de 60s ni TTL.
     //    Se invalida por la MISMA vía que usará el módulo de colegios.
-    app.get(AuthService).invalidarContextoColegio({ subdominio: subdominioA, dominioEmail: dominioA });
+    app
+      .get(AuthService)
+      .invalidarContextoColegio({ subdominio: subdominioA, dominioEmail: dominioA });
     const despues = await request(app.getHttpServer()).get(
       `/api/auth/contexto-colegio?subdominio=${subdominioA}`,
     );

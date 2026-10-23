@@ -20,12 +20,7 @@ import { PaperBg } from '@/components/PaperBg';
 import { StepDots } from '@/components/StepDots';
 import { TextField } from '@/components/TextField';
 import { SESION_KEY } from '@/hooks/useSesion';
-import {
-  ApiError,
-  getContextoPorDominio,
-  iniciarSesion,
-  type ContextoConSede,
-} from '@/lib/api';
+import { ApiError, getContextoPorDominio, iniciarSesion, type ContextoConSede } from '@/lib/api';
 import { aplicarBranding } from '@/lib/branding';
 import { inicialesDe } from '@/lib/subdominio';
 
@@ -174,15 +169,23 @@ export function LoginFlow() {
               <div className="locked-icon" aria-hidden="true">
                 <span className="material-symbols-outlined">lock</span>
               </div>
-              <h2 id="bloqueada-titulo" className="m3-headline-small" style={{ margin: '0 0 8px 0' }}>
+              <h2
+                id="bloqueada-titulo"
+                className="m3-headline-small"
+                style={{ margin: '0 0 8px 0' }}
+              >
                 Cuenta bloqueada
               </h2>
-              <p className="m3-body-medium" style={{ color: 'var(--md-sys-color-on-surface-variant)', margin: '0 0 24px 0' }}>
+              <p
+                className="m3-body-medium"
+                style={{ color: 'var(--md-sys-color-on-surface-variant)', margin: '0 0 24px 0' }}
+              >
                 Por seguridad, bloqueamos esta cuenta tras varios intentos fallidos.
               </p>
               <div className="locked-info">
                 <p className="m3-body-medium" style={{ margin: 0 }}>
-                  El bloqueo se levanta automáticamente en <strong>15 minutos</strong> o contactando al admin de tu colegio.
+                  El bloqueo se levanta automáticamente en <strong>15 minutos</strong> o contactando
+                  al admin de tu colegio.
                 </p>
               </div>
               <M3Button
@@ -211,9 +214,13 @@ export function LoginFlow() {
                   <h2 id="paso1-titulo" className="m3-headline-small step-titulo">
                     Iniciar sesión
                   </h2>
-                  <p className="m3-body-medium step-subtitulo">Ingresa con tu correo institucional.</p>
+                  <p className="m3-body-medium step-subtitulo">
+                    Ingresa con tu correo institucional.
+                  </p>
 
-                  {banner !== null ? <ErrorBanner titulo="No pudimos iniciar sesión" mensaje={banner} /> : null}
+                  {banner !== null ? (
+                    <ErrorBanner titulo="No pudimos iniciar sesión" mensaje={banner} />
+                  ) : null}
 
                   <form onSubmit={onEnviarPaso1} className="login-form" noValidate>
                     <TextField
@@ -263,10 +270,13 @@ export function LoginFlow() {
                     Tu contraseña
                   </h2>
                   <p className="m3-body-medium step-subtitulo">
-                    Estás entrando como <strong className="strong-on-surface">{email.trim()}</strong>
+                    Estás entrando como{' '}
+                    <strong className="strong-on-surface">{email.trim()}</strong>
                   </p>
 
-                  {banner !== null ? <ErrorBanner titulo="No pudimos iniciar sesión" mensaje={banner} /> : null}
+                  {banner !== null ? (
+                    <ErrorBanner titulo="No pudimos iniciar sesión" mensaje={banner} />
+                  ) : null}
 
                   {avisoRecuperacion ? (
                     <ErrorBanner
