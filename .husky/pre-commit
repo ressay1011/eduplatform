@@ -1,0 +1,4 @@
+# Pre-commit: rápida, solo lo que va en el commit.
+# El chequeo completo (tipos, tests, build, auditoría) sigue en `pnpm preflight`
+# y en el hook pre-push.
+pnpm exec lint-staged
