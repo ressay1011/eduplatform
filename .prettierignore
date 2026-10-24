@@ -1,0 +1,17 @@
+# Artefactos de build y dependencias
+node_modules/
+dist/
+.next/
+.vercel/
+coverage/
+.turbo/
+.scannerwork/
+
+# Diseño (Figma, exports) y lockfile: tienen su propio formato
+diseno/
+pnpm-lock.yaml
+
+# Entornos
+.env
+.env.*
+!.env.example

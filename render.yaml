@@ -1,0 +1,39 @@
+# Blueprint de Render para la API de EduPlatform.
+#
+# Uso: Render → New → Blueprint → conectar el repo. Render lee este archivo y
+# pide los valores marcados con `sync: false` (secretos) al crear el servicio.
+#
+# Build desde el monorepo: los paquetes workspace se compilan ANTES que la API
+# porque las apps los consumen desde dist/ (CommonJS).
+services:
+  - type: web
+    name: eduplatform-api
+    runtime: node
+    plan: free
+    region: virginia # us-east-1, misma región que el proyecto de Neon
+    branch: main
+    healthCheckPath: /api/health
+    buildCommand: >-
+      export COREPACK_ENABLE_DOWNLOAD_PROMPT=0 &&
+      corepack enable &&
+      pnpm install --frozen-lockfile --prod=false &&
+      pnpm --filter @eduplatform/types run build &&
+      pnpm --filter @eduplatform/database run build &&
+      pnpm --filter @eduplatform/api run build
+    startCommand: node apps/api/dist/main.js
+    envVars:
+      - key: NODE_VERSION
+        value: '22'
+      - key: NODE_ENV
+        value: production
+      # Web y API no comparten dominio registrable (Vercel + onrender.com):
+      # sin SameSite=None el navegador no envía la cookie de sesión.
+      - key: COOKIE_SAMESITE
+        value: none
+      # Secretos: se completan en el dashboard, nunca en el repo.
+      - key: DATABASE_URL
+        sync: false
+      - key: TOKEN_PEPPER
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false

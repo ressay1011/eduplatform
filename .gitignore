@@ -1,0 +1,58 @@
+# Dependencias
+node_modules/
+
+# Builds
+.turbo/
+dist/
+.next/
+out/
+build/
+coverage/
+*.tsbuildinfo
+
+# Entorno (NUNCA commitear secretos — copiar de .env.example)
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# CLI de Vercel (project.json y entorno local)
+.vercel
+
+# Sistema / editores
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Datos locales de Docker (si se llegan a montar)
+.docker-data/scripts/*.log
+
+# === Solo local: no se publica en el remoto de producción ===
+# El repo de GitHub es únicamente la fuente de despliegue (Render/Vercel).
+/docs/
+/diseno/
+/scripts/*
+!/scripts/preflight.mjs
+!/scripts/sonar.mjs
+!/scripts/coverage-floor.mjs
+/AGENTS.md
+/apps/web/server.mjs
+
+# Salida del escáner de Sonar
+.scannerwork/
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+# Videos de prueba (se regeneran y se sobrescriben; no van al repo)
+/pruebas-video/
+
+# Solo local: hooks de git y plantilla de PR (no hacen falta para desplegar)
+/.husky/
+/.github/pull_request_template.md

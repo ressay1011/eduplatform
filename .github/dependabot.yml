@@ -1,0 +1,65 @@
+# Dependabot — actualizaciones de dependencias de EduPlatform
+#
+# Reglas:
+# - Todo entra por `dev` (nunca directo a `main`), igual que el trabajo humano.
+# - Semanal, agrupado: una PR por grupo en vez de veinte sueltas.
+# - Los saltos de versión mayor de los frameworks se ignoran a propósito: se
+#   hacen a mano, con su migración y sus pruebas (Next, React, Nest, Vitest).
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: /
+    target-branch: dev
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: America/Bogota
+    open-pull-requests-limit: 5
+    versioning-strategy: increase
+    labels:
+      - dependencias
+      - automatizado
+    commit-message:
+      # `include: scope` añade "(deps)"; el prefijo no debe repetirlo.
+      prefix: 'chore'
+      include: scope
+    groups:
+      produccion-menor:
+        dependency-type: production
+        update-types:
+          - minor
+          - patch
+      desarrollo-menor:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+    ignore:
+      # Política del repo: un salto de versión MAYOR se hace a mano, con su
+      # migración y sus pruebas (Next, React, Nest, TypeScript, Vite…).
+      # Dependabot solo propone minor y patch; las alertas de seguridad siguen
+      # activas por su cuenta.
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
+
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: dev
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: America/Bogota
+    open-pull-requests-limit: 3
+    labels:
+      - dependencias
+      - automatizado
+    commit-message:
+      prefix: 'ci'
+      include: scope
+    groups:
+      actions:
+        patterns:
+          - '*'

@@ -1,0 +1,64 @@
+{
+  "name": "eduplatform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "EduPlatform — SaaS multi-tenant de gestión escolar para colegios públicos colombianos",
+  "packageManager": "pnpm@9.12.0",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "preflight": "node scripts/preflight.mjs",
+    "preflight:fast": "node scripts/preflight.mjs --fast",
+    "sonar": "node scripts/sonar.mjs",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml}\"",
+    "clean": "turbo run clean",
+    "coverage": "turbo run test:coverage",
+    "coverage:check": "node scripts/coverage-floor.mjs",
+    "e2e": "playwright test",
+    "e2e:changed": "playwright test --only-changed",
+    "e2e:ui": "playwright test --ui",
+    "e2e:types": "tsc -p tsconfig.e2e.json",
+    "e2e:install": "playwright install --with-deps chromium",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx,mjs,cjs}": [
+      "eslint --fix --max-warnings=0",
+      "prettier --write"
+    ],
+    "*.{json,md,yml,yaml}": [
+      "prettier --write"
+    ]
+  },
+  "pnpm": {
+    "overrides": {
+      "postcss": "^8.5.23"
+    }
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@next/eslint-plugin-next": "^16.4.2",
+    "@playwright/test": "^1.56.0",
+    "@sonar/scan": "^5.0.2",
+    "@types/node": "^22",
+    "eslint": "^9",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.13.0",
+    "husky": "^9",
+    "lint-staged": "^16",
+    "prettier": "^3.3.3",
+    "turbo": "^2.11.9",
+    "typescript": "^5.6.0",
+    "typescript-eslint": "^8.72.0"
+  }
+}
