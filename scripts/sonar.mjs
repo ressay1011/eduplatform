@@ -42,7 +42,7 @@ if (token === null) {
   process.exit(1);
 }
 
-const java = spawnSync('java', ['-version'], { encoding: 'utf8' });
+const java = spawnSync('java', ['-version'], { encoding: 'utf8' }); // NOSONAR: script de desarrollo, comando fijo
 if (java.status !== 0) {
   console.error('✗ El escáner necesita Java 17+ en el PATH (no lo encontré).');
   process.exit(1);
@@ -61,7 +61,7 @@ if (cobertura.length === 0) {
 
 console.log(`▸ Escaneando con ${host} (Java: ${(java.stderr.split('\n')[0] ?? '').replace('openjdk version ', '')})…`);
 
-const escaneo = spawnSync('pnpm exec sonar-scanner-npm', {
+const escaneo = spawnSync('pnpm exec sonar-scanner-npm', { // NOSONAR: idem, comando fijo
   cwd: raiz,
   shell: true,
   stdio: 'inherit',
