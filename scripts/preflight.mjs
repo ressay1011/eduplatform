@@ -47,7 +47,7 @@ function correr(etiqueta, comando, opciones = {}) {
 
 /** Ejecuta `git` y devuelve la salida recortada. */
 function git(...partes) {
-  const resultado = spawnSync('git', partes, { cwd: raiz, encoding: 'utf8' });
+  const resultado = spawnSync('git', partes, { cwd: raiz, encoding: 'utf8' }); // NOSONAR: script de desarrollo, comando fijo sin entrada de usuario
   return (resultado.stdout ?? '').trim();
 }
 
@@ -144,7 +144,7 @@ if (soloRapido) {
 
 // ── 7. Auditoría de dependencias (aviso, no bloquea) ──────────────────────────
 titulo('7. Auditoría de dependencias');
-const auditoria = spawnSync('pnpm audit --prod --audit-level=high', {
+const auditoria = spawnSync('pnpm audit --prod --audit-level=high', { // NOSONAR: idem, comando fijo
   cwd: raiz,
   shell: true,
   encoding: 'utf8',
