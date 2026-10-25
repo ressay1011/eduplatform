@@ -1041,6 +1041,19 @@ export default function OnboardingPage() {
               nacimiento.
             </p>
 
+            {cursosQ.isLoading && <p className="onb-nota">Cargando cursos del año lectivo…</p>}
+            {cursosQ.isError && (
+              <p className="onb-aviso" role="alert">
+                No pudimos cargar los cursos del año lectivo. Revisa la conexión y vuelve a entrar
+                al paso 5.
+              </p>
+            )}
+            {cursosQ.isSuccess && cursosMatricula.length === 0 && (
+              <p className="onb-nota">
+                No hay cursos en el año vigente: vuelve al paso 3 y genera la estructura.
+              </p>
+            )}
+
             {csvMensaje !== null && (
               <p className="onb-nota" role="status">
                 {csvMensaje}
