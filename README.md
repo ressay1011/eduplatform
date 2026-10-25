@@ -33,6 +33,36 @@ packages/
   `usuarios_permisos` es la proyección que leen los guards. El alcance por sede
   (`usuarios.alcance` + `usuarios_sedes`) vive en la asignación, no en el rol.
 
+## Matrículas y onboarding
+
+El wizard `/onboarding` (6 pasos) configura el colegio, agrega personal (paso 4)
+e importa estudiantes (paso 5). Una matrícula vincula un estudiante con un curso
+del año lectivo vigente (`UNIQUE (anio_lectivo_id, estudiante_id)`); la baja es
+lógica (`estado = RETIRADO`), nunca un borrado.
+
+| Método | Ruta                                     | Permiso                  | Uso                                            |
+| ------ | ---------------------------------------- | ------------------------ | ---------------------------------------------- |
+| GET    | `/matriculas/cursos`                     | `estudiantes.ver`        | cursos resolubles del año                      |
+| GET    | `/matriculas?cursoId=&anioLectivoId=&q=` | `estudiantes.ver`        | listado con curso                              |
+| POST   | `/matriculas`                            | `matriculas.administrar` | alta individual                                |
+| POST   | `/matriculas/importar`                   | `matriculas.administrar` | CSV → `{ creadas, errores[{ fila, motivo }] }` |
+| DELETE | `/matriculas/:id`                        | `matriculas.administrar` | baja lógica (RETIRADO)                         |
+
+CSV del paso 5 (UTF-8, separado por comas; el encabezado es opcional):
+
+```csv
+documento,nombres,apellidos,correo,sede,grado,letra,jornada,fechaNacimiento
+1098765432,Ana María,Gómez Ruiz,ana@cole.edu.co,Sede Principal,6,A,Mañana,2013-04-18
+```
+
+- `grado` acepta `6`, `6°` o `Transición`; `jornada` acepta `Mañana`, `Tarde`,
+  `Noche`, `Única` o `Sabatina`.
+- `fechaNacimiento` es opcional, salvo cuando la cuenta existe pero todavía no
+  tiene ficha `estudiantes`: en ese caso es obligatoria.
+- La importación **no crea cuentas**: un documento inexistente se reporta con un
+  error explícito por fila. Las cuentas de estudiante se crean desde Usuarios con
+  el rol Estudiante (el alta masiva llega con su módulo).
+
 ## Requisitos
 
 - Node.js 22 y pnpm 9.12 (`corepack enable`)
@@ -119,8 +149,10 @@ DATABASE_URL='postgresql://app_user:...' TENANT_ID='<uuid>' \
 Implementado y verificado: monorepo, RLS multi-tenant, auth propia (login
 unificado por dominio del correo), dashboard del admin, módulo **Personas**
 (Empleados · Estudiantes · Acudientes · Roles) con roles por colegio y alcance
-por sede.
+por sede, **onboarding de 6 pasos** (personal en el paso 4) y **matrículas**
+(API + importación CSV en el paso 5; el curso de cada estudiante se ve en
+Personas).
 
-Pendiente: onboarding de 6 pasos, dashboards por rol (docente, estudiante,
-acudiente), alta de estudiantes/acudientes con matrículas y el resto de las
-mejoras de rendimiento del informe interno.
+Pendiente: dashboards por rol (docente, estudiante, acudiente), alta masiva de
+cuentas de estudiante/acudiente y el resto de las mejoras de rendimiento del
+informe interno.

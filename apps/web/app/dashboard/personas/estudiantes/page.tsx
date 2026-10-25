@@ -2,8 +2,8 @@
 
 /**
  * Personas → Estudiantes — réplica del frame «Personas · Estudiantes».
- * CURSO queda vacío hasta que exista el módulo de matrículas (la BD todavía
- * no vincula estudiante ↔ grupo); el acudiente sí es real.
+ * El CURSO sale de la matrícula vigente (módulo Matrículas); el acudiente de
+ * `acudientes_estudiantes`.
  */
 import { useEffect, useState } from 'react';
 import { useAviso } from '@/components/DashboardShell';

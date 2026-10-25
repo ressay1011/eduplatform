@@ -4,6 +4,7 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from './modules/auth/auth.module';
 import { HealthModule } from './modules/health/health.module';
+import { MatriculasModule } from './modules/matriculas/matriculas.module';
 import { OnboardingModule } from './modules/onboarding/onboarding.module';
 import { PersonasModule } from './modules/personas/personas.module';
 import { RolesModule } from './modules/roles/roles.module';
@@ -19,6 +20,7 @@ import { SharedModule } from './shared/shared.module';
     UsuariosModule,
     RolesModule,
     PersonasModule,
+    MatriculasModule,
     OnboardingModule,
     HealthModule,
   ],
