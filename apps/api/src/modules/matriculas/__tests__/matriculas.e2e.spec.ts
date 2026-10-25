@@ -10,6 +10,7 @@
  *    la cuenta existe y la fila trae fecha de nacimiento
  *  - baja lógica (RETIRADO) y su efecto en el contador del onboarding
  */
+import { randomInt } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import bcrypt from 'bcrypt';
@@ -63,9 +64,12 @@ describe('Matrículas (e2e)', () => {
   let app: INestApplication;
   let db: Database;
 
-  const sufijo = String(Date.now()).slice(-8);
+  // Sufijo aleatorio: varios specs corren en hilos en paralelo y con
+  // `Date.now()` compartían milisegundo (choque de codigo_dane/subdominio).
+  const sufijo = String(randomInt(0, 100_000_000)).padStart(8, '0');
   let tenantA: Tenant;
   let tenantB: Tenant;
+  let fixturesListas = false;
   let matriculaA = '';
 
   async function login(email: string) {
@@ -274,21 +278,25 @@ describe('Matrículas (e2e)', () => {
     const hash = await bcrypt.hash(PASSWORD, 4);
     tenantA = await crearTenant('Colegio Matrículas A', 1, hash);
     tenantB = await crearTenant('Colegio Matrículas B', 2, hash);
+    fixturesListas = true;
   });
 
   afterAll(async () => {
-    await withTenant(db, platformCtx, async (tx) => {
-      for (const colegioId of [tenantA.colegioId, tenantB.colegioId]) {
-        await tx.delete(matriculas).where(eq(matriculas.colegioId, colegioId));
-        await tx.delete(estudiantes).where(eq(estudiantes.colegioId, colegioId));
-        await tx.delete(aniosLectivos).where(eq(aniosLectivos.colegioId, colegioId));
-        await tx.delete(sedes).where(eq(sedes.colegioId, colegioId));
-        await tx.delete(grados).where(eq(grados.colegioId, colegioId));
-        await tx.delete(usuarios).where(eq(usuarios.colegioId, colegioId));
-        await tx.delete(roles).where(eq(roles.colegioId, colegioId));
-        await tx.delete(colegios).where(eq(colegios.id, colegioId));
-      }
-    });
+    // Si beforeAll no llegó a crear los tenants no hay nada que limpiar.
+    if (fixturesListas) {
+      await withTenant(db, platformCtx, async (tx) => {
+        for (const colegioId of [tenantA.colegioId, tenantB.colegioId]) {
+          await tx.delete(matriculas).where(eq(matriculas.colegioId, colegioId));
+          await tx.delete(estudiantes).where(eq(estudiantes.colegioId, colegioId));
+          await tx.delete(aniosLectivos).where(eq(aniosLectivos.colegioId, colegioId));
+          await tx.delete(sedes).where(eq(sedes.colegioId, colegioId));
+          await tx.delete(grados).where(eq(grados.colegioId, colegioId));
+          await tx.delete(usuarios).where(eq(usuarios.colegioId, colegioId));
+          await tx.delete(roles).where(eq(roles.colegioId, colegioId));
+          await tx.delete(colegios).where(eq(colegios.id, colegioId));
+        }
+      });
+    }
     await app.close();
   });
 
