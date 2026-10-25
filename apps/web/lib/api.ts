@@ -11,8 +11,14 @@ import type {
   CrearRolRequest,
   CrearUsuarioRequest,
   ColegioOnboardingRequest,
+  CrearMatriculaRequest,
+  CursoMatricula,
   EstadoOnboarding,
   EstructuraOnboardingRequest,
+  ImportarMatriculasRequest,
+  ListaMatriculas,
+  MatriculaCreada,
+  ResultadoImportacionMatriculas,
   ResultadoOnboarding,
   SedeOnboardingRequest,
   ListaPersonas,
@@ -302,4 +308,48 @@ export function guardarPasoOnboarding(paso: number): Promise<EstadoOnboarding> {
 
 export function finalizarOnboarding(): Promise<ResultadoOnboarding> {
   return request('/onboarding/finalizar', { method: 'POST' });
+}
+
+// ── Matrículas ───────────────────────────────────────────────────────────────
+
+/** Cursos del año vigente (resuelven las filas del CSV). */
+export function listarCursosMatricula(): Promise<CursoMatricula[]> {
+  return request('/matriculas/cursos');
+}
+
+/** Listado de matrículas, filtrable por curso y año. */
+export function listarMatriculas(params: {
+  cursoId?: string | undefined;
+  anioLectivoId?: string | undefined;
+  q?: string | undefined;
+  page?: number;
+  limit?: number;
+}): Promise<ListaMatriculas> {
+  const query = new URLSearchParams();
+  if (params.cursoId !== undefined && params.cursoId !== '') query.set('cursoId', params.cursoId);
+  if (params.anioLectivoId !== undefined && params.anioLectivoId !== '') {
+    query.set('anioLectivoId', params.anioLectivoId);
+  }
+  if (params.q !== undefined && params.q !== '') query.set('q', params.q);
+  if (params.page !== undefined) query.set('page', String(params.page));
+  if (params.limit !== undefined) query.set('limit', String(params.limit));
+  const sufijo = query.toString();
+  return request(`/matriculas${sufijo === '' ? '' : `?${sufijo}`}`);
+}
+
+/** Alta individual (el estudiante debe existir en el colegio). */
+export function crearMatricula(dto: CrearMatriculaRequest): Promise<MatriculaCreada> {
+  return request('/matriculas', { method: 'POST', body: dto });
+}
+
+/** Importación del CSV: responde creadas + errores por fila. */
+export function importarMatriculas(
+  dto: ImportarMatriculasRequest,
+): Promise<ResultadoImportacionMatriculas> {
+  return request('/matriculas/importar', { method: 'POST', body: dto });
+}
+
+/** Baja lógica (estado RETIRADO). */
+export function retirarMatricula(id: string): Promise<{ id: string }> {
+  return request(`/matriculas/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }

@@ -6,25 +6,45 @@
  * Réplica del diseño aprobado (`diseno/Exports/Onboarding · *.json`): rail de
  * 320 px con los pasos, contenido con título Fraunces y tarjetas M3.
  *
- * Los pasos 1-3 y 6 están conectados a la API. Los pasos 4 (personal) y 5
- * (estudiantes) se pueden omitir por ahora: el alta masiva llega con el módulo
- * de matrículas y mientras tanto se hacen desde Personas.
+ * Los 6 pasos están conectados a la API: 1-3 configuran el colegio, 4 agrega
+ * personal (reutiliza POST /usuarios) y 5 importa matrículas con un CSV que se
+ * valida contra los cursos reales (POST /matriculas/importar).
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Jornada, type EstadoOnboarding } from '@eduplatform/types';
+import {
+  Jornada,
+  TIPOS_DOCUMENTO,
+  type CursoMatricula,
+  type EstadoOnboarding,
+  type ResultadoImportacionMatriculas,
+  type TipoDocumento,
+} from '@eduplatform/types';
 import { M3Button } from '@/components/M3Button';
 import { TextField } from '@/components/TextField';
+import { useEmpleados, useRoles, useSedes } from '@/hooks/usePersonas';
 import {
   ApiError,
+  actualizarUsuario,
+  crearUsuario,
   finalizarOnboarding,
   generarEstructuraOnboarding,
   getOnboarding,
   guardarColegioOnboarding,
   guardarPasoOnboarding,
   guardarSedeOnboarding,
+  importarMatriculas,
+  listarCursosMatricula,
 } from '@/lib/api';
+import {
+  aFilaRequest,
+  descargarPlantillaMatriculas,
+  motivoFilaCsv,
+  parsearCsvMatriculas,
+  resolverCursoCsv,
+  type FilaCsvMatricula,
+} from '@/lib/matriculas';
 
 const PASOS = [
   'Colegio',
@@ -56,6 +76,38 @@ interface PeriodoForm {
   nombre: string;
   fechaInicio: string;
   fechaFin: string;
+}
+
+/** Campos del alta rápida de personal (paso 4). */
+interface EmpleadoForm {
+  nombres: string;
+  apellidos: string;
+  tipoDocumento: TipoDocumento;
+  numeroDocumento: string;
+  email: string;
+  rolId: string;
+  sedeId: string;
+}
+
+const EMPLEADO_VACIO: EmpleadoForm = {
+  nombres: '',
+  apellidos: '',
+  tipoDocumento: 'CC',
+  numeroDocumento: '',
+  email: '',
+  rolId: '',
+  sedeId: '',
+};
+
+/** Lee un archivo con FileReader (compatible con jsdom en los tests). */
+function leerTexto(archivo: File): Promise<string> {
+  if (typeof archivo.text === 'function') return archivo.text();
+  return new Promise((resolve, reject) => {
+    const lector = new FileReader();
+    lector.onload = () => resolve(String(lector.result ?? ''));
+    lector.onerror = () => reject(new Error('No se pudo leer el archivo'));
+    lector.readAsText(archivo);
+  });
 }
 
 /** Períodos típicos según calendario (editables en el paso 1). */
@@ -135,6 +187,30 @@ export default function OnboardingPage() {
   const [grados, setGrados] = useState<number[]>([6, 7]);
   const [letras, setLetras] = useState<string[]>(['A', 'B']);
 
+  // Paso 4 — alta rápida de personal (POST /usuarios con rol y alcance).
+  const [empleado, setEmpleado] = useState<EmpleadoForm>(EMPLEADO_VACIO);
+  const [credencial, setCredencial] = useState<{ nombre: string; password: string } | null>(null);
+  const [exito, setExito] = useState<string | null>(null);
+
+  // Paso 5 — CSV de matrículas.
+  const [filasCsv, setFilasCsv] = useState<FilaCsvMatricula[]>([]);
+  const [lineasImportadas, setLineasImportadas] = useState<FilaCsvMatricula[]>([]);
+  const [csvMensaje, setCsvMensaje] = useState<string | null>(null);
+  const [nombreArchivo, setNombreArchivo] = useState('');
+  const [resultadoCsv, setResultadoCsv] = useState<ResultadoImportacionMatriculas | null>(null);
+  const [importando, setImportando] = useState(false);
+
+  // Consultas de los pasos 4 y 5: solo se disparan cuando el paso está activo.
+  const rolesQ = useRoles(paso === 4);
+  const sedesQ = useSedes(paso === 4);
+  const empleadosQ = useEmpleados('', paso === 4);
+  const cursosQ = useQuery<CursoMatricula[]>({
+    queryKey: ['matriculas', 'cursos'],
+    queryFn: listarCursosMatricula,
+    enabled: paso === 5,
+    retry: false,
+  });
+
   useEffect(() => {
     if (data === undefined) return;
     setColegio({
@@ -165,6 +241,21 @@ export default function OnboardingPage() {
 
   const cursosPrevistos = useMemo(() => grados.length * letras.length, [grados, letras]);
   const sedeActual = data?.sedes.find((s) => s.id === sedeId) ?? data?.sedes[0];
+
+  // Paso 4: roles asignables a personal, sedes para el alcance y listado real.
+  const rolesEmpleado = (rolesQ.data?.items ?? []).filter(
+    (rol) => rol.tipoPersona === 'EMPLEADO' && rol.activo,
+  );
+  const sedes = sedesQ.data ?? [];
+  const personal = (empleadosQ.data?.items ?? []).filter((persona) => !persona.esAdmin);
+
+  // Paso 5: cursos del año vigente y vista previa del CSV.
+  const cursosMatricula = useMemo(() => cursosQ.data ?? [], [cursosQ.data]);
+  const filasResueltas = useMemo(
+    () => filasCsv.map((fila) => ({ fila, motivo: motivoFilaCsv(cursosMatricula, fila) })),
+    [filasCsv, cursosMatricula],
+  );
+  const filasValidas = filasResueltas.filter((item) => item.motivo === null);
 
   function aplicar(estado: EstadoOnboarding, siguiente?: number): void {
     qc.setQueryData(['onboarding'], estado);
@@ -262,6 +353,142 @@ export default function OnboardingPage() {
     }
   }
 
+  function mensajeDeError(error: unknown, porDefecto: string): string {
+    return error instanceof ApiError ? error.message : porDefecto;
+  }
+
+  /** Refresca el estado del wizard y el listado de personal del paso 4. */
+  async function refrescarWizard(): Promise<void> {
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ['onboarding'] }),
+      qc.invalidateQueries({ queryKey: ['personas', 'empleados'] }),
+    ]);
+  }
+
+  /** Paso 4: crea la cuenta del empleado con rol y alcance por sede. */
+  async function crearEmpleado(): Promise<void> {
+    if (
+      empleado.nombres.trim().length < 2 ||
+      empleado.apellidos.trim().length < 2 ||
+      empleado.numeroDocumento.trim().length < 4 ||
+      empleado.email.trim() === '' ||
+      empleado.rolId === ''
+    ) {
+      setAviso('Completa nombres, apellidos, documento, correo y rol para agregar personal.');
+      return;
+    }
+
+    setGuardando(true);
+    setAviso(null);
+    setExito(null);
+    try {
+      const creado = await crearUsuario({
+        nombres: empleado.nombres.trim(),
+        apellidos: empleado.apellidos.trim(),
+        email: empleado.email.trim(),
+        tipoDocumento: empleado.tipoDocumento,
+        numeroDocumento: empleado.numeroDocumento.trim(),
+        esAdmin: false,
+        rolId: empleado.rolId,
+        alcance: empleado.sedeId === '' ? 'TODAS' : 'ESPECIFICAS',
+        sedesIds: empleado.sedeId === '' ? [] : [empleado.sedeId],
+        permisos: [],
+      });
+      setCredencial({
+        nombre: `${creado.usuario.nombres} ${creado.usuario.apellidos}`,
+        password: creado.passwordTemporal,
+      });
+      setEmpleado({ ...EMPLEADO_VACIO, tipoDocumento: empleado.tipoDocumento });
+      await refrescarWizard();
+      setExito('Personal agregado. Comparte la contraseña temporal: solo se muestra una vez.');
+    } catch (e) {
+      setAviso(mensajeDeError(e, 'No se pudo agregar a la persona.'));
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  /** Paso 4: baja lógica de la cuenta (reversible desde Personas → Empleados). */
+  async function quitarEmpleado(id: string, nombre: string): Promise<void> {
+    setGuardando(true);
+    setAviso(null);
+    setExito(null);
+    try {
+      await actualizarUsuario(id, { activo: false });
+      await refrescarWizard();
+      setExito(`${nombre} quedó inactivo. Puedes reactivarlo en Personas → Empleados.`);
+    } catch (e) {
+      setAviso(mensajeDeError(e, 'No se pudo quitar a la persona.'));
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  /** Avanza y persiste el paso (el progreso es cosmético: no bloquea). */
+  async function avanzar(destino: number): Promise<void> {
+    try {
+      const estado = await guardarPasoOnboarding(destino);
+      qc.setQueryData(['onboarding'], estado);
+    } catch {
+      // Sin conexión el wizard sigue: el paso se guarda al finalizar.
+    }
+    setPaso(destino);
+    setAviso(null);
+    setExito(null);
+  }
+
+  /** Paso 5: lee el CSV en el cliente y arma la vista previa. */
+  async function leerCsv(evento: ChangeEvent<HTMLInputElement>): Promise<void> {
+    const archivo = evento.target.files?.[0];
+    evento.target.value = '';
+    if (archivo === undefined) return;
+
+    setNombreArchivo(archivo.name);
+    setResultadoCsv(null);
+    setExito(null);
+    setAviso(null);
+    try {
+      const leido = parsearCsvMatriculas(await leerTexto(archivo));
+      setFilasCsv(leido.filas);
+      setCsvMensaje(
+        leido.errores.length > 0
+          ? leido.errores.join(' · ')
+          : `${leido.filas.length} fila(s) listas para revisar.`,
+      );
+    } catch {
+      setFilasCsv([]);
+      setCsvMensaje('No pudimos leer el archivo. Guarda el CSV en UTF-8 separado por comas.');
+    }
+  }
+
+  /** Paso 5: envía solo las filas válidas; la API reporta sus propios errores. */
+  async function importarCsv(): Promise<void> {
+    if (filasValidas.length === 0) {
+      setAviso('No hay filas válidas para importar.');
+      return;
+    }
+    setImportando(true);
+    setAviso(null);
+    setExito(null);
+    try {
+      const enviadas = filasValidas.map((item) => item.fila);
+      const resultado = await importarMatriculas({ filas: enviadas.map(aFilaRequest) });
+      setResultadoCsv(resultado);
+      setLineasImportadas(enviadas);
+      setFilasCsv([]);
+      setNombreArchivo('');
+      setCsvMensaje(null);
+      await qc.invalidateQueries({ queryKey: ['onboarding'] });
+      if (resultado.creadas > 0) {
+        setExito(`Se matricularon ${resultado.creadas} estudiante(s).`);
+      }
+    } catch (e) {
+      setAviso(mensajeDeError(e, 'No se pudo importar el CSV.'));
+    } finally {
+      setImportando(false);
+    }
+  }
+
   if (isLoading) {
     return (
       <main className="onb-cargando" aria-live="polite">
@@ -311,6 +538,12 @@ export default function OnboardingPage() {
         {aviso !== null && (
           <p className="onb-aviso" role="alert">
             {aviso}
+          </p>
+        )}
+
+        {exito !== null && (
+          <p className="onb-ok" role="status">
+            {exito}
           </p>
         )}
 
@@ -601,17 +834,307 @@ export default function OnboardingPage() {
           </section>
         )}
 
-        {(paso === 4 || paso === 5) && (
-          <section className="onb-card onb-card--pendiente">
-            <p>
-              {paso === 4
-                ? 'El alta de personal se hace desde Personas → Empleados (con rol y sede). La importación CSV llega con ese módulo.'
-                : 'La carga masiva de estudiantes llega con el módulo de matrículas; las filas se validan contra cursos reales.'}
-            </p>
+        {paso === 4 && (
+          <section className="onb-card">
+            <div className="onb-card-cabecera">
+              <h2 className="onb-card-titulo">Agregar personal</h2>
+              <span className="onb-contador">
+                {data.personal.total} {data.personal.total === 1 ? 'persona' : 'personas'} en el
+                colegio
+              </span>
+            </div>
+
+            <div className="onb-grid">
+              <TextField
+                id="onb-emp-nombres"
+                label="Nombres"
+                value={empleado.nombres}
+                onChange={(v) => setEmpleado({ ...empleado, nombres: v })}
+              />
+              <TextField
+                id="onb-emp-apellidos"
+                label="Apellidos"
+                value={empleado.apellidos}
+                onChange={(v) => setEmpleado({ ...empleado, apellidos: v })}
+              />
+              <label className="onb-campo">
+                Tipo de documento
+                <select
+                  value={empleado.tipoDocumento}
+                  onChange={(e) =>
+                    setEmpleado({ ...empleado, tipoDocumento: e.target.value as TipoDocumento })
+                  }
+                >
+                  {TIPOS_DOCUMENTO.map((tipo) => (
+                    <option key={tipo} value={tipo}>
+                      {tipo}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <TextField
+                id="onb-emp-documento"
+                label="Número de documento"
+                value={empleado.numeroDocumento}
+                onChange={(v) => setEmpleado({ ...empleado, numeroDocumento: v })}
+              />
+              <TextField
+                id="onb-emp-email"
+                label="Correo electrónico"
+                tipo="email"
+                value={empleado.email}
+                onChange={(v) => setEmpleado({ ...empleado, email: v })}
+                ayuda="Será su usuario para entrar a la plataforma"
+              />
+              <label className="onb-campo">
+                Rol
+                <select
+                  value={empleado.rolId}
+                  onChange={(e) => setEmpleado({ ...empleado, rolId: e.target.value })}
+                >
+                  <option value="">Elige un rol…</option>
+                  {rolesEmpleado.map((rol) => (
+                    <option key={rol.id} value={rol.id}>
+                      {rol.nombre}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="onb-campo">
+                Sede (alcance)
+                <select
+                  value={empleado.sedeId}
+                  onChange={(e) => setEmpleado({ ...empleado, sedeId: e.target.value })}
+                >
+                  <option value="">Todas las sedes</option>
+                  {sedes.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.nombre}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div className="onb-acciones">
+              <M3Button
+                icono="person_add"
+                onClick={() => void crearEmpleado()}
+                disabled={guardando}
+              >
+                Agregar al equipo
+              </M3Button>
+            </div>
+
+            {credencial !== null && (
+              <div className="onb-credencial" role="status">
+                <p>
+                  <strong>{credencial.nombre}</strong> quedó creado. Esta contraseña temporal se
+                  muestra una sola vez:
+                </p>
+                <code>{credencial.password}</code>
+              </div>
+            )}
+
+            <h2 className="onb-card-titulo">Personal agregado</h2>
+            {empleadosQ.isLoading ? (
+              <p className="onb-nota">Cargando personal…</p>
+            ) : personal.length === 0 ? (
+              <p className="onb-nota">
+                Además de tu cuenta de administrador aún no hay personal. Puedes continuar sin
+                agregar a nadie y hacerlo después en Personas → Empleados.
+              </p>
+            ) : (
+              <div className="onb-tabla-envoltura">
+                <table className="onb-tabla">
+                  <thead>
+                    <tr>
+                      <th scope="col">Persona</th>
+                      <th scope="col">Documento</th>
+                      <th scope="col">Rol</th>
+                      <th scope="col">Estado</th>
+                      <th scope="col">
+                        <span className="sr-only">Acciones</span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {personal.map((persona) => (
+                      <tr key={persona.id}>
+                        <td>
+                          <strong>
+                            {persona.nombres} {persona.apellidos}
+                          </strong>
+                          <span className="onb-celda-detalle">{persona.email}</span>
+                        </td>
+                        <td>{persona.numeroDocumento}</td>
+                        <td>{persona.rolNombre ?? 'Sin rol'}</td>
+                        <td>
+                          <span className="onb-chip onb-chip--solo">
+                            {persona.activo ? 'Activo' : 'Inactivo'}
+                          </span>
+                        </td>
+                        <td>
+                          {persona.activo ? (
+                            <button
+                              type="button"
+                              className="onb-quitar"
+                              onClick={() =>
+                                void quitarEmpleado(
+                                  persona.id,
+                                  `${persona.nombres} ${persona.apellidos}`,
+                                )
+                              }
+                              disabled={guardando}
+                            >
+                              Quitar
+                            </button>
+                          ) : null}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {!rolesQ.isLoading && rolesEmpleado.length === 0 && (
+              <p className="onb-nota">
+                No hay roles de tipo empleado activos: créalos en Personas → Roles antes de agregar
+                personal.
+              </p>
+            )}
+          </section>
+        )}
+
+        {paso === 5 && (
+          <section className="onb-card">
+            <div className="onb-card-cabecera">
+              <h2 className="onb-card-titulo">Importar estudiantes (CSV)</h2>
+              <span className="onb-contador">
+                {data.estudiantes.matriculados} matriculado(s) de {data.estudiantes.total}{' '}
+                estudiante(s)
+              </span>
+            </div>
+
+            <div className="onb-archivo-fila">
+              <label className="onb-archivo">
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  upload_file
+                </span>
+                {nombreArchivo === '' ? 'Elegir archivo CSV' : nombreArchivo}
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  onChange={(evento) => void leerCsv(evento)}
+                />
+              </label>
+              <M3Button variante="outlined" icono="download" onClick={descargarPlantillaMatriculas}>
+                Descargar plantilla
+              </M3Button>
+            </div>
+
             <p className="onb-nota">
-              Puedes omitirlo ahora: el checklist «Completa tu colegio» te lo recordará en el
-              dashboard.
+              Columnas: documento, nombres, apellidos, correo, sede, grado (6 o 6°), letra, jornada
+              (Mañana, Tarde, Noche, Única o Sabatina) y fechaNacimiento opcional. Solo se
+              matriculan cuentas que ya existen; si el estudiante no tiene ficha, agrega la fecha de
+              nacimiento.
             </p>
+
+            {cursosQ.isLoading && <p className="onb-nota">Cargando cursos del año lectivo…</p>}
+            {cursosQ.isError && (
+              <p className="onb-aviso" role="alert">
+                No pudimos cargar los cursos del año lectivo. Revisa la conexión y vuelve a entrar
+                al paso 5.
+              </p>
+            )}
+            {cursosQ.isSuccess && cursosMatricula.length === 0 && (
+              <p className="onb-nota">
+                No hay cursos en el año vigente: vuelve al paso 3 y genera la estructura.
+              </p>
+            )}
+
+            {csvMensaje !== null && (
+              <p className="onb-nota" role="status">
+                {csvMensaje}
+              </p>
+            )}
+
+            {csvMensaje === null && nombreArchivo === '' && resultadoCsv === null && (
+              <p className="onb-nota">
+                Aún no has cargado un archivo. Puedes continuar y hacer la carga después: el
+                checklist «Completa tu colegio» te lo recordará.
+              </p>
+            )}
+
+            {filasCsv.length > 0 && (
+              <>
+                <div className="onb-tabla-envoltura">
+                  <table className="onb-tabla onb-tabla--csv">
+                    <thead>
+                      <tr>
+                        <th scope="col">Línea</th>
+                        <th scope="col">Documento</th>
+                        <th scope="col">Estudiante</th>
+                        <th scope="col">Curso</th>
+                        <th scope="col">Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filasResueltas.map(({ fila, motivo }) => {
+                        const nombre = `${fila.nombres} ${fila.apellidos}`.trim();
+                        return (
+                          <tr key={fila.linea}>
+                            <td>{fila.linea}</td>
+                            <td>{fila.documento}</td>
+                            <td>{nombre === '' ? '—' : nombre}</td>
+                            <td>{resolverCursoCsv(cursosMatricula, fila)?.nombre ?? '—'}</td>
+                            <td>
+                              {motivo === null ? (
+                                <span className="onb-chip onb-chip--ok">Válida</span>
+                              ) : (
+                                <span className="onb-chip onb-chip--error">{motivo}</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="onb-acciones">
+                  <M3Button
+                    icono="upload"
+                    onClick={() => void importarCsv()}
+                    disabled={importando || filasValidas.length === 0}
+                  >
+                    Importar {filasValidas.length} fila(s) válida(s)
+                  </M3Button>
+                </div>
+              </>
+            )}
+
+            {resultadoCsv !== null && (
+              <div className="onb-resultado" role="status">
+                <p>
+                  <strong>{resultadoCsv.creadas}</strong> matrícula(s) creada(s).
+                </p>
+                {resultadoCsv.errores.length > 0 ? (
+                  <ul>
+                    {resultadoCsv.errores.map((error) => {
+                      const original = lineasImportadas[error.fila - 1];
+                      return (
+                        <li key={`${error.fila}-${error.motivo}`}>
+                          Línea {original?.linea ?? error.fila}: {error.motivo}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  <p className="onb-nota">Sin errores.</p>
+                )}
+              </div>
+            )}
           </section>
         )}
 
@@ -680,8 +1203,15 @@ export default function OnboardingPage() {
                 Generar {cursosPrevistos} cursos
               </M3Button>
             )}
-            {(paso === 4 || paso === 5) && (
-              <M3Button onClick={() => setPaso(paso + 1)}>Omitir por ahora</M3Button>
+            {paso === 4 && (
+              <M3Button onClick={() => void avanzar(5)} disabled={guardando}>
+                Continuar a estudiantes
+              </M3Button>
+            )}
+            {paso === 5 && (
+              <M3Button onClick={() => void avanzar(6)} disabled={importando}>
+                Continuar al resumen
+              </M3Button>
             )}
             {paso === 6 && (
               <M3Button onClick={() => void terminar()} disabled={guardando}>

@@ -96,7 +96,7 @@ export class PersonasRepository extends BaseRepository {
     });
   }
 
-  /** Estudiantes con su cuenta; el curso llega con el módulo de matrículas. */
+  /** Estudiantes con su cuenta y el curso de su matrícula vigente. */
   async estudiantes(
     ctx: TenantContext,
     filtros: Filtros,
@@ -125,6 +125,18 @@ export class PersonasRepository extends BaseRepository {
           codigoMatricula: estudiantes.codigoMatricula,
           estado: estudiantes.estado,
           activo: usuarios.activo,
+          // Curso de la matrícula vigente (módulo Matrículas); null si no tiene.
+          curso: sql<string | null>`(
+            select gr.nombre || ' ' || g.letra
+            from matriculas m
+            join grupos g on g.id = m.grupo_id
+            join grados gr on gr.id = g.grado_id
+            where m.estudiante_id = ${estudiantes.id}
+              and m.colegio_id = ${ctx.colegioId}
+              and m.estado = 'MATRICULADO'
+            order by m.fecha_matricula desc
+            limit 1
+          )`,
           // Acudiente principal del estudiante: el primero marcado como tal.
           acudiente: sql<string | null>`(
             select ua.nombres || ' ' || ua.apellidos
@@ -145,7 +157,7 @@ export class PersonasRepository extends BaseRepository {
         .offset((filtros.page - 1) * filtros.limit);
 
       return {
-        items: filas.map((fila) => ({ ...fila, curso: null })),
+        items: filas,
         total: Number(filas[0]?.total ?? 0),
         page: filtros.page,
         limit: filtros.limit,
