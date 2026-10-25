@@ -8,4 +8,5 @@ export * from './entities/enums';
 export * from './auth';
 export * from './usuarios';
 export * from './roles';
+export * from './matriculas';
 export * from './onboarding';
