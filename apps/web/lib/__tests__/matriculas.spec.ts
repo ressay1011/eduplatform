@@ -1,8 +1,9 @@
 /** CSV de matrículas: lectura, resolución de curso y plantilla (unidad). */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { CursoMatricula } from '@eduplatform/types';
 import {
   aFilaRequest,
+  descargarPlantillaMatriculas,
   motivoFilaCsv,
   normalizarJornada,
   numeroDeGrado,
@@ -55,6 +56,16 @@ describe('parsearCsvMatriculas', () => {
     expect(filas[1]?.fechaNacimiento).toBeUndefined();
   });
 
+  it('respeta las comillas escapadas dentro de un campo', () => {
+    const { filas } = parsearCsvMatriculas(
+      [
+        'documento,nombres,apellidos,correo,sede,grado,letra,jornada',
+        '12345678,"Pérez ""el jefe""",López,,Sede Principal,6,A,Mañana',
+      ].join('\n'),
+    );
+    expect(filas[0]?.nombres).toBe('Pérez "el jefe"');
+  });
+
   it('reporta líneas incompletas sin descartar las válidas', () => {
     const { filas, errores } = parsearCsvMatriculas(
       ['documento,nombres,apellidos,correo,sede,grado,letra,jornada', 'solo,dos'].join('\n'),
@@ -97,6 +108,7 @@ describe('resolución de curso y motivo', () => {
       jornada: 'Mañana',
     };
     expect(motivoFilaCsv(CURSOS, { ...base, documento: '' })).toBe('Falta el documento');
+    expect(motivoFilaCsv(CURSOS, { ...base, sede: '' })).toBe('Faltan datos del curso');
     expect(motivoFilaCsv(CURSOS, { ...base, sede: 'Sede Norte' })).toContain('no existe');
     expect(motivoFilaCsv(CURSOS, { ...base, jornada: 'madrugada' })).toContain('Jornada inválida');
   });
@@ -124,5 +136,34 @@ describe('plantillaMatriculasCsv', () => {
     const lineas = plantillaMatriculasCsv().split('\r\n');
     expect(lineas[0]).toContain('documento,nombres,apellidos,correo,sede,grado,letra,jornada');
     expect(lineas[1]?.split(',')[0]).toBe('1098765432');
+  });
+
+  it('descarga la plantilla con un enlace temporal y libera el objeto URL', () => {
+    const crear = vi.fn(() => 'blob:plantilla');
+    const liberar = vi.fn();
+    const clic = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    const descriptorCrear = Object.getOwnPropertyDescriptor(URL, 'createObjectURL');
+    const descriptorLiberar = Object.getOwnPropertyDescriptor(URL, 'revokeObjectURL');
+
+    Object.defineProperty(URL, 'createObjectURL', { value: crear, configurable: true });
+    Object.defineProperty(URL, 'revokeObjectURL', { value: liberar, configurable: true });
+    try {
+      descargarPlantillaMatriculas();
+      expect(crear).toHaveBeenCalledTimes(1);
+      expect(clic).toHaveBeenCalledTimes(1);
+      expect(liberar).toHaveBeenCalledWith('blob:plantilla');
+    } finally {
+      clic.mockRestore();
+      if (descriptorCrear === undefined) {
+        Reflect.deleteProperty(URL, 'createObjectURL');
+      } else {
+        Object.defineProperty(URL, 'createObjectURL', descriptorCrear);
+      }
+      if (descriptorLiberar === undefined) {
+        Reflect.deleteProperty(URL, 'revokeObjectURL');
+      } else {
+        Object.defineProperty(URL, 'revokeObjectURL', descriptorLiberar);
+      }
+    }
   });
 });

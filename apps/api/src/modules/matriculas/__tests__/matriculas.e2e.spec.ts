@@ -47,7 +47,10 @@ interface Tenant {
   adminEmail: string;
   staffEmail: string;
   sedeId: string;
+  anioLectivoId: string;
   cursoId: string;
+  /** Documento del admin (cuenta sin rol de estudiante: la usa el CSV). */
+  adminDocumento: string;
   /** Estudiante con ficha (se matricula individualmente). */
   estudianteId: string;
   estudianteDocumento: string;
@@ -147,6 +150,7 @@ describe('Matrículas (e2e)', () => {
       const base = Number(sufijo.slice(-4)) * 10 + indice;
       const documentoEstudiante = `10${base}1`;
       const documentoCuenta = `10${base}2`;
+      const documentoAdmin = `9${sufijo}${indice}1`;
 
       const creados = await tx
         .insert(usuarios)
@@ -158,7 +162,7 @@ describe('Matrículas (e2e)', () => {
             nombres: 'Admin',
             apellidos: `Colegio ${indice}`,
             tipoDocumento: 'CC',
-            numeroDocumento: `9${sufijo}${indice}1`,
+            numeroDocumento: documentoAdmin,
             esAdmin: true,
             debeCambiarPassword: false,
           },
@@ -234,7 +238,9 @@ describe('Matrículas (e2e)', () => {
         adminEmail,
         staffEmail,
         sedeId: sede.id,
+        anioLectivoId: anio.id,
         cursoId: curso.id,
+        adminDocumento: documentoAdmin,
         estudianteId: '',
         estudianteDocumento: documentoEstudiante,
         cuentaSinFichaId: cuenta.id,
@@ -326,6 +332,13 @@ describe('Matrículas (e2e)', () => {
       estado: 'MATRICULADO',
     });
 
+    // Filtros por año y búsqueda por nombre.
+    const filtrado = await agente
+      .get(`/api/matriculas?anioLectivoId=${tenantA.anioLectivoId}&q=Estudiante`)
+      .expect(200);
+    expect(filtrado.body.data.total).toBe(1);
+    expect(filtrado.body.data.items[0].id).toBe(matriculaA);
+
     // Personas → Estudiantes ya muestra el CURSO de la matrícula vigente.
     const personas = await agente.get('/api/personas/estudiantes').expect(200);
     const fila = personas.body.data.items.find(
@@ -340,6 +353,17 @@ describe('Matrículas (e2e)', () => {
       .post('/api/matriculas')
       .send({ estudianteId: tenantA.estudianteId, cursoId: tenantA.cursoId })
       .expect(409);
+  });
+
+  it('devuelve 404 si el estudiante no existe en el colegio', async () => {
+    const agente = await login(tenantA.adminEmail);
+    await agente
+      .post('/api/matriculas')
+      .send({
+        estudianteId: '00000000-0000-4000-8000-000000000000',
+        cursoId: tenantA.cursoId,
+      })
+      .expect(404);
   });
 
   it('no cruza tenants: el curso y el estudiante ajenos dan 404', async () => {
@@ -364,6 +388,15 @@ describe('Matrículas (e2e)', () => {
       .post('/api/matriculas/importar')
       .send({
         filas: [
+          // Fila 1: la cuenta existe sin ficha y la fila no trae fecha → error.
+          {
+            documento: tenantA.cuentaSinFichaDocumento,
+            sede: 'Sede Principal',
+            grado: '6',
+            letra: 'A',
+            jornada: 'MANANA',
+          },
+          // Fila 2: misma cuenta, ahora con fecha → crea la ficha y matricula.
           {
             documento: tenantA.cuentaSinFichaDocumento,
             nombres: 'Cuenta',
@@ -375,6 +408,7 @@ describe('Matrículas (e2e)', () => {
             jornada: 'Mañana',
             fechaNacimiento: '2012-09-30',
           },
+          // Fila 3: documento inexistente.
           {
             documento: '99999999',
             sede: 'Sede Principal',
@@ -382,6 +416,7 @@ describe('Matrículas (e2e)', () => {
             letra: 'A',
             jornada: 'MANANA',
           },
+          // Fila 4: ya tiene matrícula en el año.
           {
             documento: tenantA.estudianteDocumento,
             sede: 'Sede Principal',
@@ -389,6 +424,7 @@ describe('Matrículas (e2e)', () => {
             letra: 'A',
             jornada: 'MANANA',
           },
+          // Fila 5: curso que no existe en el colegio.
           {
             documento: tenantA.cuentaSinFichaDocumento,
             sede: 'Sede Fantasma',
@@ -396,16 +432,31 @@ describe('Matrículas (e2e)', () => {
             letra: 'A',
             jornada: 'MANANA',
           },
+          // Fila 6: cuenta sin rol de estudiante (el admin).
+          {
+            documento: tenantA.adminDocumento,
+            sede: 'Sede Principal',
+            grado: '6',
+            letra: 'A',
+            jornada: 'MANANA',
+            fechaNacimiento: '1990-01-01',
+          },
         ],
       })
       .expect(200);
 
     expect(body.data.creadas).toBe(1);
-    expect(body.data.errores).toHaveLength(3);
-    expect(body.data.errores[0].fila).toBe(2);
-    expect(body.data.errores[0].motivo).toContain('No existe una cuenta con el documento 99999999');
-    expect(body.data.errores[1].motivo).toContain('ya tiene matrícula en 2026');
-    expect(body.data.errores[2].motivo).toContain('No existe el curso');
+    expect(body.data.errores).toHaveLength(5);
+    expect(body.data.errores[0]).toMatchObject({ fila: 1 });
+    expect(body.data.errores[0].motivo).toContain('Falta fechaNacimiento');
+    expect(body.data.errores[1]).toMatchObject({ fila: 3 });
+    expect(body.data.errores[1].motivo).toContain('No existe una cuenta con el documento 99999999');
+    expect(body.data.errores[2]).toMatchObject({ fila: 4 });
+    expect(body.data.errores[2].motivo).toContain('ya tiene matrícula en 2026');
+    expect(body.data.errores[3]).toMatchObject({ fila: 5 });
+    expect(body.data.errores[3].motivo).toContain('No existe el curso');
+    expect(body.data.errores[4]).toMatchObject({ fila: 6 });
+    expect(body.data.errores[4].motivo).toContain('no tiene rol de estudiante');
 
     // La ficha se creó para la cuenta que no la tenía (con su fecha de nacimiento).
     const [ficha] = await withTenant(db, platformCtx, (tx) =>
@@ -425,6 +476,10 @@ describe('Matrículas (e2e)', () => {
 
   it('la baja deja la matrícula en RETIRADO y actualiza el contador del onboarding', async () => {
     const agente = await login(tenantA.adminEmail);
+
+    // Una matrícula inexistente responde 404 (no borra nada).
+    await agente.delete('/api/matriculas/00000000-0000-4000-8000-000000000001').expect(404);
+
     await agente.delete(`/api/matriculas/${matriculaA}`).expect(200);
 
     const listado = await agente.get(`/api/matriculas?cursoId=${tenantA.cursoId}`).expect(200);

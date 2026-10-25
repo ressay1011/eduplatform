@@ -217,6 +217,7 @@ describe('Onboarding · paso 4 (personal)', () => {
 
     await userEvent.type(screen.getByLabelText('Nombres'), 'Laura');
     await userEvent.type(screen.getByLabelText('Apellidos'), 'Ramírez');
+    await userEvent.selectOptions(screen.getByLabelText(/^Tipo de documento/), 'TI');
     await userEvent.type(screen.getByLabelText('Número de documento'), '1088999');
     await userEvent.type(screen.getByLabelText('Correo electrónico'), 'laura@demo.edu.co');
     await userEvent.selectOptions(screen.getByLabelText(/^Rol/), 'rol-1');
@@ -230,6 +231,7 @@ describe('Onboarding · paso 4 (personal)', () => {
         nombres: 'Laura',
         apellidos: 'Ramírez',
         email: 'laura@demo.edu.co',
+        tipoDocumento: 'TI',
         numeroDocumento: '1088999',
         rolId: 'rol-1',
         esAdmin: false,
@@ -238,6 +240,35 @@ describe('Onboarding · paso 4 (personal)', () => {
       }),
     );
     expect(await screen.findByText('Temp-2026!')).toBeInTheDocument();
+  });
+
+  it('no agrega si el formulario está incompleto', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(4));
+
+    renderPagina();
+    await screen.findByRole('heading', { name: 'Personal del colegio' });
+    await userEvent.click(screen.getByRole('button', { name: /agregar al equipo/i }));
+
+    expect(
+      await screen.findByText(/Completa nombres, apellidos, documento, correo y rol/i),
+    ).toBeInTheDocument();
+    expect(crearUsuario).not.toHaveBeenCalled();
+  });
+
+  it('muestra el mensaje por defecto ante un error que no es de la API', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(4));
+    vi.mocked(crearUsuario).mockRejectedValue(new Error('boom'));
+
+    renderPagina();
+    await screen.findByRole('heading', { name: 'Personal del colegio' });
+    await userEvent.type(screen.getByLabelText('Nombres'), 'Laura');
+    await userEvent.type(screen.getByLabelText('Apellidos'), 'Ramírez');
+    await userEvent.type(screen.getByLabelText('Número de documento'), '1088999');
+    await userEvent.type(screen.getByLabelText('Correo electrónico'), 'laura@demo.edu.co');
+    await userEvent.selectOptions(screen.getByLabelText(/^Rol/), 'rol-1');
+    await userEvent.click(screen.getByRole('button', { name: /agregar al equipo/i }));
+
+    expect(await screen.findByText('No se pudo agregar a la persona.')).toBeInTheDocument();
   });
 
   it('da de baja a una persona del listado', async () => {
@@ -253,6 +284,18 @@ describe('Onboarding · paso 4 (personal)', () => {
       expect(actualizarUsuario).toHaveBeenCalledWith('persona-1', { activo: false }),
     );
     expect(await screen.findByText(/quedó inactivo/i)).toBeInTheDocument();
+  });
+
+  it('informa si la baja falla', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(4));
+    vi.mocked(listarEmpleados).mockResolvedValue(personal([EMPLEADO]));
+    vi.mocked(actualizarUsuario).mockRejectedValue(new Error('boom'));
+
+    renderPagina();
+    await screen.findByText('Carlos Pérez');
+    await userEvent.click(screen.getByRole('button', { name: 'Quitar' }));
+
+    expect(await screen.findByText('No se pudo quitar a la persona.')).toBeInTheDocument();
   });
 });
 
@@ -322,5 +365,44 @@ describe('Onboarding · paso 5 (CSV de matrículas)', () => {
 
     await waitFor(() => expect(guardarPasoOnboarding).toHaveBeenCalledWith(6));
     expect(await screen.findByRole('heading', { name: 'Todo listo' })).toBeInTheDocument();
+  });
+
+  it('avisa si el archivo no se puede leer', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(5));
+
+    renderPagina();
+    await screen.findByRole('heading', { name: 'Estudiantes' });
+
+    const archivo = new File(['x'], 'roto.csv', { type: 'text/csv' });
+    Object.defineProperty(archivo, 'text', {
+      value: () => Promise.reject(new Error('ilegible')),
+      configurable: true,
+    });
+    fireEvent.change(screen.getByLabelText(/elegir archivo csv/i), {
+      target: { files: [archivo] },
+    });
+
+    expect(await screen.findByText(/No pudimos leer el archivo/)).toBeInTheDocument();
+  });
+
+  it('informa si la importación falla', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(5));
+    vi.mocked(importarMatriculas).mockRejectedValue(new Error('boom'));
+
+    renderPagina();
+    await screen.findByRole('heading', { name: 'Estudiantes' });
+
+    const csv = [
+      'documento,nombres,apellidos,correo,sede,grado,letra,jornada',
+      '1098765432,Ana María,Gómez,ana@demo.edu.co,Sede Principal,6,A,Mañana',
+    ].join('\n');
+    fireEvent.change(screen.getByLabelText(/elegir archivo csv/i), {
+      target: { files: [new File([csv], 'matriculas.csv', { type: 'text/csv' })] },
+    });
+
+    await screen.findByText('1098765432');
+    await userEvent.click(screen.getByRole('button', { name: /importar 1 fila/i }));
+
+    expect(await screen.findByText('No se pudo importar el CSV.')).toBeInTheDocument();
   });
 });

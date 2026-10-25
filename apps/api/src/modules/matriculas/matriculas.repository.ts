@@ -17,7 +17,7 @@ import {
   sedes,
   usuarios,
 } from '@eduplatform/database';
-import { and, asc, count, desc, eq, ilike, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, isNull, or, sql } from 'drizzle-orm';
 import type {
   CursoMatricula,
   Jornada,
@@ -110,10 +110,6 @@ export class MatriculasRepository extends BaseRepository {
   }
 
   /** Año lectivo más reciente del colegio. */
-  async anioVigente(ctx: TenantContext): Promise<{ id: string; anio: number } | null> {
-    return this.withTenant(ctx, async (tx) => this.anioVigenteTx(tx, ctx));
-  }
-
   private async anioVigenteTx(
     tx: Tx,
     ctx: TenantContext,
@@ -369,17 +365,6 @@ export class MatriculasRepository extends BaseRepository {
         .where(and(eq(matriculas.id, matriculaId), eq(matriculas.colegioId, ctx.colegioId)))
         .returning({ id: matriculas.id });
       return fila !== undefined;
-    });
-  }
-
-  /** Conteo de matriculados (checklist del onboarding). */
-  async contarMatriculados(ctx: TenantContext): Promise<number> {
-    return this.withTenant(ctx, async (tx) => {
-      const [fila] = await tx
-        .select({ n: count() })
-        .from(matriculas)
-        .where(and(eq(matriculas.colegioId, ctx.colegioId), eq(matriculas.estado, 'MATRICULADO')));
-      return Number(fila?.n ?? 0);
     });
   }
 }

@@ -4,7 +4,17 @@
  * del cliente: contrato exitoso, errores con código y fallo de red).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, getContextoColegio, iniciarSesion, listarUsuarios } from '../api';
+import {
+  ApiError,
+  crearMatricula,
+  getContextoColegio,
+  importarMatriculas,
+  iniciarSesion,
+  listarCursosMatricula,
+  listarMatriculas,
+  listarUsuarios,
+  retirarMatricula,
+} from '../api';
 
 const fetchMock = vi.fn();
 
@@ -93,5 +103,72 @@ describe('lib/api', () => {
       expect.stringContaining('/usuarios?q=mar%C3%ADa+l%C3%B3pez&estado=activo&page=2&limit=10'),
       expect.anything(),
     );
+  });
+
+  describe('matrículas', () => {
+    it('lista cursos y matrículas con sus filtros', async () => {
+      fetchMock.mockImplementation(async () => respuesta(200, { success: true, data: [] }));
+      await listarCursosMatricula();
+      expect(fetchMock).toHaveBeenLastCalledWith(
+        expect.stringContaining('/matriculas/cursos'),
+        expect.objectContaining({ method: 'GET' }),
+      );
+
+      fetchMock.mockImplementation(async () =>
+        respuesta(200, { success: true, data: { items: [], total: 0, page: 1, limit: 50 } }),
+      );
+      await listarMatriculas({ cursoId: 'c1', anioLectivoId: 'a1', q: 'ana', page: 1, limit: 50 });
+      expect(fetchMock).toHaveBeenLastCalledWith(
+        expect.stringContaining('/matriculas?cursoId=c1&anioLectivoId=a1&q=ana&page=1&limit=50'),
+        expect.anything(),
+      );
+
+      // Sin filtros la ruta va limpia (no agrega `?`).
+      await listarMatriculas({});
+      expect(fetchMock.mock.calls.at(-1)?.[0]).toMatch(/\/matriculas$/);
+    });
+
+    it('crea, importa y retira con el método y el cuerpo correctos', async () => {
+      fetchMock.mockResolvedValue(respuesta(201, { success: true, data: { id: 'm1' } }));
+      await expect(crearMatricula({ estudianteId: 'e1', cursoId: 'c1' })).resolves.toEqual({
+        id: 'm1',
+      });
+      expect(fetchMock).toHaveBeenLastCalledWith(
+        expect.stringContaining('/matriculas'),
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ estudianteId: 'e1', cursoId: 'c1' }),
+        }),
+      );
+
+      fetchMock.mockResolvedValue(
+        respuesta(200, { success: true, data: { creadas: 1, errores: [] } }),
+      );
+      const fila = {
+        documento: '1098765432',
+        sede: 'Sede Principal',
+        grado: '6',
+        letra: 'A',
+        jornada: 'Mañana',
+      };
+      await expect(importarMatriculas({ filas: [fila] })).resolves.toEqual({
+        creadas: 1,
+        errores: [],
+      });
+      expect(fetchMock).toHaveBeenLastCalledWith(
+        expect.stringContaining('/matriculas/importar'),
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ filas: [fila] }),
+        }),
+      );
+
+      fetchMock.mockResolvedValue(respuesta(200, { success: true, data: { id: 'm1' } }));
+      await expect(retirarMatricula('m1')).resolves.toEqual({ id: 'm1' });
+      expect(fetchMock).toHaveBeenLastCalledWith(
+        expect.stringContaining('/matriculas/m1'),
+        expect.objectContaining({ method: 'DELETE' }),
+      );
+    });
   });
 });
