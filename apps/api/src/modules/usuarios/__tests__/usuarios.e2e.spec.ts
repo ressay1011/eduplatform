@@ -5,6 +5,7 @@
  *  - reglas: admin único, no auto-desactivarse, dominio institucional
  *  - contraseña temporal: se devuelve una vez, obliga cambio y revoca sesiones
  */
+import { randomInt } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import bcrypt from 'bcrypt';
@@ -36,7 +37,9 @@ describe('Usuarios (e2e)', () => {
   let app: INestApplication;
   let db: Database;
 
-  const sufijo = String(Date.now()).slice(-8);
+  // Sufijo aleatorio: varios specs corren en hilos en paralelo y con
+  // `Date.now()` compartían milisegundo (choque de codigo_dane/subdominio).
+  const sufijo = String(randomInt(0, 100_000_000)).padStart(8, '0');
   const subdominioA = `usr-a-${sufijo}`;
   const subdominioB = `usr-b-${sufijo}`;
   const dominioA = `ua-${sufijo}.test`;
@@ -211,18 +214,21 @@ describe('Usuarios (e2e)', () => {
   }, 30000);
 
   afterAll(async () => {
-    await withTenant(db, platformCtx, async (tx) => {
-      await tx.delete(auditLog).where(eq(auditLog.colegioId, colegioAId));
-      await tx.delete(auditLog).where(eq(auditLog.colegioId, colegioBId));
-      await tx.delete(sesiones).where(eq(sesiones.colegioId, colegioAId));
-      await tx.delete(sesiones).where(eq(sesiones.colegioId, colegioBId));
-      await tx.delete(usuariosPermisos).where(eq(usuariosPermisos.colegioId, colegioAId));
-      await tx.delete(usuariosPermisos).where(eq(usuariosPermisos.colegioId, colegioBId));
-      await tx.delete(usuarios).where(eq(usuarios.colegioId, colegioAId));
-      await tx.delete(usuarios).where(eq(usuarios.colegioId, colegioBId));
-      await tx.delete(colegios).where(eq(colegios.id, colegioAId));
-      await tx.delete(colegios).where(eq(colegios.id, colegioBId));
-    });
+    // Sin fixtures creados no hay nada que borrar (evita uuid '' en los deletes).
+    if (colegioAId !== '') {
+      await withTenant(db, platformCtx, async (tx) => {
+        await tx.delete(auditLog).where(eq(auditLog.colegioId, colegioAId));
+        await tx.delete(auditLog).where(eq(auditLog.colegioId, colegioBId));
+        await tx.delete(sesiones).where(eq(sesiones.colegioId, colegioAId));
+        await tx.delete(sesiones).where(eq(sesiones.colegioId, colegioBId));
+        await tx.delete(usuariosPermisos).where(eq(usuariosPermisos.colegioId, colegioAId));
+        await tx.delete(usuariosPermisos).where(eq(usuariosPermisos.colegioId, colegioBId));
+        await tx.delete(usuarios).where(eq(usuarios.colegioId, colegioAId));
+        await tx.delete(usuarios).where(eq(usuarios.colegioId, colegioBId));
+        await tx.delete(colegios).where(eq(colegios.id, colegioAId));
+        await tx.delete(colegios).where(eq(colegios.id, colegioBId));
+      });
+    }
     await app.close();
   }, 30000);
 

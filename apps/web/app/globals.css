@@ -2517,13 +2517,19 @@ body {
 
 /* ── Onboarding (wizard de configuración inicial) ───────────────────────────
    Réplica del frame 1440×1024: rail 320 #f5f3f7, contenido padding 64/48,
-   título Fraunces 28, tarjetas #f5f3f7 radio 12 padding 24. */
+   título Fraunces 28, tarjetas #f5f3f7 radio 12 padding 24.
+   Paleta EXACTA del export (no tokens M3): primary #0856cf, texto #1b1b1f,
+   secundario #45464f, bordes #c5c6d0, nota #e9e7ec, hecho #dae2ff. */
 .onb-shell {
   display: grid;
   grid-template-columns: 320px minmax(0, 1fr);
   min-height: 100vh;
-  background: var(--md-sys-color-surface);
-  color: var(--md-sys-color-on-surface);
+  /* El Figma no tiene variante oscura: el wizard se queda claro aunque el
+     sistema operativo pida tema oscuro (si no, el rail claro se mezclaba con
+     texto de los tokens oscuros). */
+  color-scheme: light;
+  background: #fefbff;
+  color: #1b1b1f;
 }
 .onb-rail {
   position: sticky;
@@ -2542,13 +2548,13 @@ body {
 }
 .onb-sub {
   margin: 2px 0 0;
-  color: var(--md-sys-color-on-surface-variant);
+  color: #45464f;
   font: 400 12px/16px var(--md-ref-typeface-plain);
 }
 .onb-pasos {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 20px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -2557,38 +2563,44 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 12px;
+  height: 28px;
+  padding: 0;
   border-radius: 8px;
-  color: var(--md-sys-color-on-surface-variant);
+  color: #45464f;
   font: 500 14px/20px var(--md-ref-typeface-plain);
 }
 .onb-paso--activo {
-  background: #dce2f9;
-  color: #0856cf;
+  background: transparent;
+  color: #1b1b1f;
 }
 .onb-paso--hecho {
-  color: var(--md-sys-color-on-surface);
+  color: #1b1b1f;
 }
 .onb-num {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   border-radius: 999px;
-  background: #ffffff;
+  background: #fefbff;
+  color: #45464f;
   font: 600 12px/1 var(--md-ref-typeface-plain);
 }
 .onb-paso--activo .onb-num {
   background: #0856cf;
   color: #ffffff;
 }
+.onb-paso--hecho .onb-num {
+  background: #dae2ff;
+  color: #0856cf;
+}
 .onb-salir {
   margin-top: auto;
   padding: 0;
   border: 0;
   background: none;
-  color: var(--md-sys-color-on-surface-variant);
+  color: #45464f;
   font: 500 13px/20px var(--md-ref-typeface-plain);
   text-align: left;
   cursor: pointer;
@@ -2600,9 +2612,9 @@ body {
 }
 .onb-eyebrow {
   margin: 0 0 8px;
-  color: var(--md-sys-color-on-surface-variant);
-  font: 600 11px/16px var(--md-ref-typeface-plain);
-  letter-spacing: 0.08em;
+  color: #0856cf;
+  font: 500 12px/16px var(--md-ref-typeface-plain);
+  letter-spacing: 0.02em;
 }
 .onb-titulo {
   margin: 0 0 6px;
@@ -2610,15 +2622,15 @@ body {
 }
 .onb-bajada {
   margin: 0 0 24px;
-  color: var(--md-sys-color-on-surface-variant);
+  color: #45464f;
   font: 400 14px/20px var(--md-ref-typeface-plain);
 }
 .onb-aviso {
   margin: 0 0 16px;
   padding: 12px 16px;
   border-radius: 8px;
-  background: var(--md-sys-color-error-container);
-  color: var(--md-sys-color-on-error-container);
+  background: #f9dedc;
+  color: #410e0b;
   font: 500 13px/20px var(--md-ref-typeface-plain);
 }
 .onb-card {
@@ -2630,7 +2642,7 @@ body {
   background: #f5f3f7;
 }
 .onb-card--pendiente {
-  color: var(--md-sys-color-on-surface-variant);
+  color: #45464f;
   font: 400 14px/22px var(--md-ref-typeface-plain);
 }
 .onb-card-titulo {
@@ -2656,17 +2668,17 @@ body {
   gap: 8px;
   height: 32px;
   padding: 0 14px;
-  border: 1px solid var(--md-sys-color-outline);
+  border: 1px solid #c5c6d0;
   border-radius: 8px;
   background: transparent;
-  color: var(--md-sys-color-on-surface);
+  color: #1b1b1f;
   font: 500 13px/1 var(--md-ref-typeface-plain);
   cursor: pointer;
 }
 .onb-chip--on {
   border-color: transparent;
   background: #dce2f9;
-  color: #0856cf;
+  color: #151b2c;
 }
 .onb-chip input {
   margin: 0;
@@ -2674,7 +2686,10 @@ body {
 }
 .onb-nota {
   margin: 0;
-  color: var(--md-sys-color-on-surface-variant);
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: #e9e7ec;
+  color: #45464f;
   font: 400 13px/20px var(--md-ref-typeface-plain);
 }
 .onb-periodos {
@@ -2695,24 +2710,24 @@ body {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  color: var(--md-sys-color-on-surface-variant);
+  color: #45464f;
   font: 400 12px/16px var(--md-ref-typeface-plain);
 }
 .onb-periodo input,
 .onb-campo select {
   height: 36px;
   padding: 0 8px;
-  border: 1px solid var(--md-sys-color-outline);
+  border: 1px solid #c5c6d0;
   border-radius: 8px;
   background: #ffffff;
-  color: var(--md-sys-color-on-surface);
+  color: #1b1b1f;
   font: 400 13px/20px var(--md-ref-typeface-plain);
 }
 .onb-campo {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  color: var(--md-sys-color-on-surface-variant);
+  color: #45464f;
   font: 500 12px/16px var(--md-ref-typeface-plain);
 }
 .onb-nivel {
@@ -2737,7 +2752,7 @@ body {
   font: 600 24px/32px var(--font-fraunces, Georgia, serif);
 }
 .onb-resumen span {
-  color: var(--md-sys-color-on-surface-variant);
+  color: #45464f;
   font: 400 12px/16px var(--md-ref-typeface-plain);
 }
 .onb-checklist {
@@ -2764,7 +2779,7 @@ body {
 }
 .onb-checklist p {
   margin: 2px 0 0;
-  color: var(--md-sys-color-on-surface-variant);
+  color: #45464f;
   font: 400 12px/16px var(--md-ref-typeface-plain);
 }
 .onb-footer {
@@ -2777,7 +2792,7 @@ body {
 .onb-atras {
   border: 0;
   background: none;
-  color: var(--md-sys-color-on-surface-variant);
+  color: #45464f;
   font: 500 13px/20px var(--md-ref-typeface-plain);
   cursor: pointer;
 }
@@ -2785,14 +2800,66 @@ body {
   display: flex;
   gap: 12px;
 }
+/* El CTA del wizard es #0856cf (Figma), no el primary del tema (#0b57d0),
+   y lleva etiqueta blanca también si el sistema pide tema oscuro. */
+.onb-acciones .m3-btn-filled {
+  background: #0856cf;
+  color: #ffffff;
+}
+.onb-acciones .m3-btn-filled:disabled {
+  background: #e4e2e6;
+  color: #757780;
+}
+/* Los componentes M3 (TextField, botón outlined) leen los tokens del tema:
+   dentro del wizard van con la paleta clara del Figma aunque el SO pida
+   tema oscuro, o los campos salían #131017 sobre tarjetas claras. */
+.onb-shell .m3-textfield .m3-tf {
+  background: #fefbff;
+  border-color: #c5c6d0;
+  color: #1b1b1f;
+}
+.onb-shell .m3-textfield .m3-tf:focus {
+  border-color: #0856cf;
+  box-shadow: 0 0 0 1px #0856cf;
+}
+.onb-shell .m3-textfield .m3-tf-label {
+  background: #fefbff;
+  color: #45464f;
+}
+.onb-shell .m3-textfield .m3-tf:focus + .m3-tf-label,
+.onb-shell .m3-textfield .m3-tf:not(:placeholder-shown) + .m3-tf-label {
+  color: #0856cf;
+}
+.onb-shell .m3-textfield .m3-tf-trailing {
+  color: #45464f;
+}
+.onb-shell .m3-textfield .m3-tf-helper {
+  color: #45464f;
+}
+.onb-shell .m3-textfield.error .m3-tf {
+  border-color: #b3261e;
+}
+.onb-shell .m3-textfield.error .m3-tf-label,
+.onb-shell .m3-textfield.error .m3-tf-helper {
+  color: #b3261e;
+}
+.onb-shell .m3-btn-outlined {
+  border-color: #c5c6d0;
+  color: #0856cf;
+}
+.onb-shell .m3-btn-outlined:disabled {
+  border-color: #e4e2e6;
+  color: #757780;
+}
 .onb-cargando {
   display: grid;
   place-items: center;
   gap: 16px;
   min-height: 100vh;
   padding: 32px;
-  background: var(--md-sys-color-surface);
-  color: var(--md-sys-color-on-surface);
+  color-scheme: light;
+  background: #fefbff;
+  color: #1b1b1f;
   text-align: center;
   font: 400 14px/20px var(--md-ref-typeface-plain);
 }
@@ -2814,7 +2881,7 @@ body {
   flex-wrap: wrap;
 }
 .onb-contador {
-  color: var(--md-sys-color-on-surface-variant);
+  color: #45464f;
   font: 500 12px/16px var(--md-ref-typeface-plain);
 }
 .onb-tabla-envoltura {
@@ -2830,7 +2897,7 @@ body {
 .onb-tabla th {
   padding: 10px 12px;
   border-bottom: 1px solid var(--md-sys-color-outline-variant, #e3e1e6);
-  color: var(--md-sys-color-on-surface-variant);
+  color: #45464f;
   text-align: left;
   font: 600 11px/16px var(--md-ref-typeface-plain);
   letter-spacing: 0.04em;
@@ -2846,7 +2913,7 @@ body {
 }
 .onb-celda-detalle {
   display: block;
-  color: var(--md-sys-color-on-surface-variant);
+  color: #45464f;
   font: 400 12px/16px var(--md-ref-typeface-plain);
 }
 .onb-tabla--csv td:nth-child(5) {
@@ -2855,7 +2922,7 @@ body {
 .onb-chip--solo {
   background: #f0eef2;
   border-color: transparent;
-  color: var(--md-sys-color-on-surface-variant);
+  color: #45464f;
   cursor: default;
 }
 .onb-chip--ok {
@@ -2868,9 +2935,9 @@ body {
   height: auto;
   min-height: 32px;
   padding: 6px 12px;
-  border-color: var(--md-sys-color-error);
+  border-color: #b3261e;
   background: transparent;
-  color: var(--md-sys-color-error);
+  color: #b3261e;
   white-space: normal;
   cursor: default;
   text-align: left;
@@ -2878,7 +2945,7 @@ body {
 .onb-quitar {
   border: 0;
   background: none;
-  color: var(--md-sys-color-error);
+  color: #b3261e;
   font: 500 12px/18px var(--md-ref-typeface-plain);
   cursor: pointer;
   padding: 4px 6px;
@@ -2925,7 +2992,7 @@ body {
   gap: 8px;
   height: 40px;
   padding: 0 16px;
-  border: 1px dashed var(--md-sys-color-outline);
+  border: 1px dashed #c5c6d0;
   border-radius: 8px;
   background: #ffffff;
   color: #0856cf;
@@ -2954,7 +3021,7 @@ body {
 .onb-resultado ul {
   margin: 0;
   padding-left: 20px;
-  color: var(--md-sys-color-error);
+  color: #b3261e;
 }
 
 @media (max-width: 900px) {
@@ -3005,7 +3072,7 @@ body {
 }
 .onb-tarjeta p {
   margin: 4px 0 0;
-  color: var(--md-sys-color-on-surface-variant);
+  color: #45464f;
   font: 400 13px/18px var(--md-ref-typeface-plain);
 }
 .onb-tarjeta ul {
@@ -3020,12 +3087,12 @@ body {
   display: flex;
   gap: 8px;
   align-items: flex-start;
-  color: var(--md-sys-color-on-surface-variant);
+  color: #45464f;
   font: 400 12px/16px var(--md-ref-typeface-plain);
 }
 .onb-tarjeta li strong {
   display: block;
-  color: var(--md-sys-color-on-surface);
+  color: #1b1b1f;
   font: 600 13px/18px var(--md-ref-typeface-plain);
 }
 .onb-tarjeta li p {
