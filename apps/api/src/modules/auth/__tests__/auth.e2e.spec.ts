@@ -6,6 +6,7 @@
  * Fixtures: se crean y se limpian en este mismo spec. Los passwordHash usan
  * bcrypt costo 4 (solo los round-trips de producción necesitan el 12).
  */
+import { randomInt } from 'node:crypto';
 import { Controller, Get } from '@nestjs/common';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
@@ -51,7 +52,9 @@ describe('Auth (e2e)', () => {
   let app: INestApplication;
   let db: Database;
 
-  const sufijo = String(Date.now()).slice(-8);
+  // Sufijo aleatorio: varios specs corren en hilos en paralelo y con
+  // `Date.now()` compartían milisegundo (choque de codigo_dane/subdominio).
+  const sufijo = String(randomInt(0, 100_000_000)).padStart(8, '0');
   const subdominioA = `e2e-a-${sufijo}`;
   const subdominioB = `e2e-b-${sufijo}`;
   // Dominios de correo: son la llave del login unificado (únicos por colegio).
@@ -156,19 +159,22 @@ describe('Auth (e2e)', () => {
   }, 30000);
 
   afterAll(async () => {
-    await withTenant(db, platformCtx, async (tx) => {
-      // Borrado en orden por dependencias de FK (y sin depender de cascadas).
-      await tx.delete(auditLog).where(eq(auditLog.colegioId, colegioAId));
-      await tx.delete(auditLog).where(eq(auditLog.colegioId, colegioBId));
-      await tx.delete(sesiones).where(eq(sesiones.colegioId, colegioAId));
-      await tx.delete(sesiones).where(eq(sesiones.colegioId, colegioBId));
-      await tx.delete(usuariosPermisos).where(eq(usuariosPermisos.colegioId, colegioAId));
-      await tx.delete(usuariosPermisos).where(eq(usuariosPermisos.colegioId, colegioBId));
-      await tx.delete(usuarios).where(eq(usuarios.colegioId, colegioAId));
-      await tx.delete(usuarios).where(eq(usuarios.colegioId, colegioBId));
-      await tx.delete(colegios).where(eq(colegios.id, colegioAId));
-      await tx.delete(colegios).where(eq(colegios.id, colegioBId));
-    });
+    // Sin fixtures creados no hay nada que borrar (evita uuid '' en los deletes).
+    if (colegioAId !== '') {
+      await withTenant(db, platformCtx, async (tx) => {
+        // Borrado en orden por dependencias de FK (y sin depender de cascadas).
+        await tx.delete(auditLog).where(eq(auditLog.colegioId, colegioAId));
+        await tx.delete(auditLog).where(eq(auditLog.colegioId, colegioBId));
+        await tx.delete(sesiones).where(eq(sesiones.colegioId, colegioAId));
+        await tx.delete(sesiones).where(eq(sesiones.colegioId, colegioBId));
+        await tx.delete(usuariosPermisos).where(eq(usuariosPermisos.colegioId, colegioAId));
+        await tx.delete(usuariosPermisos).where(eq(usuariosPermisos.colegioId, colegioBId));
+        await tx.delete(usuarios).where(eq(usuarios.colegioId, colegioAId));
+        await tx.delete(usuarios).where(eq(usuarios.colegioId, colegioBId));
+        await tx.delete(colegios).where(eq(colegios.id, colegioAId));
+        await tx.delete(colegios).where(eq(colegios.id, colegioBId));
+      });
+    }
     await app.close();
   }, 30000);
 

@@ -6,6 +6,7 @@
  *  - paso 3: generador de cursos (grados × letras) y validación de jornada
  *  - finalizar: mínimo sede+curso y checklist actualizado
  */
+import { randomInt } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import bcrypt from 'bcrypt';
@@ -36,7 +37,10 @@ describe('Onboarding (e2e)', () => {
   let app: INestApplication;
   let db: Database;
 
-  const sufijo = String(Date.now()).slice(-8);
+  // 8 dígitos aleatorios: el DANE del fixture es `1${sufijo}000` y vitest corre
+  // estos specs en hilos en paralelo, así que un sufijo por reloj se repetía
+  // entre archivos y chocaba con `colegios_codigo_dane_unique`.
+  const sufijo = String(randomInt(0, 100_000_000)).padStart(8, '0');
   const subdominio = `onb-${sufijo}`;
   const dominio = `onb-${sufijo}.test`;
   const codigoDane = `1${sufijo}000`;
@@ -125,16 +129,20 @@ describe('Onboarding (e2e)', () => {
   });
 
   afterAll(async () => {
-    await withTenant(db, platformCtx, async (tx) => {
-      // El año lectivo cuelga con restrict: al borrarlo caen períodos y cursos.
-      await tx.delete(aniosLectivos).where(eq(aniosLectivos.colegioId, colegioId));
-      await tx.delete(sedes).where(eq(sedes.colegioId, colegioId));
-      await tx.delete(grados).where(eq(grados.colegioId, colegioId));
-      await tx.delete(usuarios).where(eq(usuarios.colegioId, colegioId));
-      await tx.delete(colegios).where(eq(colegios.id, colegioId));
-    });
+    // Si beforeAll falló, `colegioId` queda vacío: borrar con uuid '' revienta
+    // y esconde el error real (y deja basura en la base).
+    if (colegioId !== '') {
+      await withTenant(db, platformCtx, async (tx) => {
+        // El año lectivo cuelga con restrict: al borrarlo caen períodos y cursos.
+        await tx.delete(aniosLectivos).where(eq(aniosLectivos.colegioId, colegioId));
+        await tx.delete(sedes).where(eq(sedes.colegioId, colegioId));
+        await tx.delete(grados).where(eq(grados.colegioId, colegioId));
+        await tx.delete(usuarios).where(eq(usuarios.colegioId, colegioId));
+        await tx.delete(colegios).where(eq(colegios.id, colegioId));
+      });
+    }
     await app.close();
-  });
+  }, 30000);
 
   it('arranca en el paso 1, sin sedes y sin completar', async () => {
     const agente = await login(adminEmail);
