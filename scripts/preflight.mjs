@@ -164,8 +164,9 @@ if (soloRapido) {
 
 // ── 7. Auditoría de dependencias (aviso, no bloquea) ──────────────────────────
 titulo('7. Auditoría de dependencias');
-const auditoria = spawnSync('pnpm audit --prod --audit-level=high', {
-  // NOSONAR: idem, comando fijo
+const ORDEN_AUDIT = 'pnpm audit --prod --audit-level=high';
+const auditoria = spawnSync(ORDEN_AUDIT, {
+  // NOSONAR: script de desarrollo, comando fijo sin entrada de usuario
   cwd: raiz,
   shell: true,
   encoding: 'utf8',
@@ -193,12 +194,16 @@ if (urlBase === null) {
   });
 } else {
   const inicioAuditoria = Date.now();
-  const auditoriaBase = spawnSync('node', ['packages/database/scripts/audit-seguridad.mjs'], {
-    cwd: raiz,
-    shell: false,
-    encoding: 'utf8',
-    env: { ...process.env, DATABASE_URL: urlBase },
-  });
+  const auditoriaBase = spawnSync(
+    process.execPath,
+    ['packages/database/scripts/audit-seguridad.mjs'],
+    {
+      cwd: raiz,
+      shell: false,
+      encoding: 'utf8',
+      env: { ...process.env, DATABASE_URL: urlBase },
+    },
+  );
   const segundos = ((Date.now() - inicioAuditoria) / 1000).toFixed(1);
   const okAuditoria = auditoriaBase.status === 0;
   const hallazgos = (auditoriaBase.stdout ?? '')
