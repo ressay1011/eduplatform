@@ -123,7 +123,10 @@ body {
   background: var(--md-sys-color-surface);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  /* dvh = alto visible real; con 100vh el body quedaba más alto que la
+     pantalla en móvil y aparecía scroll aunque la tarjeta cupiera. */
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 /* Material Symbols */
@@ -1117,6 +1120,7 @@ body {
 .dash-page {
   display: flex;
   min-height: 100vh;
+  min-height: 100dvh;
   background: var(--md-sys-color-surface);
   color: var(--md-sys-color-on-surface);
   font-family: var(--font-inter), Inter, system-ui, sans-serif;
@@ -1135,6 +1139,7 @@ body {
   top: 0;
   align-self: flex-start;
   height: 100vh;
+  height: 100dvh;
   min-height: 0;
   overflow-y: auto;
   background: var(--edu-superficie);
@@ -1632,14 +1637,51 @@ body {
   .stage-card {
     padding: 24px 20px;
   }
-  /* Móviles bajos (360×640): apretar el formulario para que no haya scroll
-     cuando el contenido cabe justo. */
+  /* Móviles bajos: apretar el login (no el resto) para que la tarjeta quepa
+     sin scroll cuando el navegador se come parte del alto. */
   @media (max-height: 720px) {
     .stage-card {
       padding: 20px 18px;
     }
+    .brand-header {
+      margin-bottom: 16px;
+    }
+    .step-indicator {
+      margin-bottom: 16px;
+    }
+    .step-subtitulo {
+      margin-bottom: 16px;
+    }
     .login-form {
       gap: 16px;
+    }
+  }
+  @media (max-height: 620px) {
+    .stage {
+      padding: 10px;
+    }
+    .stage-card {
+      padding: 16px 14px;
+    }
+    .brand-logo {
+      width: 48px;
+      height: 48px;
+      font-size: 20px;
+    }
+    .brand-header {
+      margin-bottom: 10px;
+    }
+    .step-indicator {
+      margin-bottom: 10px;
+    }
+    .step-titulo {
+      margin-bottom: 4px;
+    }
+    .step-subtitulo {
+      margin-bottom: 10px;
+    }
+    .login-form {
+      gap: 10px;
     }
   }
   .page-card {
@@ -2547,6 +2589,7 @@ body {
   display: grid;
   grid-template-columns: 320px minmax(0, 1fr);
   min-height: 100vh;
+  min-height: 100dvh;
   background: var(--md-sys-color-surface);
   color: var(--md-sys-color-on-surface);
 }
@@ -2557,6 +2600,7 @@ body {
   flex-direction: column;
   gap: 32px;
   height: 100vh;
+  height: 100dvh;
   padding: 40px 32px 32px;
   background: var(--edu-superficie);
   box-shadow: 0 0 0 1px var(--edu-borde-tarjeta);
@@ -2826,6 +2870,7 @@ body {
   place-items: center;
   gap: 16px;
   min-height: 100vh;
+  min-height: 100dvh;
   padding: 32px;
   background: var(--md-sys-color-surface);
   color: var(--md-sys-color-on-surface);
