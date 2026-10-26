@@ -86,7 +86,7 @@ export default function CambiarPasswordPage() {
   const sesionColegio = sesion !== undefined && sesion.tipo === 'colegio' ? sesion : null;
 
   return (
-    <div className="login-shell">
+    <>
       <PaperBg />
       <main className="stage" id="contenido-principal">
         <div className="stage-card fade">
@@ -181,6 +181,6 @@ export default function CambiarPasswordPage() {
           )}
         </div>
       </main>
-    </div>
+    </>
   );
 }
