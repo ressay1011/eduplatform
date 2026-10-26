@@ -14,7 +14,7 @@
  * Sale con código 1 si algo falla: así el hook/CI/terminal frenan el push.
  */
 import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -51,6 +51,19 @@ function git(...partes) {
   return (resultado.stdout ?? '').trim();
 }
 
+/** Lee una variable de un archivo .env sin cargarlo entero en el proceso. */
+function leerVariable(archivo, clave) {
+  if (!existsSync(archivo)) return null;
+  const lineas = readFileSync(archivo, 'utf8').split(/\r?\n/);
+  const linea = lineas.find((fila) => fila.startsWith(`${clave}=`));
+  if (linea === undefined) return null;
+  const valor = linea
+    .slice(clave.length + 1)
+    .trim()
+    .replace(/^["']|["']$/g, '');
+  return valor === '' ? null : valor;
+}
+
 function titulo(texto) {
   console.log(`\n\u001b[1m${texto}\u001b[0m`);
 }
@@ -63,7 +76,9 @@ resultados.push({
   etiqueta: `rama actual: ${rama}${permitirMain ? ' (--allow-main)' : ''}`,
   ok: ramaOk,
   segundos: '0.0',
-  detalle: ramaOk ? undefined : 'trabaja en dev o en una rama feat/* / fix/*; main despliega a producción',
+  detalle: ramaOk
+    ? undefined
+    : 'trabaja en dev o en una rama feat/* / fix/*; main despliega a producción',
 });
 
 // ── 2. Árbol limpio ───────────────────────────────────────────────────────────
@@ -88,15 +103,22 @@ const sospechosos = rastreados.filter(
 );
 const secretosOk = sospechosos.length === 0;
 resultados.push({
-  etiqueta: secretosOk ? 'ningún .env versionado' : `archivos .env versionados: ${sospechosos.join(', ')}`,
+  etiqueta: secretosOk
+    ? 'ningún .env versionado'
+    : `archivos .env versionados: ${sospechosos.join(', ')}`,
   ok: secretosOk,
   segundos: '0.0',
-  detalle: secretosOk ? undefined : 'quitar del índice con `git rm --cached` y añadirlos a .gitignore',
+  detalle: secretosOk
+    ? undefined
+    : 'quitar del índice con `git rm --cached` y añadirlos a .gitignore',
 });
 
 const claves = rastreados.filter((archivo) => /\.(pem|key|p12|pfx)$/.test(archivo));
 resultados.push({
-  etiqueta: claves.length === 0 ? 'sin claves privadas versionadas' : `claves versionadas: ${claves.join(', ')}`,
+  etiqueta:
+    claves.length === 0
+      ? 'sin claves privadas versionadas'
+      : `claves versionadas: ${claves.join(', ')}`,
   ok: claves.length === 0,
   segundos: '0.0',
 });
@@ -135,16 +157,15 @@ if (soloRapido) {
   });
 } else {
   titulo('6. Build');
-  correr(
-    'build (turbo: paquetes + api + web)',
-    'pnpm build',
-    { env: { NODE_ENV: 'production', NEXT_PUBLIC_API_URL: 'http://localhost:4000/api' } },
-  );
+  correr('build (turbo: paquetes + api + web)', 'pnpm build', {
+    env: { NODE_ENV: 'production', NEXT_PUBLIC_API_URL: 'http://localhost:4000/api' },
+  });
 }
 
 // ── 7. Auditoría de dependencias (aviso, no bloquea) ──────────────────────────
 titulo('7. Auditoría de dependencias');
-const auditoria = spawnSync('pnpm audit --prod --audit-level=high', { // NOSONAR: idem, comando fijo
+const auditoria = spawnSync('pnpm audit --prod --audit-level=high', {
+  // NOSONAR: idem, comando fijo
   cwd: raiz,
   shell: true,
   encoding: 'utf8',
@@ -156,8 +177,47 @@ resultados.push({
       : 'auditoría reportó hallazgos (revisar; no bloquea)',
   ok: true,
   segundos: '0.0',
-  detalle: auditoria.status === 0 ? undefined : (auditoria.stdout ?? '').split('\n').slice(-4).join('\n'),
+  detalle:
+    auditoria.status === 0 ? undefined : (auditoria.stdout ?? '').split('\n').slice(-4).join('\n'),
 });
+
+// ── 8. Auditoría de la base (roles, privilegios y RLS) ───────────────────────
+titulo('8. Auditoría de la base');
+const urlBase = leerVariable(join(raiz, 'apps/api/.env'), 'DATABASE_URL');
+if (urlBase === null) {
+  resultados.push({
+    etiqueta: 'auditoría de la base omitida (sin DATABASE_URL en apps/api/.env)',
+    ok: true,
+    segundos: '0.0',
+    detalle: 'con la base configurada, `db:audit` comprueba roles, privilegios y RLS',
+  });
+} else {
+  const inicioAuditoria = Date.now();
+  const auditoriaBase = spawnSync('node', ['packages/database/scripts/audit-seguridad.mjs'], {
+    cwd: raiz,
+    shell: false,
+    encoding: 'utf8',
+    env: { ...process.env, DATABASE_URL: urlBase },
+  });
+  const segundos = ((Date.now() - inicioAuditoria) / 1000).toFixed(1);
+  const okAuditoria = auditoriaBase.status === 0;
+  const hallazgos = (auditoriaBase.stdout ?? '')
+    .split('\n')
+    .filter((linea) => linea.startsWith('XX'))
+    .join('\n');
+  resultados.push({
+    etiqueta: okAuditoria
+      ? 'roles, privilegios y RLS en su sitio (db:audit)'
+      : 'db:audit encontró fallos de seguridad',
+    ok: okAuditoria,
+    segundos,
+    detalle: okAuditoria
+      ? undefined
+      : hallazgos !== ''
+        ? hallazgos
+        : (auditoriaBase.stderr ?? '').split('\n').slice(-4).join('\n'),
+  });
+}
 
 // ── Resumen ───────────────────────────────────────────────────────────────────
 console.log('\n' + '─'.repeat(72));
@@ -167,7 +227,8 @@ for (const resultado of resultados) {
   console.log(`${marca} ${resultado.etiqueta} \u001b[90m(${resultado.segundos}s)\u001b[0m`);
   if (!resultado.ok) {
     fallos += 1;
-    if (resultado.detalle !== undefined) console.log(`   \u001b[31m→ ${resultado.detalle}\u001b[0m`);
+    if (resultado.detalle !== undefined)
+      console.log(`   \u001b[31m→ ${resultado.detalle}\u001b[0m`);
   }
 }
 console.log('─'.repeat(72));
@@ -178,4 +239,6 @@ if (fallos > 0) {
 }
 
 console.log(`\u001b[32m\u001b[1mPREFLIGHT OK\u001b[0m — puedes commitear y subir ${rama}.`);
-console.log('\u001b[90mSiguiente paso: push a dev (o rama feat/*) y PR; main solo por PR con CI verde.\u001b[0m');
+console.log(
+  '\u001b[90mSiguiente paso: push a dev (o rama feat/*) y PR; main solo por PR con CI verde.\u001b[0m',
+);
