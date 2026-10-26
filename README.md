@@ -133,7 +133,18 @@ DEMO_HASH='<bcrypt>' DATABASE_URL='postgresql://app_migrator:...' \
 # Verifica que la RLS está activa y aísla (0 filas sin tenant, N con tenant)
 DATABASE_URL='postgresql://app_user:...' TENANT_ID='<uuid>' \
   pnpm --filter @eduplatform/database run db:verify
+
+# Auditoría de roles, privilegios y RLS (falla con código 1 si algo se sale del patrón)
+DATABASE_URL='postgresql://app_user:...' \
+  pnpm --filter @eduplatform/database run db:audit
 ```
+
+`db:audit` revisa 88 comprobaciones sin modificar nada: roles sin superusuario,
+`BYPASSRLS`, `CREATEDB` ni `CREATEROLE`; RLS y política en cada tabla con
+`colegio_id`; propiedad de las tablas; privilegios de `app_user` (lectura y DML
+sí, DDL no); default ACL para tablas nuevas; funciones `SECURITY DEFINER`; y que
+las vistas pre-tenant existan sin exponer `password_hash`. Conviene correrlo
+después de cada migración y antes de un despliegue.
 
 - **API → Render:** `render.yaml` (Blueprint) declara el servicio `eduplatform-api`
   (free, Virginia, health `/api/health`), el comando de build del monorepo y el
