@@ -158,7 +158,7 @@ export function LoginFlow() {
   const iniciales = colegio !== null ? inicialesDe(colegio.nombre) : 'EP';
 
   return (
-    <>
+    <div className="login-shell">
       <PaperBg />
       <main className="stage" id="contenido-principal">
         <div className="stage-card fade">
@@ -375,6 +375,6 @@ export function LoginFlow() {
           )}
         </div>
       </main>
-    </>
+    </div>
   );
 }
