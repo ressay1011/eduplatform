@@ -693,11 +693,21 @@ body {
 .stage {
   position: relative;
   z-index: 1;
+  /* dvh = alto visible real del móvil (100vh incluye la barra del navegador
+     y provoca un scroll fantasma). El vh queda como respaldo. */
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 24px;
+}
+/* Centrado «seguro»: si la tarjeta no cabe, se pega arriba en vez de que el
+   navegador recorte la cabecera al centrarla en un contenedor que desborda. */
+@supports (align-items: safe center) {
+  .stage {
+    align-items: safe center;
+  }
 }
 .stage-card {
   width: 100%;
@@ -1615,11 +1625,22 @@ body {
 /* === Adaptación móvil/tablet de las pantallas de gestión === */
 @media (max-width: 700px) {
   .stage {
-    align-items: flex-start;
+    /* Antes flex-start: dejaba la tarjeta pegada arriba y descompensada.
+       El centrado seguro ya la sube sola cuando no cabe. */
     padding: 16px;
   }
   .stage-card {
     padding: 24px 20px;
+  }
+  /* Móviles bajos (360×640): apretar el formulario para que no haya scroll
+     cuando el contenido cabe justo. */
+  @media (max-height: 720px) {
+    .stage-card {
+      padding: 20px 18px;
+    }
+    .login-form {
+      gap: 16px;
+    }
   }
   .page-card {
     padding: 20px 16px;
