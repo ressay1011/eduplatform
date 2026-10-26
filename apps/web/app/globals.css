@@ -58,6 +58,13 @@
      (#f5f3f7); en oscuro ese rol coincide con surface (#1b1b1f) y la tarjeta
      desaparecería, así que se sube un nivel. */
   --edu-superficie: var(--md-sys-color-surface-container-low);
+  /* Hover de filas/nav: en claro el gris exacto del Figma (#eceaee); en oscuro
+     hace falta un nivel más que la tarjeta para que se note. */
+  --edu-hover: #eceaee;
+  /* Texto sobre success-container: la Foundation oscura trae
+     on-success-container (#003915) sobre success-container (#1c5b2b) = 1.6:1,
+     así que en oscuro se usa el verde claro del rol success. */
+  --edu-on-exito: var(--md-sys-color-on-success-container);
 
   /* Derivado: on-surface al 38 % (M3 disabled) */
   --md-sys-color-on-surface-disabled: rgba(27, 27, 31, 0.38);
@@ -863,6 +870,8 @@ body {
     --md-sys-color-on-surface-disabled: rgba(228, 226, 230, 0.38);
     --paper-trazo: 0.3;
     --edu-superficie: var(--md-sys-color-surface-container);
+    --edu-hover: var(--md-sys-color-surface-container-high);
+    --edu-on-exito: var(--md-sys-color-success);
 
     --md-sys-color-primary:                          #b2c5ff;
     --md-sys-color-on-primary:                       #002b72;
@@ -1236,7 +1245,7 @@ body {
   cursor: pointer;
 }
 .dash-nav-item:hover {
-  background: var(--md-sys-color-surface-container);
+  background: var(--edu-hover);
 }
 .dash-nav-item.active {
   background: var(--md-sys-color-secondary-container);
@@ -1329,7 +1338,7 @@ body {
   justify-content: center;
 }
 .dash-icon-btn:hover {
-  background: var(--md-sys-color-surface-container);
+  background: var(--edu-hover);
 }
 .dash-content {
   padding: 32px;
@@ -1515,7 +1524,7 @@ body {
   color: inherit;
 }
 .dash-fila:hover {
-  background: var(--md-sys-color-surface-container);
+  background: var(--edu-hover);
   border-radius: 8px;
 }
 .dash-fila > .material-symbols-outlined {
@@ -1561,8 +1570,8 @@ body {
   max-width: 90vw;
 }
 .dash-toast .m3-snackbar {
-  background: var(--md-sys-color-on-surface);
-  color: var(--md-sys-color-surface);
+  background: var(--md-sys-color-inverse-surface);
+  color: var(--md-sys-color-inverse-on-surface);
 }
 .dash-topbar-izq {
   display: flex;
@@ -2067,7 +2076,7 @@ body {
   color: var(--md-sys-color-on-secondary-container);
 }
 .per-tab:hover {
-  background: var(--md-sys-color-surface-container);
+  background: var(--edu-hover);
 }
 .per-tab[aria-selected='true']:hover {
   background: var(--md-sys-color-secondary-container);
@@ -2148,7 +2157,7 @@ body {
   color: var(--md-sys-color-on-secondary-container);
 }
 .per-chip:hover {
-  background: var(--md-sys-color-surface-container);
+  background: var(--edu-hover);
 }
 .per-chip--activo:hover {
   background: var(--md-sys-color-secondary-container);
@@ -2198,7 +2207,7 @@ body {
   border-bottom: 0;
 }
 .per-tabla tbody tr:hover {
-  background: var(--md-sys-color-surface-container);
+  background: var(--edu-hover);
 }
 .per-tabla td {
   padding: 12px 0;
@@ -2847,7 +2856,7 @@ body {
   padding: 12px 16px;
   border-radius: 8px;
   background: var(--md-sys-color-success-container);
-  color: var(--md-sys-color-on-success-container);
+  color: var(--edu-on-exito);
   font: 500 13px/20px var(--md-ref-typeface-plain);
 }
 .onb-card-cabecera {
@@ -2905,7 +2914,7 @@ body {
 .onb-chip--ok {
   background: var(--md-sys-color-success-container);
   border-color: transparent;
-  color: var(--md-sys-color-on-success-container);
+  color: var(--edu-on-exito);
   cursor: default;
 }
 .onb-chip--error {
