@@ -65,6 +65,11 @@
      on-success-container (#003915) sobre success-container (#1c5b2b) = 1.6:1,
      así que en oscuro se usa el verde claro del rol success. */
   --edu-on-exito: var(--md-sys-color-on-success-container);
+  /* Borde de controles: el #c5c6d0 del Figma en claro; en oscuro ese rol no
+     llega a 3:1 y se usa outline (bordes decorativos siguen con variant). */
+  --edu-borde-control: var(--md-sys-color-outline-variant);
+  /* Anillo de tarjeta: invisible en claro, marca el borde en oscuro. */
+  --edu-borde-tarjeta: transparent;
 
   /* Derivado: on-surface al 38 % (M3 disabled) */
   --md-sys-color-on-surface-disabled: rgba(27, 27, 31, 0.38);
@@ -845,13 +850,13 @@ body {
   .paper-bg .paper-grid {
     animation: none !important;
     stroke-dashoffset: 0 !important;
-    opacity: 0.18 !important;
+    opacity: var(--paper-trazo) !important;
   }
 }
 @media (prefers-reduced-motion: reduce) and (prefers-color-scheme: dark) {
   .paper-bg path,
   .paper-bg .paper-grid {
-    opacity: 0.3 !important;
+    opacity: var(--paper-trazo) !important;
   }
 }
 
@@ -872,6 +877,8 @@ body {
     --edu-superficie: var(--md-sys-color-surface-container);
     --edu-hover: var(--md-sys-color-surface-container-high);
     --edu-on-exito: var(--md-sys-color-success);
+    --edu-borde-control: var(--md-sys-color-outline);
+    --edu-borde-tarjeta: var(--md-sys-color-outline-variant);
 
     --md-sys-color-primary:                          #b2c5ff;
     --md-sys-color-on-primary:                       #002b72;
@@ -929,7 +936,7 @@ body {
   .login-shell {
     --paper-trazo: 0.18;
     --md-sys-color-on-surface-disabled: rgba(27, 27, 31, 0.38);
-    --edu-superficie: #f5f3f7;
+    --edu-superficie: var(--md-sys-color-surface-container-low);
 
     --md-sys-color-background:                       #fefbff;
     --md-sys-color-error:                            #ba1a1a;
@@ -1371,6 +1378,7 @@ body {
 }
 .dash-kpi {
   background: var(--edu-superficie);
+  box-shadow: 0 0 0 1px var(--edu-borde-tarjeta);
   border-radius: 12px;
   padding: 16px 20px;
   display: flex;
@@ -1420,6 +1428,7 @@ body {
 }
 .dash-card {
   background: var(--edu-superficie);
+  box-shadow: 0 0 0 1px var(--edu-borde-tarjeta);
   border-radius: 12px;
   padding: 24px;
   display: flex;
@@ -1615,7 +1624,9 @@ body {
     z-index: 41;
     transform: translateX(-105%);
     transition: transform 180ms ease;
-    box-shadow: 0 0 32px rgba(0, 0, 0, 0.22);
+    box-shadow:
+    0 0 32px rgba(0, 0, 0, 0.22),
+    0 0 0 1px var(--edu-borde-tarjeta);
   }
   .dash-sidebar.abierta {
     transform: translateX(0);
@@ -1930,7 +1941,7 @@ body {
   cursor: pointer;
   padding: 10px 14px;
   border-radius: 10px;
-  border: 1px solid var(--md-sys-color-outline-variant);
+  border: 1px solid var(--edu-borde-control);
   font: 400 14px/20px var(--md-ref-typeface-plain);
 }
 .radio-opcion:has(input:checked) {
@@ -2169,6 +2180,7 @@ body {
 /* Tarjeta de tabla: fondo #f5f3f7, radio 12, padding 24. */
 .per-card {
   background: var(--edu-superficie);
+  box-shadow: 0 0 0 1px var(--edu-borde-tarjeta);
   border-radius: 12px;
   padding: 24px;
   display: flex;
@@ -2383,6 +2395,7 @@ body {
 }
 .per-card-form {
   background: var(--edu-superficie);
+  box-shadow: 0 0 0 1px var(--edu-borde-tarjeta);
   border-radius: 12px;
   padding: 24px;
   display: flex;
@@ -2578,6 +2591,7 @@ body {
   height: 100vh;
   padding: 40px 32px 32px;
   background: var(--edu-superficie);
+  box-shadow: 0 0 0 1px var(--edu-borde-tarjeta);
 }
 .onb-marca {
   margin: 0;
@@ -2672,6 +2686,7 @@ body {
   font: 500 13px/20px var(--md-ref-typeface-plain);
 }
 .onb-card {
+  box-shadow: 0 0 0 1px var(--edu-borde-tarjeta);
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -2706,7 +2721,7 @@ body {
   gap: 8px;
   height: 32px;
   padding: 0 14px;
-  border: 1px solid var(--md-sys-color-outline-variant);
+  border: 1px solid var(--edu-borde-control);
   border-radius: 8px;
   background: transparent;
   color: var(--md-sys-color-on-surface);
@@ -2755,7 +2770,7 @@ body {
 .onb-campo select {
   height: 36px;
   padding: 0 8px;
-  border: 1px solid var(--md-sys-color-outline-variant);
+  border: 1px solid var(--edu-borde-control);
   border-radius: 8px;
   background: var(--md-sys-color-surface-container-lowest);
   color: var(--md-sys-color-on-surface);
@@ -2978,7 +2993,7 @@ body {
   gap: 8px;
   height: 40px;
   padding: 0 16px;
-  border: 1px dashed var(--md-sys-color-outline-variant);
+  border: 1px dashed var(--edu-borde-control);
   border-radius: 8px;
   background: var(--md-sys-color-surface-container-lowest);
   color: var(--md-sys-color-primary);
@@ -3038,6 +3053,7 @@ body {
 
 /* Tarjeta «Completa tu colegio» del dashboard */
 .onb-tarjeta {
+  box-shadow: 0 0 0 1px var(--edu-borde-tarjeta);
   display: flex;
   flex-direction: column;
   gap: 12px;
