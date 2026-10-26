@@ -65,6 +65,11 @@
      on-success-container (#003915) sobre success-container (#1c5b2b) = 1.6:1,
      así que en oscuro se usa el verde claro del rol success. */
   --edu-on-exito: var(--md-sys-color-on-success-container);
+  /* Verde para TEXTO sobre superficies claras: el `success` del Figma
+     (#1f8739) da 4.16:1 sobre la tarjeta (#f5f3f7) y no llega a AA; este es
+     el tono más cercano que pasa (5.04:1 en tarjeta, 5.41 en pantalla).
+     Los iconos siguen con `success`. */
+  --edu-exito-texto: #1a7833;
   /* Borde de controles: el #c5c6d0 del Figma en claro; en oscuro ese rol no
      llega a 3:1 y se usa outline (bordes decorativos siguen con variant). */
   --edu-borde-control: var(--md-sys-color-outline-variant);
@@ -807,7 +812,7 @@ body {
   color: var(--md-sys-color-on-surface-variant);
 }
 .regla.cumplida {
-  color: var(--md-sys-color-success);
+  color: var(--edu-exito-texto);
 }
 .regla.cumplida .material-symbols-outlined {
   color: var(--md-sys-color-success);
@@ -877,6 +882,7 @@ body {
     --edu-superficie: var(--md-sys-color-surface-container);
     --edu-hover: var(--md-sys-color-surface-container-high);
     --edu-on-exito: var(--md-sys-color-success);
+    --edu-exito-texto: var(--md-sys-color-success);
     --edu-borde-control: var(--md-sys-color-outline);
     --edu-borde-tarjeta: var(--md-sys-color-outline-variant);
 
@@ -1353,7 +1359,7 @@ body {
   color: var(--md-sys-color-on-surface-variant);
 }
 .dash-kpi-pie.pos {
-  color: var(--md-sys-color-success);
+  color: var(--edu-exito-texto);
 }
 .dash-grid {
   display: grid;
