@@ -165,12 +165,8 @@ if (soloRapido) {
 // ── 7. Auditoría de dependencias (aviso, no bloquea) ──────────────────────────
 titulo('7. Auditoría de dependencias');
 const ORDEN_AUDIT = 'pnpm audit --prod --audit-level=high';
-const auditoria = spawnSync(ORDEN_AUDIT, {
-  // NOSONAR: script de desarrollo, comando fijo sin entrada de usuario
-  cwd: raiz,
-  shell: true,
-  encoding: 'utf8',
-});
+// NOSONAR: script de desarrollo con comando literal, sin entrada de usuario.
+const auditoria = spawnSync(ORDEN_AUDIT, { cwd: raiz, shell: true, encoding: 'utf8' }); // NOSONAR
 resultados.push({
   etiqueta:
     auditoria.status === 0
