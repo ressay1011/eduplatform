@@ -17,6 +17,7 @@
     "db:neon": "node scripts/neon-bootstrap.mjs",
     "db:seed": "node scripts/seed-demo.mjs",
     "db:verify": "node scripts/verify-rls.mjs",
+    "db:audit": "node scripts/audit-seguridad.mjs",
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
