@@ -114,6 +114,7 @@ function estado(paso: number): EstadoOnboarding {
     anioLectivo: { id: 'anio-1', anio: 2026, fechaInicio: '2026-02-02', fechaFin: '2026-11-30' },
     periodos: [
       { numero: 1, nombre: 'Período 1', fechaInicio: '2026-02-02', fechaFin: '2026-04-24' },
+      { numero: 2, nombre: 'Período 2', fechaInicio: '2026-04-28', fechaFin: '2026-07-03' },
     ],
     estructura: { grados: 1, cursos: 1 },
     personal: { total: 2 },
@@ -240,21 +241,18 @@ describe('Onboarding · paso 1 (identidad)', () => {
     expect(screen.getByText('demo.edu.co')).toBeInTheDocument();
   });
 
-  it('nace bloqueado: solo el código DANE se puede escribir', async () => {
+  it('oculta el formulario hasta que hay código DANE', async () => {
     vi.mocked(getOnboarding).mockResolvedValue(estadoSinCodigo());
     renderPagina();
 
-    expect(await screen.findByLabelText('Código DANE')).toBeEnabled();
-    expect(screen.getByLabelText('Nombre')).toBeDisabled();
-    expect(screen.getByLabelText('Municipio')).toBeDisabled();
-    expect(screen.getByLabelText('NIT (opcional)')).toBeDisabled();
-    expect(screen.getByRole('button', { name: /continuar a sedes/i })).toBeDisabled();
-    expect(
-      screen.getByText(/Escribe los 12 dígitos del código DANE para habilitar/i),
-    ).toBeInTheDocument();
+    expect(await screen.findByLabelText('Código DANE')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Nombre')).toBeNull();
+    expect(screen.queryByLabelText('Departamento')).toBeNull();
+    expect(screen.queryByRole('button', { name: /continuar a sedes/i })).toBeNull();
+    expect(screen.getByText(/para ver el resto del formulario/i)).toBeInTheDocument();
   });
 
-  it('busca solo al llegar a los 12 dígitos y prellena con el nombre saneado', async () => {
+  it('busca solo al llegar a los 12 dígitos, muestra el formulario y lo prellena', async () => {
     vi.mocked(getOnboarding).mockResolvedValue(estadoSinCodigo());
     vi.mocked(buscarColegioDane).mockResolvedValue(DANE);
     renderPagina();
@@ -265,27 +263,26 @@ describe('Onboarding · paso 1 (identidad)', () => {
 
     // Sin botón: el disparo es el decimosegundo dígito.
     expect(buscarColegioDane).toHaveBeenCalledWith('147555000295');
-    await waitFor(() => expect(screen.getByLabelText('Municipio')).toHaveValue('Plato'));
-    expect(screen.getByLabelText('Nombre')).toHaveValue('I.E.T.D. Juana Arias de Benavides');
+    const nombre = await screen.findByLabelText('Nombre');
+    expect(nombre).toHaveValue('I.E.T.D. Juana Arias de Benavides');
     // El nombre completo del MEN se guarda aparte, para los documentos.
     expect(screen.getByLabelText('Nombre oficial (documentos)')).toHaveValue(
       'INSTITUCIÓN EDUCATIVA TÉCNICA DEPARTAMENTAL JUANA ARIAS DE BENAVIDES',
     );
-    expect(screen.getByLabelText('Nombre')).toBeEnabled();
+    expect(screen.getByLabelText('Departamento')).toHaveValue('Magdalena');
+    expect(screen.getByLabelText('Municipio')).toHaveValue('Plato');
     expect(screen.getByLabelText('Dirección')).toHaveValue(DANE.direccion);
-    expect(screen.getByLabelText('Teléfono')).toHaveValue(DANE.telefono);
-    expect(screen.getByLabelText('Calendario B')).toBeChecked();
     expect(screen.getByText(/Datos del MEN de 2025/)).toBeInTheDocument();
   });
 
-  it('no consulta el portal mientras el código esté incompleto', async () => {
+  it('no consulta el portal ni muestra el formulario con el código incompleto', async () => {
     vi.mocked(getOnboarding).mockResolvedValue(estadoSinCodigo());
     renderPagina();
 
     fireEvent.change(await screen.findByLabelText('Código DANE'), { target: { value: '123' } });
 
     expect(buscarColegioDane).not.toHaveBeenCalled();
-    expect(screen.getByLabelText('Nombre')).toBeDisabled();
+    expect(screen.queryByLabelText('Nombre')).toBeNull();
   });
 
   it.each([
@@ -295,7 +292,7 @@ describe('Onboarding · paso 1 (identidad)', () => {
       'BAD_GATEWAY',
       'El servicio de datos del MEN no respondió. Intenta de nuevo en unos minutos.',
     ],
-  ])('habilita el formulario igual si el MEN responde %i', async (estadoHttp, codigo, mensaje) => {
+  ])('muestra el formulario igual si el MEN responde %i', async (estadoHttp, codigo, mensaje) => {
     vi.mocked(getOnboarding).mockResolvedValue(estadoSinCodigo());
     vi.mocked(buscarColegioDane).mockRejectedValue(new ApiError(estadoHttp, codigo, mensaje));
     renderPagina();
@@ -305,16 +302,70 @@ describe('Onboarding · paso 1 (identidad)', () => {
     });
 
     expect(await screen.findByText(mensaje)).toBeInTheDocument();
-    expect(screen.getByLabelText('Nombre')).toBeEnabled();
-    expect(screen.getByRole('button', { name: /continuar a sedes/i })).toBeEnabled();
+    expect(screen.getByLabelText('Nombre')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /continuar a sedes/i })).toBeInTheDocument();
   });
 
-  it('no repite la búsqueda si el colegio ya tiene código guardado', async () => {
+  it('muestra el formulario de entrada si el colegio ya tiene código guardado', async () => {
     vi.mocked(getOnboarding).mockResolvedValue(estado(1));
     renderPagina();
 
-    expect(await screen.findByLabelText('Nombre')).toBeEnabled();
+    expect(await screen.findByLabelText('Nombre')).toBeInTheDocument();
     expect(buscarColegioDane).not.toHaveBeenCalled();
+  });
+
+  it('pone el año lectivo en la misma fila que el calendario', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(1));
+    renderPagina();
+
+    const anio = await screen.findByLabelText('Año lectivo');
+    expect(anio.closest('.onb-fila-calendario')).not.toBeNull();
+    expect(screen.getByRole('radiogroup', { name: /calendario escolar/i })).toBeInTheDocument();
+  });
+
+  it('oculta los períodos mientras no haya calendario elegido', async () => {
+    const datos = estado(1);
+    // Solo un colegio sin calendario llegaría así (la columna es NOT NULL).
+    datos.colegio.calendario = '' as 'A';
+    vi.mocked(getOnboarding).mockResolvedValue(datos);
+    renderPagina();
+
+    expect(await screen.findByLabelText('Nombre')).toBeInTheDocument();
+    expect(screen.queryByText(/Períodos académicos precargados/i)).toBeNull();
+
+    fireEvent.click(screen.getByLabelText('Calendario B'));
+
+    expect(screen.getByText(/Períodos académicos precargados/i)).toBeInTheDocument();
+    expect(screen.getByText('Período 4')).toBeInTheDocument();
+  });
+
+  it('filtra los municipios por departamento y limpia el que no corresponde', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(1));
+    renderPagina();
+
+    const municipio = await screen.findByLabelText('Municipio');
+    expect(municipio).toHaveValue('Plato');
+    expect(screen.getByRole('option', { name: 'Plato' })).toBeInTheDocument();
+
+    await userEvent.selectOptions(screen.getByLabelText('Departamento'), 'Caldas');
+
+    expect(municipio).toHaveValue('');
+    expect(screen.queryByRole('option', { name: 'Plato' })).toBeNull();
+    expect(screen.getByRole('option', { name: 'Manizales' })).toBeInTheDocument();
+  });
+
+  it('valida el correo antes de continuar', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(1));
+    renderPagina();
+
+    fireEvent.change(await screen.findByLabelText('Correo del colegio'), {
+      target: { value: 'rectoria-sin-arroba' },
+    });
+    await userEvent.click(screen.getByRole('button', { name: /continuar a sedes/i }));
+
+    expect(await screen.findByText(/Correo inválido/i)).toBeInTheDocument();
+    expect(guardarColegioOnboarding).not.toHaveBeenCalled();
+    expect(mockPush).not.toHaveBeenCalled();
   });
 
   it('guarda el nombre oficial junto al nombre corto', async () => {
@@ -335,6 +386,34 @@ describe('Onboarding · paso 1 (identidad)', () => {
         subdominio: 'demo',
       }),
     );
+  });
+
+  it('«Guardar y salir» guarda el paso 1 y sale al dashboard', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(1));
+    vi.mocked(guardarColegioOnboarding).mockResolvedValue(estado(1));
+    vi.mocked(guardarPasoOnboarding).mockResolvedValue(estado(1));
+    renderPagina();
+
+    await screen.findByLabelText('Nombre');
+    await userEvent.click(screen.getByRole('button', { name: /guardar y salir/i }));
+
+    await waitFor(() => expect(guardarColegioOnboarding).toHaveBeenCalledTimes(1));
+    expect(mockPush).toHaveBeenCalledWith('/dashboard');
+  });
+
+  it('«Guardar y salir» no sale si el formulario tiene errores', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(1));
+    renderPagina();
+
+    fireEvent.change(await screen.findByLabelText('Correo del colegio'), {
+      target: { value: 'malo' },
+    });
+    await userEvent.click(screen.getByRole('button', { name: /guardar y salir/i }));
+
+    expect(await screen.findByText(/Correo inválido/i)).toBeInTheDocument();
+    expect(await screen.findByText(/no se guardó nada/i)).toBeInTheDocument();
+    expect(guardarColegioOnboarding).not.toHaveBeenCalled();
+    expect(mockPush).not.toHaveBeenCalled();
   });
 
   it('sugiere el subdominio a partir del nombre', async () => {

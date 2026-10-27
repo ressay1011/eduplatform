@@ -2726,28 +2726,62 @@ body {
 .onb-campo-ancho {
   grid-column: 1 / -1;
 }
-/* Paso 1: el formulario nace bloqueado hasta que el código DANE se verifica.
-   `fieldset` es la forma nativa de deshabilitar todos los controles de golpe. */
-.onb-fieldset {
+/* Paso 1: el formulario aparece cuando el código DANE se resuelve. */
+.onb-form {
   display: flex;
   flex-direction: column;
   gap: 16px;
   min-width: 0;
-  margin: 0;
-  padding: 0;
-  border: 0;
 }
-.m3-textfield .m3-tf:disabled {
-  opacity: 0.38;
-  cursor: not-allowed;
+/* Calendario y año lectivo en la misma fila: chips a la izquierda, año a la
+   derecha; los dos bloques miden 56 px de alto y quedan alineados por abajo. */
+.onb-fila-calendario {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
 }
-.m3-textfield:has(.m3-tf:disabled) .m3-tf-label {
-  opacity: 0.38;
+.onb-fila-calendario .onb-anio {
+  width: 160px;
 }
-.onb-chip:has(input:disabled),
-.onb-periodo input:disabled {
-  opacity: 0.38;
-  cursor: not-allowed;
+.onb-etiqueta {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--md-sys-color-on-surface-variant);
+  font: 500 12px/16px var(--md-ref-typeface-plain);
+}
+/* Error de un grupo de campos (calendario, períodos) que no es un TextField. */
+.onb-error {
+  margin: 6px 0 0;
+  color: var(--md-sys-color-error);
+  font: 400 12px/16px var(--md-ref-typeface-plain);
+}
+/* Select con la piel del TextField M3 (mismo alto, borde y label flotante). */
+.m3-textfield .m3-tf--select {
+  padding: 0 44px 0 16px;
+  appearance: none;
+  cursor: pointer;
+}
+.m3-textfield .m3-tf-label--flotante {
+  top: 8px;
+  transform: translateY(-50%);
+  font: 500 12px/16px var(--md-ref-typeface-plain);
+}
+.m3-textfield .m3-tf--select:focus + .m3-tf-label {
+  color: var(--md-sys-color-primary);
+}
+.m3-tf-caret {
+  position: absolute;
+  top: 36px;
+  right: 8px;
+  transform: translateY(-50%);
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 24px;
+  pointer-events: none;
+}
+.m3-textfield.error .m3-tf-caret {
+  color: var(--md-sys-color-error);
 }
 .onb-opciones {
   display: flex;

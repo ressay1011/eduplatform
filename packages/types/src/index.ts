@@ -6,6 +6,7 @@
 export * from './api/response';
 export * from './entities/enums';
 export * from './auth';
+export * from './colombia';
 export * from './usuarios';
 export * from './roles';
 export * from './matriculas';
