@@ -204,7 +204,8 @@ beforeEach(() => {
 const DANE: ColegioDane = {
   codigoDane: '147555000295',
   anio: 2025,
-  nombre: 'I.E.T.D. Juana Arias de Benavides',
+  // El MEN manda el nombre crudo: la página lo sanea antes de prellenar.
+  nombre: 'INSTITUCION EDUCATIVA TECNICA DEPARTAMENTAL JUANA ARIAS DE BENAVIDES',
   municipio: 'Plato',
   departamento: 'Magdalena',
   direccion: 'CALLE 6A CARRERA 15 ESQUINA',
@@ -218,6 +219,15 @@ const DANE: ColegioDane = {
   sedes: 7,
 };
 
+/** Colegio recién creado: todavía no tiene código DANE guardado. */
+function estadoSinCodigo(): EstadoOnboarding {
+  const datos = estado(1);
+  datos.colegio.codigoDane = '';
+  datos.colegio.nombre = '';
+  datos.colegio.subdominio = '';
+  return datos;
+}
+
 describe('Onboarding · paso 1 (identidad)', () => {
   it('no ofrece el dominio de correo como campo editable', async () => {
     vi.mocked(getOnboarding).mockResolvedValue(estado(1));
@@ -226,6 +236,79 @@ describe('Onboarding · paso 1 (identidad)', () => {
     expect(await screen.findByLabelText('Nombre')).toHaveValue('I.E. Demo');
     expect(screen.queryByLabelText('Dominio de correo')).toBeNull();
     expect(screen.getByText('demo.edu.co')).toBeInTheDocument();
+  });
+
+  it('nace bloqueado: solo el código DANE se puede escribir', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estadoSinCodigo());
+    renderPagina();
+
+    expect(await screen.findByLabelText('Código DANE')).toBeEnabled();
+    expect(screen.getByLabelText('Nombre')).toBeDisabled();
+    expect(screen.getByLabelText('Municipio')).toBeDisabled();
+    expect(screen.getByLabelText('NIT (opcional)')).toBeDisabled();
+    expect(screen.getByRole('button', { name: /continuar a sedes/i })).toBeDisabled();
+    expect(
+      screen.getByText(/Escribe los 12 dígitos del código DANE para habilitar/i),
+    ).toBeInTheDocument();
+  });
+
+  it('busca solo al llegar a los 12 dígitos y prellena con el nombre saneado', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estadoSinCodigo());
+    vi.mocked(buscarColegioDane).mockResolvedValue(DANE);
+    renderPagina();
+
+    fireEvent.change(await screen.findByLabelText('Código DANE'), {
+      target: { value: '147555000295' },
+    });
+
+    // Sin botón: el disparo es el decimosegundo dígito.
+    expect(buscarColegioDane).toHaveBeenCalledWith('147555000295');
+    await waitFor(() => expect(screen.getByLabelText('Municipio')).toHaveValue('Plato'));
+    expect(screen.getByLabelText('Nombre')).toHaveValue('I.E.T.D. Juana Arias de Benavides');
+    expect(screen.getByLabelText('Nombre')).toBeEnabled();
+    expect(screen.getByLabelText('Dirección')).toHaveValue(DANE.direccion);
+    expect(screen.getByLabelText('Teléfono')).toHaveValue(DANE.telefono);
+    expect(screen.getByLabelText('Calendario B')).toBeChecked();
+    expect(screen.getByText(/Datos del MEN de 2025/)).toBeInTheDocument();
+  });
+
+  it('no consulta el portal mientras el código esté incompleto', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estadoSinCodigo());
+    renderPagina();
+
+    fireEvent.change(await screen.findByLabelText('Código DANE'), { target: { value: '123' } });
+
+    expect(buscarColegioDane).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Nombre')).toBeDisabled();
+  });
+
+  it.each([
+    [404, 'NOT_FOUND', 'No encontramos un establecimiento educativo con ese código DANE.'],
+    [
+      502,
+      'BAD_GATEWAY',
+      'El servicio de datos del MEN no respondió. Intenta de nuevo en unos minutos.',
+    ],
+  ])('habilita el formulario igual si el MEN responde %i', async (estadoHttp, codigo, mensaje) => {
+    vi.mocked(getOnboarding).mockResolvedValue(estadoSinCodigo());
+    vi.mocked(buscarColegioDane).mockRejectedValue(new ApiError(estadoHttp, codigo, mensaje));
+    renderPagina();
+
+    fireEvent.change(await screen.findByLabelText('Código DANE'), {
+      target: { value: '999999999999' },
+    });
+
+    expect(await screen.findByText(mensaje)).toBeInTheDocument();
+    expect(screen.getByLabelText('Nombre')).toBeEnabled();
+    expect(screen.getByRole('button', { name: /continuar a sedes/i })).toBeEnabled();
+  });
+
+  it('no repite la búsqueda si el colegio ya tiene código guardado', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(1));
+    renderPagina();
+
+    expect(await screen.findByLabelText('Nombre')).toBeEnabled();
+    expect(buscarColegioDane).not.toHaveBeenCalled();
   });
 
   it('sugiere el subdominio a partir del nombre', async () => {
@@ -248,57 +331,6 @@ describe('Onboarding · paso 1 (identidad)', () => {
     fireEvent.change(await screen.findByLabelText('Nombre'), { target: { value: 'Otro nombre' } });
 
     expect(screen.getByLabelText('Subdominio')).toHaveValue('demo');
-  });
-
-  it('trae los datos del MEN con el código DANE y prellena el formulario', async () => {
-    vi.mocked(getOnboarding).mockResolvedValue(estado(1));
-    vi.mocked(buscarColegioDane).mockResolvedValue(DANE);
-    renderPagina();
-
-    fireEvent.change(await screen.findByLabelText('Código DANE'), {
-      target: { value: '147555000295' },
-    });
-    await userEvent.click(screen.getByRole('button', { name: /buscar/i }));
-
-    expect(buscarColegioDane).toHaveBeenCalledWith('147555000295');
-    await waitFor(() => expect(screen.getByLabelText('Municipio')).toHaveValue('Plato'));
-    expect(screen.getByLabelText('Nombre')).toHaveValue(DANE.nombre);
-    expect(screen.getByLabelText('Dirección')).toHaveValue(DANE.direccion);
-    expect(screen.getByLabelText('Teléfono')).toHaveValue(DANE.telefono);
-    expect(screen.getByLabelText('Calendario B')).toBeChecked();
-    expect(screen.getByText(/Datos del MEN de 2025/)).toBeInTheDocument();
-  });
-
-  it('avisa si el código no tiene 12 dígitos y no consulta el portal', async () => {
-    vi.mocked(getOnboarding).mockResolvedValue(estado(1));
-    renderPagina();
-
-    fireEvent.change(await screen.findByLabelText('Código DANE'), { target: { value: '123' } });
-    await userEvent.click(screen.getByRole('button', { name: /buscar/i }));
-
-    expect(buscarColegioDane).not.toHaveBeenCalled();
-    expect(await screen.findByText('El código DANE tiene 12 dígitos.')).toBeInTheDocument();
-  });
-
-  it('muestra el mensaje de la API cuando el código no existe', async () => {
-    vi.mocked(getOnboarding).mockResolvedValue(estado(1));
-    vi.mocked(buscarColegioDane).mockRejectedValue(
-      new ApiError(
-        404,
-        'NOT_FOUND',
-        'No encontramos un establecimiento educativo con ese código DANE.',
-      ),
-    );
-    renderPagina();
-
-    fireEvent.change(await screen.findByLabelText('Código DANE'), {
-      target: { value: '999999999999' },
-    });
-    await userEvent.click(screen.getByRole('button', { name: /buscar/i }));
-
-    expect(
-      await screen.findByText(/No encontramos un establecimiento educativo/),
-    ).toBeInTheDocument();
   });
 });
 
