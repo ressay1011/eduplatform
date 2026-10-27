@@ -4,14 +4,16 @@
  * Todo exige `configuracion.editar` y, además, ser admin del colegio: el
  * wizard crea sedes y cursos, no es una pantalla operativa más.
  */
-import { Body, Controller, Get, HttpCode, Patch, Post, Put } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Patch, Post, Put } from '@nestjs/common';
 import { z } from 'zod';
 import {
+  CodigoDaneSchema,
   ColegioOnboardingSchema,
   ErrorCodes,
   EstructuraOnboardingSchema,
   SedeOnboardingSchema,
   type ApiResponse,
+  type ColegioDane,
   type EstadoOnboarding,
   type ResultadoOnboarding,
 } from '@eduplatform/types';
@@ -31,7 +33,12 @@ export class OnboardingController {
     if (auth.tipo !== 'colegio') {
       throw apiError(ErrorCodes.FORBIDDEN, 403, 'Este módulo es exclusivo de usuarios del colegio');
     }
-    return { colegioId: auth.colegio.id, usuarioId: auth.usuario.id, esAdmin: auth.esAdmin };
+    return {
+      colegioId: auth.colegio.id,
+      usuarioId: auth.usuario.id,
+      email: auth.usuario.email,
+      esAdmin: auth.esAdmin,
+    };
   }
 
   /** Estado completo: colegio, sedes, año/períodos, conteos y checklist. */
@@ -39,6 +46,23 @@ export class OnboardingController {
   @RequirePermission('configuracion.editar')
   async estado(@CurrentAuth() auth: AuthContext): Promise<ApiResponse<EstadoOnboarding>> {
     return { success: true, data: await this.onboarding.estado(this.actor(auth)) };
+  }
+
+  /**
+   * Paso 1: datos del establecimiento en los datos abiertos del MEN.
+   * Es una SUGERENCIA para prellenar el formulario; el admin la revisa.
+   */
+  @Get('dane/:codigo')
+  @RequirePermission('configuracion.editar')
+  async dane(
+    @CurrentAuth() auth: AuthContext,
+    @Param('codigo') codigo: string,
+  ): Promise<ApiResponse<ColegioDane>> {
+    const codigoLimpio = CodigoDaneSchema.parse(codigo);
+    return {
+      success: true,
+      data: await this.onboarding.buscarDane(this.actor(auth), codigoLimpio),
+    };
   }
 
   /** Paso 1: identidad, calendario, año lectivo y períodos. */

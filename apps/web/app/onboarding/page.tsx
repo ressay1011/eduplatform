@@ -15,7 +15,10 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Jornada,
+  SubdominioSchema,
+  subdominioDeNombre,
   TIPOS_DOCUMENTO,
+  type ColegioDane,
   type CursoMatricula,
   type EstadoOnboarding,
   type ResultadoImportacionMatriculas,
@@ -27,6 +30,7 @@ import { useEmpleados, useRoles, useSedes } from '@/hooks/usePersonas';
 import {
   ApiError,
   actualizarUsuario,
+  buscarColegioDane,
   crearUsuario,
   finalizarOnboarding,
   generarEstructuraOnboarding,
@@ -163,7 +167,6 @@ export default function OnboardingPage() {
     nit: '',
     codigoDane: '',
     subdominio: '',
-    dominioEmail: '',
     municipio: '',
     departamento: '',
     direccion: '',
@@ -173,6 +176,11 @@ export default function OnboardingPage() {
     anioLectivo: new Date().getFullYear(),
   });
   const [periodos, setPeriodos] = useState<PeriodoForm[]>([]);
+
+  // Paso 1 · consulta del código DANE en los datos abiertos del MEN.
+  const [buscandoDane, setBuscandoDane] = useState(false);
+  const [daneInfo, setDaneInfo] = useState<ColegioDane | null>(null);
+  const [daneError, setDaneError] = useState<string | null>(null);
 
   // Paso 2
   const [sede, setSede] = useState({
@@ -218,7 +226,6 @@ export default function OnboardingPage() {
       nit: data.colegio.nit ?? '',
       codigoDane: data.colegio.codigoDane,
       subdominio: data.colegio.subdominio,
-      dominioEmail: data.colegio.dominioEmail ?? '',
       municipio: data.colegio.municipio,
       departamento: data.colegio.departamento,
       direccion: data.colegio.direccion ?? '',
@@ -283,14 +290,100 @@ export default function OnboardingPage() {
       guardarColegioOnboarding({
         ...colegio,
         nit: colegio.nit === '' ? undefined : colegio.nit,
-        dominioEmail: colegio.dominioEmail === '' ? undefined : colegio.dominioEmail,
         direccion: colegio.direccion === '' ? undefined : colegio.direccion,
         telefono: colegio.telefono === '' ? undefined : colegio.telefono,
         periodos,
       }),
   });
 
+  /**
+   * El subdominio se sugiere desde el nombre mientras el admin no lo toque: si
+   * el que hay sigue siendo el derivado del nombre anterior (o está vacío), se
+   * recalcula. Un subdominio propio (semilla o escrito a mano) se respeta, para
+   * no cambiar la URL del colegio cada vez que se corrige el nombre.
+   */
+  function conNombre(valor: string): void {
+    setColegio((actual) => {
+      const derivado = subdominioDeNombre(actual.nombre);
+      const seguiaAlNombre = actual.subdominio === '' || actual.subdominio === derivado;
+      return {
+        ...actual,
+        nombre: valor,
+        subdominio: seguiaAlNombre ? subdominioDeNombre(valor) : actual.subdominio,
+      };
+    });
+  }
+
+  /** Mientras se escribe solo se permiten caracteres válidos (sin exigir el mínimo). */
+  function conSubdominio(valor: string): void {
+    setColegio((actual) => ({
+      ...actual,
+      subdominio: valor
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9-]+/g, '-')
+        .replace(/^-+/, '')
+        .slice(0, 32),
+    }));
+  }
+
+  /**
+   * Paso 1: trae del MEN los datos del establecimiento con el código DANE.
+   * Es una propuesta: rellena el formulario y el admin corrige lo que haga falta.
+   */
+  async function buscarDane(): Promise<void> {
+    const codigo = colegio.codigoDane.trim();
+    if (!/^\d{12}$/.test(codigo)) {
+      setDaneError('El código DANE tiene 12 dígitos.');
+      setDaneInfo(null);
+      return;
+    }
+
+    setBuscandoDane(true);
+    setDaneError(null);
+    setAviso(null);
+    try {
+      const datos = await buscarColegioDane(codigo);
+      setDaneInfo(datos);
+      setColegio((actual) => {
+        const derivado = subdominioDeNombre(actual.nombre);
+        const seguiaAlNombre = actual.subdominio === '' || actual.subdominio === derivado;
+        return {
+          ...actual,
+          nombre: datos.nombre,
+          municipio: datos.municipio,
+          departamento: datos.departamento,
+          direccion: datos.direccion ?? '',
+          telefono: datos.telefono ?? '',
+          email: datos.email ?? actual.email,
+          calendario: datos.calendario,
+          subdominio: seguiaAlNombre ? subdominioDeNombre(datos.nombre) : actual.subdominio,
+        };
+      });
+      if (datos.calendario !== colegio.calendario) {
+        setPeriodos(periodosBase(datos.calendario, colegio.anioLectivo));
+      }
+      setExito(`Datos del MEN de ${datos.anio} cargados. Revísalos y ajusta lo que haga falta.`);
+    } catch (e) {
+      setDaneInfo(null);
+      setDaneError(mensajeDeError(e, 'No pudimos consultar ese código DANE.'));
+    } finally {
+      setBuscandoDane(false);
+    }
+  }
+
   async function guardarPaso1(siguiente: number): Promise<void> {
+    if (!/^\d{12}$/.test(colegio.codigoDane.trim())) {
+      setAviso('El código DANE debe tener 12 dígitos.');
+      return;
+    }
+    if (!SubdominioSchema.safeParse(colegio.subdominio).success) {
+      setAviso(
+        'El subdominio debe tener entre 3 y 32 caracteres: minúsculas, números y guiones, sin empezar ni terminar en guion.',
+      );
+      return;
+    }
     setGuardando(true);
     setAviso(null);
     try {
@@ -550,12 +643,43 @@ export default function OnboardingPage() {
         {paso === 1 && (
           <section className="onb-card">
             <h2 className="onb-card-titulo">Identidad del colegio</h2>
+            <div className="onb-dane">
+              <TextField
+                id="onb-dane"
+                label="Código DANE"
+                value={colegio.codigoDane}
+                onChange={(v) => {
+                  setColegio({ ...colegio, codigoDane: v.replace(/\D/g, '').slice(0, 12) });
+                  setDaneError(null);
+                }}
+                error={daneError}
+                ayuda="12 dígitos: con él se traen los datos del colegio desde el MEN."
+              />
+              <M3Button
+                type="button"
+                variante="tonal"
+                icono="search"
+                onClick={() => void buscarDane()}
+                disabled={buscandoDane}
+              >
+                {buscandoDane ? 'Buscando…' : 'Buscar'}
+              </M3Button>
+            </div>
+
+            {daneInfo !== null && (
+              <p className="onb-nota">
+                Datos del MEN ({daneInfo.anio}): {daneInfo.sector ?? 'sector sin dato'} ·{' '}
+                {daneInfo.caracter ?? 'carácter sin dato'} · rector {daneInfo.rector ?? 'sin dato'}{' '}
+                · {daneInfo.matricula} matriculado(s) · {daneInfo.sedes} sede(s).
+              </p>
+            )}
+
             <div className="onb-grid">
               <TextField
                 id="onb-nombre"
                 label="Nombre"
                 value={colegio.nombre}
-                onChange={(v) => setColegio({ ...colegio, nombre: v })}
+                onChange={conNombre}
               />
               <TextField
                 id="onb-nit"
@@ -564,23 +688,11 @@ export default function OnboardingPage() {
                 onChange={(v) => setColegio({ ...colegio, nit: v })}
               />
               <TextField
-                id="onb-dane"
-                label="Código DANE"
-                value={colegio.codigoDane}
-                onChange={(v) => setColegio({ ...colegio, codigoDane: v })}
-              />
-              <TextField
                 id="onb-sub"
                 label="Subdominio"
                 value={colegio.subdominio}
-                onChange={(v) => setColegio({ ...colegio, subdominio: v })}
-              />
-              <TextField
-                id="onb-dominio"
-                label="Dominio de correo"
-                value={colegio.dominioEmail}
-                onChange={(v) => setColegio({ ...colegio, dominioEmail: v })}
-                ayuda="Ejemplo: juanaarias.edu.co"
+                onChange={conSubdominio}
+                ayuda="Se sugiere del nombre; puedes cambiarlo."
               />
               <TextField
                 id="onb-municipio"
@@ -614,6 +726,12 @@ export default function OnboardingPage() {
                 onChange={(v) => setColegio({ ...colegio, email: v })}
               />
             </div>
+
+            <p className="onb-nota">
+              Los usuarios entran con su correo institucional: el dominio{' '}
+              <strong>{data.colegio.dominioEmail ?? 'del administrador'}</strong> identifica al
+              colegio en el login. No se edita aquí para que nadie pierda el acceso.
+            </p>
 
             <h2 className="onb-card-titulo">Calendario escolar</h2>
             <div className="onb-opciones">

@@ -27,6 +27,18 @@ const EnvSchema = z
      * obligatorio fuera de development) o la cookie no viaja y el login falla.
      */
     COOKIE_SAMESITE: z.enum(['lax', 'strict', 'none']).default('lax'),
+    /**
+     * App token de datos.gov.co (Socrata) para la consulta por código DANE.
+     * Opcional: sin él la petición sale del pool por IP (sin cupo propio); con
+     * él, 1.000 peticiones/hora. No es una credencial de datos —los datasets
+     * son abiertos— pero se mantiene en el entorno y no en el código.
+     */
+    DATOS_GOV_APP_TOKEN: z.preprocess(
+      // Una variable vacía en el `.env` (plantilla copiada sin rellenar) no debe
+      // tumbar el arranque: se trata como ausente.
+      (valor) => (typeof valor === 'string' && valor.trim() === '' ? undefined : valor),
+      z.string().trim().min(10).optional(),
+    ),
   })
   .superRefine((val, ctx) => {
     if (val.NODE_ENV === 'production' && val.DATABASE_URL === undefined) {
