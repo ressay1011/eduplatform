@@ -167,7 +167,9 @@ describe('Onboarding (e2e)', () => {
         nit: `9${sufijo}-1`,
         codigoDane,
         subdominio,
-        dominioEmail: dominio,
+        // El dominio de login NO se edita en el wizard: se envía a propósito
+        // para comprobar que la API lo ignora y el colegio conserva el suyo.
+        dominioEmail: 'intento-de-cambio.test',
         municipio: 'Plato',
         departamento: 'Magdalena',
         direccion: 'Calle 1 # 2-3',
@@ -195,6 +197,18 @@ describe('Onboarding (e2e)', () => {
     expect(body.data.paso).toBeGreaterThanOrEqual(2);
     expect(body.data.anioLectivo?.anio).toBe(2026);
     expect(body.data.periodos).toHaveLength(2);
+    // El dominio con el que entran los usuarios no cambia por el wizard.
+    expect(body.data.colegio.dominioEmail).toBe(dominio);
+  });
+
+  it('la consulta por código DANE es exclusiva del admin y valida el formato', async () => {
+    const staff = await login(staffEmail);
+    // 403 antes de salir a internet: la comprobación es de permisos.
+    await staff.get('/api/onboarding/dane/147555000295').expect(403);
+
+    const admin = await login(adminEmail);
+    // 400 de Zod antes de consultar el portal.
+    await admin.get('/api/onboarding/dane/123').expect(400);
   });
 
   it('paso 2 crea la sede con sus jornadas', async () => {

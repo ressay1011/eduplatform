@@ -6,10 +6,17 @@
  * y estudiantes pueden quedar pendientes (checklist «Completa tu colegio»).
  */
 import { z } from 'zod';
+import { SubdominioSchema } from './auth';
 import { Calendario, Jornada } from './entities/enums';
 
 const FECHA_ISO = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'La fecha debe ser AAAA-MM-DD');
 const JORNADAS = Object.values(Jornada) as [Jornada, ...Jornada[]];
+
+/** Código DANE del establecimiento: 12 dígitos (ver `subdominioDeNombre` abajo). */
+export const CodigoDaneSchema = z
+  .string()
+  .trim()
+  .regex(/^\d{12}$/, 'El código DANE tiene 12 dígitos');
 
 /** Período académico tal como llega del wizard (fechas ISO sin hora). */
 export const PeriodoOnboardingSchema = z.object({
@@ -20,24 +27,19 @@ export const PeriodoOnboardingSchema = z.object({
 });
 export type PeriodoOnboardingRequest = z.input<typeof PeriodoOnboardingSchema>;
 
-/** Paso 1: identidad del colegio, calendario, año lectivo y períodos. */
+/**
+ * Paso 1: identidad del colegio, calendario, año lectivo y períodos.
+ *
+ * NO incluye `dominioEmail`: el dominio con el que entran los usuarios se fija
+ * una sola vez (con el dominio del correo del admin que configura el colegio) y
+ * el wizard no lo edita. Cambiarlo dejaba a todos los usuarios fuera, porque el
+ * login resuelve el colegio por el dominio del correo (ADR-006).
+ */
 export const ColegioOnboardingSchema = z.object({
   nombre: z.string().trim().min(3).max(160),
   nit: z.string().trim().max(20).optional(),
-  codigoDane: z
-    .string()
-    .trim()
-    .regex(/^\d{12}$/, 'El código DANE tiene 12 dígitos'),
-  subdominio: z
-    .string()
-    .trim()
-    .regex(/^[a-z0-9][a-z0-9-]{2,38}[a-z0-9]$/, 'Subdominio en minúsculas, sin espacios'),
-  dominioEmail: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .regex(/^[a-z0-9.-]+\.[a-z]{2,}$/, 'Dominio de correo inválido')
-    .optional(),
+  codigoDane: CodigoDaneSchema,
+  subdominio: SubdominioSchema,
   municipio: z.string().trim().min(2).max(80),
   departamento: z.string().trim().min(2).max(80),
   direccion: z.string().trim().max(160).optional(),
@@ -48,6 +50,28 @@ export const ColegioOnboardingSchema = z.object({
   periodos: z.array(PeriodoOnboardingSchema).min(2).max(4),
 });
 export type ColegioOnboardingRequest = z.input<typeof ColegioOnboardingSchema>;
+
+/**
+ * Subdominio sugerido a partir del nombre del colegio.
+ *
+ * Quita tildes y puntos (para que «I.E.T.D.» no quede como `i-e-t-d-`), pasa a
+ * minúsculas, convierte el resto de separadores en guiones y recorta a 32
+ * caracteres — el máximo de `SubdominioSchema`. Devuelve `''` si no alcanza el
+ * mínimo de 3, y en ese caso la web deja el campo vacío para que lo escriba el
+ * admin. Es solo una SUGERENCIA: el campo siempre queda editable.
+ */
+export function subdominioDeNombre(nombre: string): string {
+  const base = nombre
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // tildes y diéresis
+    .replace(/\./g, '') // «I.E.» → «IE»
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+/, '')
+    .slice(0, 32)
+    .replace(/-+$/, '');
+  return base.length >= 3 ? base : '';
+}
 
 /** Paso 2: sede con las jornadas que ofrece. */
 export const SedeOnboardingSchema = z.object({
@@ -76,6 +100,31 @@ export const EstructuraOnboardingSchema = z.object({
 });
 export type EstructuraOnboardingRequest = z.input<typeof EstructuraOnboardingSchema>;
 
+/**
+ * Datos del establecimiento que devuelve la consulta por código DANE
+ * (datos abiertos del MEN). Son una SUGERENCIA para el paso 1: el admin revisa
+ * y corrige antes de guardar. `anio` es el año del dato, no el año lectivo.
+ */
+export interface ColegioDane {
+  codigoDane: string;
+  /** Año del reporte del MEN (los datos llegan con ~1 año de rezago). */
+  anio: number;
+  nombre: string;
+  municipio: string;
+  departamento: string;
+  direccion: string | null;
+  telefono: string | null;
+  email: string | null;
+  calendario: Calendario;
+  /** OFICIAL / NO OFICIAL. */
+  sector: string | null;
+  /** Académico / Técnico. */
+  caracter: string | null;
+  rector: string | null;
+  matricula: number;
+  sedes: number;
+}
+
 /** Sede tal como la devuelve la API. */
 export interface SedeOnboarding {
   id: string;
@@ -98,6 +147,7 @@ export interface ColegioOnboarding {
   nit: string | null;
   codigoDane: string;
   subdominio: string;
+  /** Dominio del correo institucional: solo lectura en el wizard. */
   dominioEmail: string | null;
   municipio: string;
   departamento: string;

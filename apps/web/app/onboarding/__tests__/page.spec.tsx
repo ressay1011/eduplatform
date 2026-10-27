@@ -10,6 +10,7 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
+  ColegioDane,
   CursoMatricula,
   EstadoOnboarding,
   ListaPersonas,
@@ -38,6 +39,7 @@ vi.mock('@/lib/api', () => {
   return {
     ApiError: ApiErrorMock,
     getOnboarding: vi.fn(),
+    buscarColegioDane: vi.fn(),
     guardarColegioOnboarding: vi.fn(),
     guardarSedeOnboarding: vi.fn(),
     generarEstructuraOnboarding: vi.fn(),
@@ -54,7 +56,9 @@ vi.mock('@/lib/api', () => {
 });
 
 import {
+  ApiError,
   actualizarUsuario,
+  buscarColegioDane,
   crearUsuario,
   getOnboarding,
   guardarPasoOnboarding,
@@ -195,6 +199,107 @@ beforeEach(() => {
   vi.mocked(listarEmpleados).mockResolvedValue(personal([]));
   vi.mocked(listarCursosMatricula).mockResolvedValue([CURSO]);
   vi.mocked(guardarPasoOnboarding).mockResolvedValue(estado(5));
+});
+
+const DANE: ColegioDane = {
+  codigoDane: '147555000295',
+  anio: 2025,
+  nombre: 'I.E.T.D. Juana Arias de Benavides',
+  municipio: 'Plato',
+  departamento: 'Magdalena',
+  direccion: 'CALLE 6A CARRERA 15 ESQUINA',
+  telefono: '3001234567',
+  email: 'rectoria@juanaarias.edu.co',
+  calendario: 'B',
+  sector: 'OFICIAL',
+  caracter: 'Técnico/Academico',
+  rector: 'ARMANDO JAIME DE ARCO CACERES',
+  matricula: 3748,
+  sedes: 7,
+};
+
+describe('Onboarding · paso 1 (identidad)', () => {
+  it('no ofrece el dominio de correo como campo editable', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(1));
+    renderPagina();
+
+    expect(await screen.findByLabelText('Nombre')).toHaveValue('I.E. Demo');
+    expect(screen.queryByLabelText('Dominio de correo')).toBeNull();
+    expect(screen.getByText('demo.edu.co')).toBeInTheDocument();
+  });
+
+  it('sugiere el subdominio a partir del nombre', async () => {
+    const datos = estado(1);
+    datos.colegio.subdominio = '';
+    vi.mocked(getOnboarding).mockResolvedValue(datos);
+    renderPagina();
+
+    fireEvent.change(await screen.findByLabelText('Nombre'), {
+      target: { value: 'I.E.T.D. Juana Arias de Benavides' },
+    });
+
+    expect(screen.getByLabelText('Subdominio')).toHaveValue('ietd-juana-arias-de-benavides');
+  });
+
+  it('respeta el subdominio propio del colegio aunque cambie el nombre', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(1));
+    renderPagina();
+
+    fireEvent.change(await screen.findByLabelText('Nombre'), { target: { value: 'Otro nombre' } });
+
+    expect(screen.getByLabelText('Subdominio')).toHaveValue('demo');
+  });
+
+  it('trae los datos del MEN con el código DANE y prellena el formulario', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(1));
+    vi.mocked(buscarColegioDane).mockResolvedValue(DANE);
+    renderPagina();
+
+    fireEvent.change(await screen.findByLabelText('Código DANE'), {
+      target: { value: '147555000295' },
+    });
+    await userEvent.click(screen.getByRole('button', { name: /buscar/i }));
+
+    expect(buscarColegioDane).toHaveBeenCalledWith('147555000295');
+    await waitFor(() => expect(screen.getByLabelText('Municipio')).toHaveValue('Plato'));
+    expect(screen.getByLabelText('Nombre')).toHaveValue(DANE.nombre);
+    expect(screen.getByLabelText('Dirección')).toHaveValue(DANE.direccion);
+    expect(screen.getByLabelText('Teléfono')).toHaveValue(DANE.telefono);
+    expect(screen.getByLabelText('Calendario B')).toBeChecked();
+    expect(screen.getByText(/Datos del MEN de 2025/)).toBeInTheDocument();
+  });
+
+  it('avisa si el código no tiene 12 dígitos y no consulta el portal', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(1));
+    renderPagina();
+
+    fireEvent.change(await screen.findByLabelText('Código DANE'), { target: { value: '123' } });
+    await userEvent.click(screen.getByRole('button', { name: /buscar/i }));
+
+    expect(buscarColegioDane).not.toHaveBeenCalled();
+    expect(await screen.findByText('El código DANE tiene 12 dígitos.')).toBeInTheDocument();
+  });
+
+  it('muestra el mensaje de la API cuando el código no existe', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(1));
+    vi.mocked(buscarColegioDane).mockRejectedValue(
+      new ApiError(
+        404,
+        'NOT_FOUND',
+        'No encontramos un establecimiento educativo con ese código DANE.',
+      ),
+    );
+    renderPagina();
+
+    fireEvent.change(await screen.findByLabelText('Código DANE'), {
+      target: { value: '999999999999' },
+    });
+    await userEvent.click(screen.getByRole('button', { name: /buscar/i }));
+
+    expect(
+      await screen.findByText(/No encontramos un establecimiento educativo/),
+    ).toBeInTheDocument();
+  });
 });
 
 describe('Onboarding · paso 4 (personal)', () => {

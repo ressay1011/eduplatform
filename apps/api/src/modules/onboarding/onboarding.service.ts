@@ -8,7 +8,9 @@
 import { Injectable } from '@nestjs/common';
 import type { TenantContext } from '@eduplatform/database';
 import {
+  dominioDeEmail,
   ErrorCodes,
+  type ColegioDane,
   type ColegioOnboardingRequest,
   type EstadoOnboarding,
   type EstructuraOnboardingRequest,
@@ -16,11 +18,15 @@ import {
 } from '@eduplatform/types';
 import { apiError } from '../../shared/api-error';
 import { AuditService } from '../../shared/audit.service';
+import { AuthService } from '../auth/auth.service';
+import { DaneService } from './dane.service';
 import { OnboardingRepository, type FotoOnboarding } from './onboarding.repository';
 
 export interface ActorOnboarding {
   colegioId: string;
   usuarioId: string;
+  /** Correo del admin: su dominio fija el del colegio si aún no tiene. */
+  email: string;
   esAdmin: boolean;
 }
 
@@ -29,6 +35,8 @@ export class OnboardingService {
   constructor(
     private readonly repo: OnboardingRepository,
     private readonly audit: AuditService,
+    private readonly auth: AuthService,
+    private readonly dane: DaneService,
   ) {}
 
   private contexto(actor: ActorOnboarding): TenantContext {
@@ -129,20 +137,32 @@ export class OnboardingService {
     datos: ColegioOnboardingRequest,
   ): Promise<EstadoOnboarding> {
     this.asegurarAdmin(actor);
+    const contexto = this.contexto(actor);
+    // Claves de caché ANTES del cambio: si el subdominio o el nombre cambian,
+    // las llaves viejas quedarían sirviendo el branding anterior hasta el TTL.
+    const previo = await this.repo.contextoPublico(contexto);
+
     try {
-      await this.repo.guardarColegio(this.contexto(actor), {
+      await this.repo.guardarColegio(contexto, {
         ...datos,
         periodos: datos.periodos,
+        dominioAdmin: dominioDeEmail(actor.email),
       });
     } catch (error) {
       if (this.esUnico(error)) {
         throw apiError(
           ErrorCodes.ALREADY_EXISTS,
           409,
-          'El código DANE, el subdominio o el dominio de correo ya están en uso',
+          'El código DANE, el subdominio o el dominio del correo del administrador ya están en uso',
         );
       }
       throw error;
+    }
+
+    // ADR-005: la caché se invalida explícitamente, nunca se espera el TTL.
+    const nuevo = await this.repo.contextoPublico(contexto);
+    for (const clave of [previo, nuevo]) {
+      if (clave !== null) this.auth.invalidarContextoColegio(clave);
     }
 
     await this.audit.registrar({
@@ -155,6 +175,16 @@ export class OnboardingService {
     });
 
     return this.estado(actor);
+  }
+
+  /**
+   * Consulta el establecimiento en los datos abiertos del MEN por código DANE.
+   * Solo el admin: cada clic consume cupo del portal y el resultado prellena el
+   * paso 1, que es configuración de la institución.
+   */
+  async buscarDane(actor: ActorOnboarding, codigo: string): Promise<ColegioDane> {
+    this.asegurarAdmin(actor);
+    return this.dane.buscar(codigo);
   }
 
   /** Paso 2. */

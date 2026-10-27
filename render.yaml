@@ -37,3 +37,7 @@ services:
         sync: false
       - key: CORS_ORIGINS
         sync: false
+      # App token de datos.gov.co (consulta por código DANE del onboarding).
+      # Opcional: sin él la API sigue funcionando con el cupo por IP.
+      - key: DATOS_GOV_APP_TOKEN
+        sync: false

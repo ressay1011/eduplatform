@@ -2722,6 +2722,27 @@ body {
 .onb-grid--angosto {
   grid-template-columns: 160px;
 }
+/* Paso 1: código DANE con el botón «Buscar» a la derecha del campo. */
+.onb-dane {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+}
+.onb-dane .m3-btn {
+  /* El input arranca 8 px dentro de su contenedor: 16 px centra el botón de
+     40 px sobre el campo de 56 px (medido en el navegador). */
+  margin-top: 16px;
+}
+@media (max-width: 640px) {
+  .onb-dane {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .onb-dane .m3-btn {
+    margin-top: 0;
+    width: 100%;
+  }
+}
 .onb-opciones {
   display: flex;
   flex-wrap: wrap;
