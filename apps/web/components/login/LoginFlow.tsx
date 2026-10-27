@@ -16,6 +16,7 @@ import { dominioDeEmail } from '@eduplatform/types';
 import { BrandHeader } from '@/components/BrandHeader';
 import { ErrorBanner } from '@/components/ErrorBanner';
 import { M3Button } from '@/components/M3Button';
+import { MostrarPassword } from '@/components/MostrarPassword';
 import { PaperBg } from '@/components/PaperBg';
 import { StepDots } from '@/components/StepDots';
 import { TextField } from '@/components/TextField';
@@ -316,16 +317,10 @@ export function LoginFlow() {
                       error={errorPassword}
                       autoFocus
                       trailing={
-                        <button
-                          type="button"
-                          className="m3-tf-trailing"
-                          aria-label={mostrarPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                          onClick={() => setMostrarPassword((v) => !v)}
-                        >
-                          <span className="material-symbols-outlined" aria-hidden="true">
-                            {mostrarPassword ? 'visibility_off' : 'visibility'}
-                          </span>
-                        </button>
+                        <MostrarPassword
+                          visible={mostrarPassword}
+                          onToggle={() => setMostrarPassword((v) => !v)}
+                        />
                       }
                     />
 
