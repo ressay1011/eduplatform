@@ -10,6 +10,7 @@ import type {
   ContextoColegioPublico,
   CrearRolRequest,
   CrearUsuarioRequest,
+  ColegioDane,
   ColegioOnboardingRequest,
   CrearMatriculaRequest,
   CursoMatricula,
@@ -286,6 +287,15 @@ export function listarAcudientes(params: {
 /** Estado completo del wizard (una llamada alimenta los 6 pasos). */
 export function getOnboarding(): Promise<EstadoOnboarding> {
   return request('/onboarding');
+}
+
+/**
+ * Paso 1: datos del establecimiento en los datos abiertos del MEN por código
+ * DANE. La API puede tardar ~1 s (consulta a datos.gov.co) dentro del timeout
+ * global de 15 s; un 404 es «código inexistente», no un fallo de red.
+ */
+export function buscarColegioDane(codigo: string): Promise<ColegioDane> {
+  return request(`/onboarding/dane/${encodeURIComponent(codigo)}`);
 }
 
 export function guardarColegioOnboarding(dto: ColegioOnboardingRequest): Promise<EstadoOnboarding> {

@@ -36,9 +36,14 @@ packages/
 ## Matrículas y onboarding
 
 El wizard `/onboarding` (6 pasos) configura el colegio, agrega personal (paso 4)
-e importa estudiantes (paso 5). Una matrícula vincula un estudiante con un curso
-del año lectivo vigente (`UNIQUE (anio_lectivo_id, estudiante_id)`); la baja es
-lógica (`estado = RETIRADO`), nunca un borrado.
+e importa estudiantes (paso 5). El paso 1 empieza por el **código DANE**: el
+botón «Buscar» trae del MEN (datos.gov.co) nombre, municipio, dirección,
+contacto, calendario y tamaño del establecimiento como propuesta editable. El
+**dominio de correo no se edita** en el wizard: es la llave del login (ADR-006)
+y se fija una sola vez con el dominio del correo del administrador; cambiarlo
+dejaba a todos los usuarios fuera. Una matrícula vincula un estudiante con un
+curso del año lectivo vigente (`UNIQUE (anio_lectivo_id, estudiante_id)`); la
+baja es lógica (`estado = RETIRADO`), nunca un borrado.
 
 | Método | Ruta                                     | Permiso                  | Uso                                            |
 | ------ | ---------------------------------------- | ------------------------ | ---------------------------------------------- |
@@ -78,13 +83,14 @@ cp apps/api/.env.example apps/api/.env
 cp apps/web/.env.example apps/web/.env.local
 ```
 
-| Variable              | Dónde                 | Notas                                                                                      |
-| --------------------- | --------------------- | ------------------------------------------------------------------------------------------ |
-| `DATABASE_URL`        | `apps/api/.env`       | Rol **`app_user`** (RLS activa)                                                            |
-| `TOKEN_PEPPER`        | `apps/api/.env`       | ≥16 caracteres; `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
-| `CORS_ORIGINS`        | `apps/api/.env`       | Origen exacto de la web, sin barra final                                                   |
-| `COOKIE_SAMESITE`     | `apps/api/.env`       | `lax` con dominio propio; `none` si web y API están en dominios distintos (exige HTTPS)    |
-| `NEXT_PUBLIC_API_URL` | `apps/web/.env.local` | Incluye `/api`; se fija en **build**                                                       |
+| Variable              | Dónde                 | Notas                                                                                       |
+| --------------------- | --------------------- | ------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`        | `apps/api/.env`       | Rol **`app_user`** (RLS activa)                                                             |
+| `TOKEN_PEPPER`        | `apps/api/.env`       | ≥16 caracteres; `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`  |
+| `CORS_ORIGINS`        | `apps/api/.env`       | Origen exacto de la web, sin barra final                                                    |
+| `COOKIE_SAMESITE`     | `apps/api/.env`       | `lax` con dominio propio; `none` si web y API están en dominios distintos (exige HTTPS)     |
+| `DATOS_GOV_APP_TOKEN` | `apps/api/.env`       | Opcional. App token de datos.gov.co: cupo propio (1.000 req/h) al consultar por código DANE |
+| `NEXT_PUBLIC_API_URL` | `apps/web/.env.local` | Incluye `/api`; se fija en **build**                                                        |
 
 ## Puesta en marcha
 
