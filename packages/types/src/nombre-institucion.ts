@@ -236,9 +236,6 @@ const TILDES: Readonly<Record<string, string>> = {
   espana: 'España',
 };
 
-/** Marcas entre paréntesis que no aportan nada al nombre. */
-const MARCADORES = /\(\s*(?:i\.?\s*e\.?\s*d?\.?|c\.?\s*e\.?|cdi|s\.?\s*a\.?\s*s\.?)\s*\)/gi;
-
 /** Quita tildes y diéresis para comparar. */
 function sinTildes(texto: string): string {
   return texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -259,12 +256,29 @@ function capitalizar(texto: string): string {
   return texto.charAt(0).toUpperCase() + texto.slice(1);
 }
 
+/** Marcas entre paréntesis que no aportan al nombre, ya normalizadas. */
+const MARCADORES = new Set(['IED', 'IE', 'ID', 'CE', 'CDI', 'SAS']);
+
+/**
+ * Quita las marcas de relleno entre paréntesis: `(IED)`, `(C.E.)`, `(S.A.S)`.
+ * Se resuelve con un callback en vez de una expresión regular con alternativas
+ * y espacios opcionales, que en CodeQL es un ReDoS polinómico.
+ */
+function sinMarcadores(nombre: string): string {
+  return nombre.replace(/\(([^)]{0,40})\)/g, (entero: string, dentro: string) => {
+    const clave = sinTildes(dentro)
+      .toUpperCase()
+      .replace(/[^A-Z]/g, '');
+    return MARCADORES.has(clave) ? ' ' : entero;
+  });
+}
+
 /**
  * Tokeniza el nombre y expande las abreviaturas sueltas del MEN. `clave` es la
  * forma de comparación: sin tildes y en mayúsculas.
  */
 function tokenizar(nombre: string): { texto: string; clave: string }[] {
-  const limpio = nombre.replace(MARCADORES, ' ').replace(/\s+/g, ' ').trim();
+  const limpio = sinMarcadores(nombre).replace(/\s+/g, ' ').trim();
   if (limpio === '') return [];
 
   const tokens: { texto: string; clave: string }[] = [];

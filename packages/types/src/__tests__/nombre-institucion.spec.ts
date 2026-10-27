@@ -48,6 +48,13 @@ describe('nombreSaneado', () => {
 
   it('conserva siglas con punto y no duplica espacios', () => {
     expect(nombreSaneado('LICEO  CAMPESTRE   S.A.S')).toBe('L. Campestre S.A.S');
+    expect(nombreSaneado('COLEGIO SAN JORGE (C.E.)')).toBe('C. San Jorge');
+  });
+
+  it('no se atasca con entradas largas o mal formadas', () => {
+    // Antes era un ReDoS polinómico: CodeQL lo marcó y se cambió por un callback.
+    const ruido = `(cdi${' '.repeat(20000)}`;
+    expect(nombreSaneado(ruido).length).toBeGreaterThan(0);
   });
 
   it('no falla con entradas raras', () => {
