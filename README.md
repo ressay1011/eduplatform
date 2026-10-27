@@ -139,12 +139,16 @@ DATABASE_URL='postgresql://app_user:...' \
   pnpm --filter @eduplatform/database run db:audit
 ```
 
-`db:audit` revisa 88 comprobaciones sin modificar nada: roles sin superusuario,
-`BYPASSRLS`, `CREATEDB` ni `CREATEROLE`; RLS y política en cada tabla con
-`colegio_id`; propiedad de las tablas; privilegios de `app_user` (lectura y DML
-sí, DDL no); default ACL para tablas nuevas; funciones `SECURITY DEFINER`; y que
-las vistas pre-tenant existan sin exponer `password_hash`. Conviene correrlo
-después de cada migración y antes de un despliegue.
+`db:audit` revisa 58 comprobaciones sin modificar nada: roles sin superusuario,
+`BYPASSRLS`, `CREATEDB` ni `CREATEROLE`; por cada tabla con `colegio_id`, RLS,
+política que filtre por `colegio_id` y `WITH CHECK` que valide el tenant al
+escribir (sin él se podría insertar en el colegio de otro); ninguna política sin
+condición (`USING (true)` o `colegio_id IS NULL` fallan); propiedad de las
+tablas; privilegios de `app_user` (lectura y DML sí, DDL no); default ACL para
+tablas nuevas; funciones `SECURITY DEFINER`; y que las vistas pre-tenant existan
+sin exponer `password_hash`. El **paso 8 de `pnpm preflight`** lo corre con el
+`DATABASE_URL` de `apps/api/.env` (se salta solo si esa base no está
+configurada), así que no se sube una rama con el patrón de seguridad roto.
 
 - **API → Render:** `render.yaml` (Blueprint) declara el servicio `eduplatform-api`
   (free, Virginia, health `/api/health`), el comando de build del monorepo y el
