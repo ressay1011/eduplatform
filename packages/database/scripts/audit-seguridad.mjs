@@ -92,24 +92,56 @@ try {
     GROUP BY c.relname, c.relrowsecurity
     ORDER BY c.relname`;
   ok(conColegio.length > 0, `hay tablas con colegio_id (${conColegio.length})`);
-  for (const t of conColegio) {
-    ok(t.rls === true, `RLS activa en ${t.tabla}`);
-    ok(t.politicas > 0, `${t.tabla} tiene al menos una política (${t.politicas})`);
-  }
 
-  const permisivas = await sql`
-    SELECT p.tablename, p.policyname, p.cmd
+  // Toda política de una tabla de colegio tiene que condicionar el acceso: o
+  // filtra por `colegio_id`, o exige el modo plataforma. Una política sin
+  // condición (`true`, `colegio_id IS NULL`, `qual` nulo) deja la tabla abierta.
+  const politicas = await sql`
+    SELECT p.tablename AS tabla, p.policyname AS politica, p.cmd, p.qual, p.with_check
     FROM pg_policies p
+    JOIN information_schema.columns c
+      ON c.table_schema = 'public' AND c.table_name = p.tablename AND c.column_name = 'colegio_id'
     WHERE p.schemaname = 'public'
-      AND (p.qual = 'true' OR (p.qual IS NULL AND p.with_check = 'true'))
-      AND EXISTS (
-        SELECT 1 FROM information_schema.columns c
-        WHERE c.table_schema = 'public' AND c.table_name = p.tablename AND c.column_name = 'colegio_id'
-      )`;
-  aviso(
-    permisivas.length === 0,
-    `políticas sin filtro en tablas con colegio_id: ${permisivas.map((p) => `${p.tablename}.${p.policyname}`).join(', ')}`,
+    ORDER BY p.tablename, p.policyname`;
+
+  const filtraTenant = (expresion) =>
+    typeof expresion === 'string' && expresion.includes('colegio_id');
+  const filtraPlataforma = (expresion) =>
+    typeof expresion === 'string' && expresion.includes('is_platform_admin');
+  const condiciona = (expresion) =>
+    (filtraTenant(expresion) || filtraPlataforma(expresion)) && expresion.trim() !== 'true';
+  const ESCRIBE = ['ALL', 'INSERT', 'UPDATE'];
+
+  const sinCondicion = politicas.filter(
+    (p) =>
+      !condiciona(p.qual ?? '') || (ESCRIBE.includes(p.cmd) && !condiciona(p.with_check ?? '')),
   );
+  ok(
+    sinCondicion.length === 0,
+    `toda política filtra por colegio_id o exige modo plataforma (sin condición: ${
+      sinCondicion.map((p) => `${p.tabla}.${p.politica}`).join(', ') || 'ninguna'
+    })`,
+  );
+
+  for (const t of conColegio) {
+    const suyas = politicas.filter((p) => p.tabla === t.tabla);
+    const aisla = suyas.some((p) => filtraTenant(p.qual ?? '') || filtraTenant(p.with_check ?? ''));
+    const aislaEscritura = suyas.some(
+      (p) => ESCRIBE.includes(p.cmd) && filtraTenant(p.with_check ?? ''),
+    );
+    const problemas = [
+      t.rls !== true ? 'sin RLS' : null,
+      suyas.length === 0 ? 'sin políticas' : null,
+      !aisla ? 'sin política que filtre por colegio_id' : null,
+      !aislaEscritura ? 'sin WITH CHECK por colegio_id (escritura cruzada)' : null,
+    ].filter(Boolean);
+    ok(
+      problemas.length === 0,
+      problemas.length === 0
+        ? `${t.tabla}: RLS, ${suyas.length} política(s), filtra y valida colegio_id`
+        : `${t.tabla}: ${problemas.join('; ')}`,
+    );
+  }
 
   // ── 3. Propiedad ───────────────────────────────────────────────────────────
   seccion('Propiedad de las tablas');
