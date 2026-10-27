@@ -23,9 +23,14 @@ function origenDe(url: string): string {
 
 const API_ORIGEN = origenDe(process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000/api');
 
+// En desarrollo Next compila con eval (React Refresh y source maps): sin
+// 'unsafe-eval' la CSP bloquea el bundle y la página no hidrata. Producción
+// sigue sin él.
+const SCRIPT_SRC = `script-src 'self' 'unsafe-inline'${process.env.NODE_ENV === 'production' ? '' : " 'unsafe-eval'"}`;
+
 const CSP = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline'",
+  SCRIPT_SRC,
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com data:",
   "img-src 'self' data: blob: https:",
