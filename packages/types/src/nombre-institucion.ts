@@ -165,6 +165,52 @@ const TILDES: Readonly<Record<string, string>> = {
   sofia: 'Sofía',
   cesar: 'César',
   ines: 'Inés',
+  // Palabras institucionales: el MEN también las escribe sin tilde y el nombre
+  // oficial tiene que salir correcto en certificados y actas.
+  institucion: 'Institución',
+  tecnica: 'Técnica',
+  tecnico: 'Técnico',
+  academica: 'Académica',
+  academico: 'Académico',
+  pedagogica: 'Pedagógica',
+  pedagogico: 'Pedagógico',
+  psicopedagogica: 'Psicopedagógica',
+  psicopedagogico: 'Psicopedagógico',
+  artistica: 'Artística',
+  artistico: 'Artístico',
+  cientifica: 'Científica',
+  cientifico: 'Científico',
+  tecnologica: 'Tecnológica',
+  tecnologico: 'Tecnológico',
+  ecologica: 'Ecológica',
+  ecologico: 'Ecológico',
+  agricola: 'Agrícola',
+  agronomia: 'Agronomía',
+  agronomica: 'Agronómica',
+  agronomico: 'Agronómico',
+  publica: 'Pública',
+  publico: 'Público',
+  basica: 'Básica',
+  basico: 'Básico',
+  juridica: 'Jurídica',
+  juridico: 'Jurídico',
+  economica: 'Económica',
+  economico: 'Económico',
+  informatica: 'Informática',
+  informatico: 'Informático',
+  electrica: 'Eléctrica',
+  electrico: 'Eléctrico',
+  mecanica: 'Mecánica',
+  mecanico: 'Mecánico',
+  quimica: 'Química',
+  quimico: 'Químico',
+  fisica: 'Física',
+  matematica: 'Matemática',
+  matematico: 'Matemático',
+  historia: 'Historia',
+  historica: 'Histórica',
+  historico: 'Histórico',
+  bolivariana: 'Bolivariana',
   bolivar: 'Bolívar',
   cordoba: 'Córdoba',
   narino: 'Nariño',
@@ -181,13 +227,7 @@ const TILDES: Readonly<Record<string, string>> = {
   facatativa: 'Facatativá',
   bahia: 'Bahía',
   maiz: 'Maíz',
-  pedagogico: 'Pedagógico',
-  psicopedagogico: 'Psicopedagógico',
   catolico: 'Católico',
-  tecnologico: 'Tecnológico',
-  ecologico: 'Ecológico',
-  artistico: 'Artístico',
-  cientifico: 'Científico',
   caqueta: 'Caquetá',
   choco: 'Chocó',
   atlantico: 'Atlántico',
@@ -220,14 +260,13 @@ function capitalizar(texto: string): string {
 }
 
 /**
- * Devuelve el nombre institucional saneado a partir del nombre del MEN.
- * No falla nunca: si no reconoce nada, devuelve el nombre en Título.
+ * Tokeniza el nombre y expande las abreviaturas sueltas del MEN. `clave` es la
+ * forma de comparación: sin tildes y en mayúsculas.
  */
-export function nombreSaneado(nombre: string): string {
+function tokenizar(nombre: string): { texto: string; clave: string }[] {
   const limpio = nombre.replace(MARCADORES, ' ').replace(/\s+/g, ' ').trim();
-  if (limpio === '') return '';
+  if (limpio === '') return [];
 
-  // Tokeniza y expande las abreviaturas sueltas del MEN.
   const tokens: { texto: string; clave: string }[] = [];
   for (const crudo of limpio.split(' ')) {
     const clave = sinTildes(crudo).toUpperCase();
@@ -238,6 +277,28 @@ export function nombreSaneado(nombre: string): string {
       tokens.push({ texto: crudo, clave });
     }
   }
+  return tokens;
+}
+
+/**
+ * Nombre COMPLETO del establecimiento para documentos oficiales: el mismo texto
+ * que publica el MEN, en mayúsculas y con las tildes restauradas.
+ * «INSTITUCION EDUCATIVA TECNICA DEPARTAMENTAL VICTOR CAMARGO ALVAREZ» →
+ * «INSTITUCIÓN EDUCATIVA TÉCNICA DEPARTAMENTAL VÍCTOR CAMARGO ÁLVAREZ».
+ */
+export function nombreOficialMen(nombre: string): string {
+  return tokenizar(nombre)
+    .map((token) => (TILDES[token.clave.toLowerCase()] ?? token.texto).toUpperCase())
+    .join(' ')
+    .trim();
+}
+
+/**
+ * Devuelve el nombre institucional saneado a partir del nombre del MEN.
+ * No falla nunca: si no reconoce nada, devuelve el nombre en Título.
+ */
+export function nombreSaneado(nombre: string): string {
+  const tokens = tokenizar(nombre);
 
   // Bloque inicial de iniciales.
   const iniciales: string[] = [];

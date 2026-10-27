@@ -15,6 +15,7 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Jornada,
+  nombreOficialMen,
   nombreSaneado,
   SubdominioSchema,
   subdominioDeNombre,
@@ -165,6 +166,8 @@ export default function OnboardingPage() {
   // Paso 1
   const [colegio, setColegio] = useState({
     nombre: '',
+    /** Nombre completo del MEN: va en certificados y actas. */
+    nombreOficial: '',
     nit: '',
     codigoDane: '',
     subdominio: '',
@@ -230,6 +233,7 @@ export default function OnboardingPage() {
     if (data === undefined) return;
     setColegio({
       nombre: data.colegio.nombre,
+      nombreOficial: data.colegio.nombreOficial ?? '',
       nit: data.colegio.nit ?? '',
       codigoDane: data.colegio.codigoDane,
       subdominio: data.colegio.subdominio,
@@ -307,6 +311,7 @@ export default function OnboardingPage() {
       guardarColegioOnboarding({
         ...colegio,
         nit: colegio.nit === '' ? undefined : colegio.nit,
+        nombreOficial: colegio.nombreOficial === '' ? undefined : colegio.nombreOficial,
         direccion: colegio.direccion === '' ? undefined : colegio.direccion,
         telefono: colegio.telefono === '' ? undefined : colegio.telefono,
         periodos,
@@ -371,6 +376,8 @@ export default function OnboardingPage() {
         return {
           ...actual,
           nombre,
+          // El nombre completo se guarda aparte: es el que va en los documentos.
+          nombreOficial: nombreOficialMen(datos.nombre),
           municipio: datos.municipio,
           departamento: datos.departamento,
           direccion: datos.direccion ?? '',
@@ -723,6 +730,16 @@ export default function OnboardingPage() {
                   value={colegio.nit}
                   onChange={(v) => setColegio({ ...colegio, nit: v })}
                 />
+                {/* El nombre completo es largo: ocupa las dos columnas. */}
+                <div className="onb-campo-ancho">
+                  <TextField
+                    id="onb-nombre-oficial"
+                    label="Nombre oficial (documentos)"
+                    value={colegio.nombreOficial}
+                    onChange={(v) => setColegio({ ...colegio, nombreOficial: v })}
+                    ayuda="Como lo registra el MEN; se imprime en certificados y actas."
+                  />
+                </div>
                 <TextField
                   id="onb-sub"
                   label="Subdominio"

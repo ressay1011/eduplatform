@@ -61,6 +61,7 @@ import {
   buscarColegioDane,
   crearUsuario,
   getOnboarding,
+  guardarColegioOnboarding,
   guardarPasoOnboarding,
   importarMatriculas,
   listarCursosMatricula,
@@ -89,6 +90,7 @@ function estado(paso: number): EstadoOnboarding {
     colegio: {
       id: 'colegio-1',
       nombre: 'I.E. Demo',
+      nombreOficial: null,
       nit: null,
       codigoDane: '105001001234',
       subdominio: 'demo',
@@ -265,6 +267,10 @@ describe('Onboarding · paso 1 (identidad)', () => {
     expect(buscarColegioDane).toHaveBeenCalledWith('147555000295');
     await waitFor(() => expect(screen.getByLabelText('Municipio')).toHaveValue('Plato'));
     expect(screen.getByLabelText('Nombre')).toHaveValue('I.E.T.D. Juana Arias de Benavides');
+    // El nombre completo del MEN se guarda aparte, para los documentos.
+    expect(screen.getByLabelText('Nombre oficial (documentos)')).toHaveValue(
+      'INSTITUCIÓN EDUCATIVA TÉCNICA DEPARTAMENTAL JUANA ARIAS DE BENAVIDES',
+    );
     expect(screen.getByLabelText('Nombre')).toBeEnabled();
     expect(screen.getByLabelText('Dirección')).toHaveValue(DANE.direccion);
     expect(screen.getByLabelText('Teléfono')).toHaveValue(DANE.telefono);
@@ -309,6 +315,26 @@ describe('Onboarding · paso 1 (identidad)', () => {
 
     expect(await screen.findByLabelText('Nombre')).toBeEnabled();
     expect(buscarColegioDane).not.toHaveBeenCalled();
+  });
+
+  it('guarda el nombre oficial junto al nombre corto', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(1));
+    vi.mocked(guardarColegioOnboarding).mockResolvedValue(estado(2));
+    renderPagina();
+
+    fireEvent.change(await screen.findByLabelText('Nombre oficial (documentos)'), {
+      target: { value: 'INSTITUCIÓN EDUCATIVA TÉCNICA DEPARTAMENTAL JUANA ARIAS DE BENAVIDES' },
+    });
+    await userEvent.click(screen.getByRole('button', { name: /continuar a sedes/i }));
+
+    await waitFor(() => expect(guardarColegioOnboarding).toHaveBeenCalledTimes(1));
+    expect(guardarColegioOnboarding).toHaveBeenCalledWith(
+      expect.objectContaining({
+        nombre: 'I.E. Demo',
+        nombreOficial: 'INSTITUCIÓN EDUCATIVA TÉCNICA DEPARTAMENTAL JUANA ARIAS DE BENAVIDES',
+        subdominio: 'demo',
+      }),
+    );
   });
 
   it('sugiere el subdominio a partir del nombre', async () => {

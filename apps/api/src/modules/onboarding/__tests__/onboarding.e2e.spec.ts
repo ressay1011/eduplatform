@@ -164,6 +164,8 @@ describe('Onboarding (e2e)', () => {
       .patch('/api/onboarding/colegio')
       .send({
         nombre: 'I.E.T.D. Onboarding',
+        // Nombre completo para certificados y actas: se guarda aparte del corto.
+        nombreOficial: 'INSTITUCIÓN EDUCATIVA TÉCNICA DEPARTAMENTAL ONBOARDING',
         nit: `9${sufijo}-1`,
         codigoDane,
         subdominio,
@@ -197,6 +199,11 @@ describe('Onboarding (e2e)', () => {
     expect(body.data.paso).toBeGreaterThanOrEqual(2);
     expect(body.data.anioLectivo?.anio).toBe(2026);
     expect(body.data.periodos).toHaveLength(2);
+    // El nombre corto y el oficial conviven: uno para la UI, otro para documentos.
+    expect(body.data.colegio.nombre).toBe('I.E.T.D. Onboarding');
+    expect(body.data.colegio.nombreOficial).toBe(
+      'INSTITUCIÓN EDUCATIVA TÉCNICA DEPARTAMENTAL ONBOARDING',
+    );
     // El dominio con el que entran los usuarios no cambia por el wizard.
     expect(body.data.colegio.dominioEmail).toBe(dominio);
   });

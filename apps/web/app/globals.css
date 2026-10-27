@@ -2722,6 +2722,10 @@ body {
 .onb-grid--angosto {
   grid-template-columns: 160px;
 }
+/* Campos de nombre largo: ocupan las dos columnas del formulario. */
+.onb-campo-ancho {
+  grid-column: 1 / -1;
+}
 /* Paso 1: el formulario nace bloqueado hasta que el código DANE se verifica.
    `fieldset` es la forma nativa de deshabilitar todos los controles de golpe. */
 .onb-fieldset {

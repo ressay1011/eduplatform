@@ -37,6 +37,12 @@ export const colegios = pgTable(
       .primaryKey()
       .default(sql`gen_random_uuid()`),
     nombre: text('nombre').notNull(),
+    /**
+     * Nombre completo del establecimiento tal como lo registra el MEN
+     * («INSTITUCIÓN EDUCATIVA TÉCNICA DEPARTAMENTAL …»). Es el que se imprime en
+     * certificados, actas y diplomas; `nombre` es el nombre corto de la UI.
+     */
+    nombreOficial: text('nombre_oficial'),
     /** NIT — nullable: algunos colegios públicos no lo reportan. */
     nit: text('nit').unique(),
     /** Código DANE oficial de la IE (12 dígitos, único a nivel nacional). */

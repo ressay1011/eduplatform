@@ -5,7 +5,7 @@
  * ejemplos inventados: si uno de estos cambia de forma, es una regresión.
  */
 import { describe, expect, it } from 'vitest';
-import { nombreSaneado } from '../index';
+import { nombreOficialMen, nombreSaneado } from '../index';
 
 describe('nombreSaneado', () => {
   it.each([
@@ -54,5 +54,34 @@ describe('nombreSaneado', () => {
     expect(nombreSaneado('')).toBe('');
     expect(nombreSaneado('   ')).toBe('');
     expect(nombreSaneado('INSTITUCION EDUCATIVA')).toBe('I.E.');
+  });
+});
+
+describe('nombreOficialMen', () => {
+  it.each([
+    [
+      'INSTITUCION EDUCATIVA TECNICA DEPARTAMENTAL JUANA ARIAS DE BENAVIDES',
+      'INSTITUCIÓN EDUCATIVA TÉCNICA DEPARTAMENTAL JUANA ARIAS DE BENAVIDES',
+    ],
+    [
+      'INSTITUCION EDUCATIVA TECNICA DEPARTAMENTAL VICTOR CAMARGO ALVAREZ',
+      'INSTITUCIÓN EDUCATIVA TÉCNICA DEPARTAMENTAL VÍCTOR CAMARGO ÁLVAREZ',
+    ],
+    ['CENTRO EDUCATIVO RURAL MAIZ BLANCO', 'CENTRO EDUCATIVO RURAL MAÍZ BLANCO'],
+    ['INSTITUCION EDUCATIVA AGRICOLA DE POPAYAN', 'INSTITUCIÓN EDUCATIVA AGRÍCOLA DE POPAYÁN'],
+  ])('pone en mayúsculas con tildes «%s»', (entrada, esperado) => {
+    expect(nombreOficialMen(entrada)).toBe(esperado);
+  });
+
+  it('expande abreviaturas y quita marcas de relleno', () => {
+    expect(nombreOficialMen('INST EDUC LICEO JOAQUIN F. VELEZ')).toBe(
+      'INSTITUCIÓN EDUCATIVA LICEO JOAQUÍN F. VÉLEZ',
+    );
+    expect(nombreOficialMen('COLEGIO JUAN REY (IED)')).toBe('COLEGIO JUAN REY');
+  });
+
+  it('no inventa nada sobre un nombre ya correcto', () => {
+    expect(nombreOficialMen('COLEGIO SAN JOSÉ DE CALASANZ')).toBe('COLEGIO SAN JOSÉ DE CALASANZ');
+    expect(nombreOficialMen('')).toBe('');
   });
 });
