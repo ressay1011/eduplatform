@@ -92,6 +92,19 @@ cp apps/web/.env.example apps/web/.env.local
 | `DATOS_GOV_APP_TOKEN` | `apps/api/.env`       | Opcional. App token de datos.gov.co: cupo propio (1.000 req/h) al consultar por código DANE |
 | `NEXT_PUBLIC_API_URL` | `apps/web/.env.local` | Incluye `/api`; se fija en **build**                                                        |
 
+## Entornos
+
+|            | Rama   | API                            | Web                            | Base de datos              |
+| ---------- | ------ | ------------------------------ | ------------------------------ | -------------------------- |
+| Producción | `main` | `eduplatform-api` (Render)     | `eduplatform-ivory.vercel.app` | Neon `main`                |
+| Pruebas    | `dev`  | `eduplatform-api-dev` (Render) | preview de Vercel de la rama   | rama `dev` de Neon (copia) |
+
+- **`main` solo se actualiza por PR desde `dev` y con autorización explícita**; un push a `main` despliega solo.
+- Cada push a `dev` despliega la API de pruebas y crea un preview de la web que apunta a esa API
+  (`NEXT_PUBLIC_API_URL` del entorno _Preview_). La web del preview exige sesión de Vercel.
+- `CORS_ORIGINS` de la API de pruebas acepta `https://eduplatform-*-<equipo>.vercel.app`, así que
+  cualquier preview funciona sin tocar la variable; en producción los orígenes son exactos.
+
 ## Puesta en marcha
 
 ```bash
