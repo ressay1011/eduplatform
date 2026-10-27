@@ -10,6 +10,7 @@ import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { ErrorBanner } from '@/components/ErrorBanner';
 import { M3Button } from '@/components/M3Button';
+import { MostrarPassword } from '@/components/MostrarPassword';
 import { PaperBg } from '@/components/PaperBg';
 import { TextField } from '@/components/TextField';
 import { SESION_KEY, useSesion } from '@/hooks/useSesion';
@@ -39,6 +40,8 @@ export default function CambiarPasswordPage() {
   const [error, setError] = useState<string | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
+  const [verNueva, setVerNueva] = useState(false);
+  const [verConfirmar, setVerConfirmar] = useState(false);
 
   useEffect(() => {
     if (isError) {
@@ -129,7 +132,7 @@ export default function CambiarPasswordPage() {
                   <TextField
                     id="password-nueva"
                     label="Nueva contraseña"
-                    tipo="password"
+                    tipo={verNueva ? 'text' : 'password'}
                     value={passwordNueva}
                     onChange={(v) => {
                       setPasswordNueva(v);
@@ -137,6 +140,9 @@ export default function CambiarPasswordPage() {
                     }}
                     autoComplete="new-password"
                     autoFocus
+                    trailing={
+                      <MostrarPassword visible={verNueva} onToggle={() => setVerNueva((v) => !v)} />
+                    }
                   />
                   <div className="reglas-lista" aria-live="polite">
                     {REGLAS.map((regla) => {
@@ -163,7 +169,7 @@ export default function CambiarPasswordPage() {
                 <TextField
                   id="password-confirmar"
                   label="Confirmar contraseña"
-                  tipo="password"
+                  tipo={verConfirmar ? 'text' : 'password'}
                   value={confirmar}
                   onChange={(v) => {
                     setConfirmar(v);
@@ -171,6 +177,13 @@ export default function CambiarPasswordPage() {
                   }}
                   autoComplete="new-password"
                   error={error}
+                  trailing={
+                    <MostrarPassword
+                      visible={verConfirmar}
+                      onToggle={() => setVerConfirmar((v) => !v)}
+                      etiqueta="confirmación de contraseña"
+                    />
+                  }
                 />
 
                 <M3Button type="submit" grande className="full-width" disabled={enviando}>
