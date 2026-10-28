@@ -156,7 +156,11 @@ export function LoginFlow() {
     [password, email, recordarme, router, queryClient],
   );
 
-  const iniciales = colegio !== null ? inicialesDe(colegio.nombre) : 'EP';
+  // Un colegio recién entregado aún no tiene nombre: hasta que lo tenga, el
+  // login se presenta como EduPlatform para no dejar la cabecera vacía.
+  const nombreColegio = colegio?.nombre.trim() ?? '';
+  const nombreVisible = nombreColegio === '' ? 'EduPlatform' : nombreColegio;
+  const iniciales = nombreColegio === '' ? 'EP' : inicialesDe(nombreColegio);
 
   return (
     <>
@@ -201,7 +205,7 @@ export function LoginFlow() {
           ) : (
             <>
               <BrandHeader
-                nombre={colegio !== null ? colegio.nombre : 'EduPlatform'}
+                nombre={nombreVisible}
                 codigoDane={colegio !== null ? colegio.codigoDane : null}
                 iniciales={iniciales}
               />

@@ -109,6 +109,22 @@ describe('LoginFlow', () => {
     expect(screen.getByText('DANE 105001001234')).toBeInTheDocument();
   });
 
+  it('colegio sin nombre todavía → la cabecera sigue siendo EduPlatform', async () => {
+    vi.mocked(getContextoPorDominio).mockResolvedValue({
+      ...contexto,
+      nombre: '',
+      codigoDane: '',
+    });
+
+    renderFlow();
+    await identificar(EMAIL);
+
+    // El chip dice «entrando como …» pero el nombre visible no queda vacío.
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('EduPlatform');
+    expect(screen.getByText('Plataforma escolar')).toBeInTheDocument();
+    expect(screen.getByText('EP')).toBeInTheDocument();
+  });
+
   it('el paso 1 valida el correo antes de consultar', async () => {
     renderFlow();
     await userEvent.click(screen.getByRole('button', { name: /continuar/i }));
