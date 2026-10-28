@@ -42,7 +42,7 @@ function sesion(esAdmin: boolean, debeCambiarPassword = false): MeResponse {
     tipo: 'colegio',
     usuario: {
       id: 'u1',
-      email: 'admin@juanaarias.edu.co',
+      usuario: 'admin@juanaarias',
       nombres: 'Yasser',
       apellidos: 'Ariza',
       esAdmin,

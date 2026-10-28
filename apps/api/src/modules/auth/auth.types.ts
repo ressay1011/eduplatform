@@ -19,7 +19,7 @@ export interface ContextoPublicoConSede extends ContextoColegioPublico {
 export interface UsuarioColegioAuth {
   readonly id: string;
   readonly colegioId: string;
-  readonly email: string;
+  readonly usuario: string;
   readonly nombres: string;
   readonly apellidos: string;
   readonly esAdmin: boolean;

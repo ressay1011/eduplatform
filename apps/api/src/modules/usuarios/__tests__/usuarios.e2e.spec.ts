@@ -54,9 +54,9 @@ describe('Usuarios (e2e)', () => {
   let portalEmail = '';
   let adminBEmail = '';
 
-  async function login(email: string, password: string) {
+  async function login(usuario: string, password: string) {
     const agente = request.agent(app.getHttpServer());
-    await agente.post('/api/auth/login').send({ email, password }).expect(200);
+    await agente.post('/api/auth/login').send({ usuario, password }).expect(200);
     return agente;
   }
 
@@ -114,7 +114,7 @@ describe('Usuarios (e2e)', () => {
         .values([
           {
             colegioId: colegioAId,
-            email: adminEmail,
+            usuario: adminEmail,
             passwordHash: hashAdmin,
             nombres: 'Admin',
             apellidos: 'A',
@@ -125,7 +125,7 @@ describe('Usuarios (e2e)', () => {
           },
           {
             colegioId: colegioAId,
-            email: lectorEmail,
+            usuario: lectorEmail,
             passwordHash: hashStaff,
             nombres: 'Lector',
             apellidos: 'A',
@@ -135,7 +135,7 @@ describe('Usuarios (e2e)', () => {
           },
           {
             colegioId: colegioAId,
-            email: gestorEmail,
+            usuario: gestorEmail,
             passwordHash: hashStaff,
             nombres: 'Gestor',
             apellidos: 'A',
@@ -145,7 +145,7 @@ describe('Usuarios (e2e)', () => {
           },
           {
             colegioId: colegioAId,
-            email: portalEmail,
+            usuario: portalEmail,
             passwordHash: hashStaff,
             nombres: 'Portal',
             apellidos: 'A',
@@ -155,7 +155,7 @@ describe('Usuarios (e2e)', () => {
           },
           {
             colegioId: colegioBId,
-            email: adminBEmail,
+            usuario: adminBEmail,
             passwordHash: hashAdmin,
             nombres: 'Admin',
             apellidos: 'B',
@@ -165,8 +165,8 @@ describe('Usuarios (e2e)', () => {
             debeCambiarPassword: false,
           },
         ])
-        .returning({ id: usuarios.id, email: usuarios.email });
-      const adminA = creadosUsuarios.find((u) => u.email === adminEmail);
+        .returning({ id: usuarios.id, usuario: usuarios.usuario });
+      const adminA = creadosUsuarios.find((u) => u.usuario === adminEmail);
       if (adminA === undefined) throw new Error('Fixtures: admin A');
       adminAId = adminA.id;
 
@@ -177,9 +177,9 @@ describe('Usuarios (e2e)', () => {
         if (fila === undefined) throw new Error(`Fixtures: permiso ${codigo}`);
         return fila.id;
       };
-      const idUsuario = (email: string): string => {
-        const fila = creadosUsuarios.find((u) => u.email === email);
-        if (fila === undefined) throw new Error(`Fixtures: usuario ${email}`);
+      const idUsuario = (usuario: string): string => {
+        const fila = creadosUsuarios.find((u) => u.usuario === usuario);
+        if (fila === undefined) throw new Error(`Fixtures: usuario ${usuario}`);
         return fila.id;
       };
 
@@ -241,7 +241,7 @@ describe('Usuarios (e2e)', () => {
     const agente = await login(lectorEmail, PASSWORD_STAFF);
     const res = await agente.get('/api/usuarios');
     expect(res.status).toBe(200);
-    const emails = (res.body.data.items as Array<{ email: string }>).map((u) => u.email);
+    const emails = (res.body.data.items as Array<{ usuario: string }>).map((u) => u.usuario);
     expect(emails).toContain(adminEmail);
     expect(emails).toContain(lectorEmail);
     expect(emails).not.toContain(adminBEmail);
@@ -270,7 +270,7 @@ describe('Usuarios (e2e)', () => {
     const res = await agente.post('/api/usuarios').send({
       nombres: 'Nuevo',
       apellidos: 'Docente',
-      email: emailNuevo,
+      usuario: emailNuevo,
       tipoDocumento: 'CC',
       numeroDocumento: `83${sufijo}1`,
       permisos: ['calificaciones.editar'],
@@ -278,7 +278,7 @@ describe('Usuarios (e2e)', () => {
 
     expect(res.status).toBe(201);
     expect(res.body.data.usuario).toMatchObject({
-      email: emailNuevo,
+      usuario: emailNuevo,
       activo: true,
       debeCambiarPassword: true,
       esAdmin: false,
@@ -296,7 +296,7 @@ describe('Usuarios (e2e)', () => {
     const agenteNuevo = request.agent(app.getHttpServer());
     const loginNuevo = await agenteNuevo
       .post('/api/auth/login')
-      .send({ email: emailNuevo, password: temporal });
+      .send({ usuario: emailNuevo, password: temporal });
     expect(loginNuevo.status).toBe(200);
     expect(loginNuevo.body.data.usuario.debeCambiarPassword).toBe(true);
 
@@ -310,19 +310,19 @@ describe('Usuarios (e2e)', () => {
     expect(eventos.some((e) => e.accion === 'CREATE' && e.entidad === 'usuarios')).toBe(true);
   });
 
-  it('rechaza correo fuera del dominio institucional', async () => {
+  it('acepta un nombre de usuario que no es un correo (sin dominio institucional)', async () => {
     const agente = await login(adminEmail, PASSWORD_ADMIN);
     const res = await agente.post('/api/usuarios').send({
-      nombres: 'Externo',
-      apellidos: 'Gmail',
-      email: 'externo@gmail.com',
+      nombres: 'Portero',
+      apellidos: 'Garcia',
+      usuario: 'portero.garcia',
       tipoDocumento: 'CC',
       numeroDocumento: `83${sufijo}2`,
       permisos: ['portal.consultar'],
     });
-    expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe('VALIDATION_ERROR');
-    expect(String(res.body.error.message)).toContain(dominioA);
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.usuario).toMatchObject({ usuario: 'portero.garcia', activo: true });
   });
 
   it('rechaza correo duplicado (409)', async () => {
@@ -330,7 +330,7 @@ describe('Usuarios (e2e)', () => {
     const res = await agente.post('/api/usuarios').send({
       nombres: 'Duplicado',
       apellidos: 'Docente',
-      email: lectorEmail,
+      usuario: lectorEmail,
       tipoDocumento: 'CC',
       numeroDocumento: `83${sufijo}3`,
       permisos: ['portal.consultar'],
@@ -344,7 +344,7 @@ describe('Usuarios (e2e)', () => {
     const res = await agente.post('/api/usuarios').send({
       nombres: 'Otro',
       apellidos: 'Admin',
-      email: `admin2@${dominioA}`,
+      usuario: `admin2@${dominioA}`,
       tipoDocumento: 'CC',
       numeroDocumento: `83${sufijo}4`,
       esAdmin: true,
@@ -362,8 +362,8 @@ describe('Usuarios (e2e)', () => {
   it('reemplaza permisos y el detalle los refleja', async () => {
     const agente = await login(adminEmail, PASSWORD_ADMIN);
     const lista = await agente.get('/api/usuarios');
-    const lector = (lista.body.data.items as Array<{ id: string; email: string }>).find(
-      (u) => u.email === lectorEmail,
+    const lector = (lista.body.data.items as Array<{ id: string; usuario: string }>).find(
+      (u) => u.usuario === lectorEmail,
     );
     if (lector === undefined) throw new Error('lector no encontrado');
 
@@ -380,8 +380,8 @@ describe('Usuarios (e2e)', () => {
   it('rechaza permisos inexistentes en el catálogo', async () => {
     const agente = await login(adminEmail, PASSWORD_ADMIN);
     const lista = await agente.get('/api/usuarios');
-    const gestor = (lista.body.data.items as Array<{ id: string; email: string }>).find(
-      (u) => u.email === gestorEmail,
+    const gestor = (lista.body.data.items as Array<{ id: string; usuario: string }>).find(
+      (u) => u.usuario === gestorEmail,
     );
     if (gestor === undefined) throw new Error('gestor no encontrado');
     const res = await agente
@@ -398,8 +398,8 @@ describe('Usuarios (e2e)', () => {
 
     const admin = await login(adminEmail, PASSWORD_ADMIN);
     const lista = await admin.get('/api/usuarios');
-    const lector = (lista.body.data.items as Array<{ id: string; email: string }>).find(
-      (u) => u.email === lectorEmail,
+    const lector = (lista.body.data.items as Array<{ id: string; usuario: string }>).find(
+      (u) => u.usuario === lectorEmail,
     );
     if (lector === undefined) throw new Error('lector no encontrado');
 
@@ -415,12 +415,12 @@ describe('Usuarios (e2e)', () => {
     // La contraseña anterior ya no sirve; la temporal sí (y obliga cambio).
     const vieja = await request(app.getHttpServer())
       .post('/api/auth/login')
-      .send({ email: lectorEmail, password: PASSWORD_STAFF });
+      .send({ usuario: lectorEmail, password: PASSWORD_STAFF });
     expect(vieja.status).toBe(401);
 
     const nuevaLogin = await request(app.getHttpServer())
       .post('/api/auth/login')
-      .send({ email: lectorEmail, password: nueva });
+      .send({ usuario: lectorEmail, password: nueva });
     expect(nuevaLogin.status).toBe(200);
     expect(nuevaLogin.body.data.usuario.debeCambiarPassword).toBe(true);
   });

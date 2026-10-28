@@ -36,7 +36,6 @@ export class OnboardingController {
     return {
       colegioId: auth.colegio.id,
       usuarioId: auth.usuario.id,
-      email: auth.usuario.email,
       esAdmin: auth.esAdmin,
     };
   }

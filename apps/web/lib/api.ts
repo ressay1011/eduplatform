@@ -122,7 +122,7 @@ export interface ContextoConSede extends ContextoColegioPublico {
 }
 
 /** Branding público por subdominio (enlaces directos a un colegio). */
-export function getContextoColegio(subdominio: string): Promise<ContextoColegioPublico> {
+export function getContextoColegio(subdominio: string): Promise<ContextoConSede> {
   return request(`/auth/contexto-colegio?subdominio=${encodeURIComponent(subdominio)}`);
 }
 
@@ -132,11 +132,11 @@ export function getContextoPorDominio(dominio: string): Promise<ContextoConSede>
 }
 
 /**
- * Paso 1 del login: la API resuelve el colegio por el dominio del correo.
- * 404 = ese dominio no pertenece a ningún colegio registrado.
+ * Paso 1 del login sin subdominio: la API resuelve el colegio por el dominio
+ * heredado del identificador (`admin@colegio.edu.co`). 404 = no hay colegio.
  */
-export function identificarColegio(email: string): Promise<ContextoConSede> {
-  return request('/auth/identificar-colegio', { method: 'POST', body: { email } });
+export function identificarColegio(usuario: string): Promise<ContextoConSede> {
+  return request('/auth/identificar-colegio', { method: 'POST', body: { usuario } });
 }
 
 /** Login de usuario de colegio (guarda la cookie httpOnly). */

@@ -39,7 +39,7 @@ export default function EditarUsuarioPage() {
   const [inicializado, setInicializado] = useState(false);
   const [nombres, setNombres] = useState('');
   const [apellidos, setApellidos] = useState('');
-  const [email, setEmail] = useState('');
+  const [nombreUsuario, setNombreUsuario] = useState('');
   const [tipoDocumento, setTipoDocumento] = useState<string>('CC');
   const [numeroDocumento, setNumeroDocumento] = useState('');
   const [activo, setActivo] = useState(true);
@@ -52,7 +52,7 @@ export default function EditarUsuarioPage() {
     if (usuario === undefined || inicializado) return;
     setNombres(usuario.nombres);
     setApellidos(usuario.apellidos);
-    setEmail(usuario.email);
+    setNombreUsuario(usuario.usuario);
     setTipoDocumento(usuario.tipoDocumento);
     setNumeroDocumento(usuario.numeroDocumento);
     setActivo(usuario.activo);
@@ -75,7 +75,7 @@ export default function EditarUsuarioPage() {
     const validado = ActualizarUsuarioSchema.safeParse({
       nombres,
       apellidos,
-      email,
+      usuario: nombreUsuario,
       tipoDocumento,
       numeroDocumento,
       activo,
@@ -189,11 +189,11 @@ export default function EditarUsuarioPage() {
                 </div>
 
                 <TextField
-                  id="email"
-                  label="Correo institucional"
-                  tipo="email"
-                  value={email}
-                  onChange={setEmail}
+                  id="usuario"
+                  label="Nombre de usuario"
+                  tipo="text"
+                  value={nombreUsuario}
+                  onChange={setNombreUsuario}
                 />
 
                 <div className="form-grid">

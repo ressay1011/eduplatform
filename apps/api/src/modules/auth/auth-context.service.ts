@@ -64,7 +64,7 @@ export class AuthContextService {
       usuario: {
         id: usuario.id,
         colegioId: usuario.colegioId,
-        email: usuario.email,
+        usuario: usuario.usuario,
         nombres: usuario.nombres,
         apellidos: usuario.apellidos,
         esAdmin: usuario.esAdmin,

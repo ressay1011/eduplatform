@@ -6,7 +6,7 @@
  * el resto recibe permisos individuales del catálogo.
  */
 import { z } from 'zod';
-import { EmailSchema } from './auth';
+import { UsuarioSchema } from './auth';
 import { TipoDocumento } from './entities/enums';
 
 /** Valores válidos de tipo de documento (espejo del enum de BD). */
@@ -29,7 +29,7 @@ export const PermisoCodigoSchema = z
 const DatosPersonalesSchema = z.object({
   nombres: z.string().trim().min(2, 'Mínimo 2 caracteres').max(120),
   apellidos: z.string().trim().min(2, 'Mínimo 2 caracteres').max(120),
-  email: EmailSchema,
+  usuario: UsuarioSchema,
   tipoDocumento: z.enum(TIPOS_DOCUMENTO),
   numeroDocumento: z
     .string()
@@ -95,7 +95,7 @@ export interface UsuarioListado {
   id: string;
   nombres: string;
   apellidos: string;
-  email: string;
+  usuario: string;
   tipoDocumento: TipoDocumento;
   numeroDocumento: string;
   esAdmin: boolean;

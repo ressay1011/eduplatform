@@ -36,7 +36,8 @@ export interface DatosColegio {
    * recién creado). El dominio es la llave del login y cambiarlo por el wizard
    * dejaba a todos los usuarios fuera (ADR-006).
    */
-  dominioAdmin: string | null;
+  /** Dominio del correo de contacto del colegio (login heredado). */
+  dominioColegio: string | null;
   municipio: string;
   departamento: string;
   direccion?: string | undefined;
@@ -253,10 +254,10 @@ export class OnboardingRepository extends BaseRepository {
       // El dominio de login NUNCA se sobrescribe desde el wizard: solo se fija
       // la primera vez (colegio sin dominio), con el dominio del correo del
       // admin, para que su propio acceso siga funcionando.
-      if (datos.dominioAdmin !== null) {
+      if (datos.dominioColegio !== null) {
         await tx
           .update(colegios)
-          .set({ dominioEmail: datos.dominioAdmin })
+          .set({ dominioEmail: datos.dominioColegio })
           .where(and(eq(colegios.id, ctx.colegioId), isNull(colegios.dominioEmail)));
       }
 

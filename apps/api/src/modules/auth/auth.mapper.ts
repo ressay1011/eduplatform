@@ -10,7 +10,7 @@ import type { ColegioAuthRow, UsuarioAuthRow } from './auth.repository';
 /** Subconjunto estructural compartido entre filas de BD y contexto de sesión. */
 export interface UsuarioSesionFuente {
   readonly id: string;
-  readonly email: string;
+  readonly usuario: string;
   readonly nombres: string;
   readonly apellidos: string;
   readonly esAdmin: boolean;
@@ -28,7 +28,7 @@ export interface ColegioSesionFuente {
 export function toUsuarioSesion(usuario: UsuarioSesionFuente): UsuarioSesion {
   return {
     id: usuario.id,
-    email: usuario.email,
+    usuario: usuario.usuario,
     nombres: usuario.nombres,
     apellidos: usuario.apellidos,
     esAdmin: usuario.esAdmin,

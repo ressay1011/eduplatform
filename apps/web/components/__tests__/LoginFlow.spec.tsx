@@ -18,6 +18,11 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush, replace: mockReplace }),
 }));
 
+vi.mock('@/lib/subdominio', async (original) => {
+  const mod = await original<typeof import('@/lib/subdominio')>();
+  return { ...mod, subdominioActual: vi.fn(() => null) };
+});
+
 vi.mock('@/lib/api', () => {
   class ApiErrorMock extends Error {
     constructor(
@@ -32,11 +37,13 @@ vi.mock('@/lib/api', () => {
   return {
     ApiError: ApiErrorMock,
     getContextoPorDominio: vi.fn(),
+    getContextoColegio: vi.fn(),
     iniciarSesion: vi.fn(),
   };
 });
 
-import { ApiError, getContextoPorDominio, iniciarSesion } from '@/lib/api';
+import { ApiError, getContextoColegio, getContextoPorDominio, iniciarSesion } from '@/lib/api';
+import { subdominioActual } from '@/lib/subdominio';
 import { LoginFlow } from '../login/LoginFlow';
 import type { ContextoConSede } from '@/lib/api';
 
@@ -51,6 +58,7 @@ const contexto: ContextoConSede = {
   subdominio: 'colegio-norte',
 };
 
+// Usuario de prueba con dominio heredado: el paso 1 sin subdominio lo resuelve.
 const EMAIL = 'maria@colegio-norte.edu.co';
 
 function nuevoCliente(): QueryClient {
@@ -70,7 +78,7 @@ function loginOk(debeCambiarPassword: boolean) {
   return {
     usuario: {
       id: 'u1',
-      email: EMAIL,
+      usuario: EMAIL,
       nombres: 'María',
       apellidos: 'López',
       esAdmin: false,
@@ -81,12 +89,12 @@ function loginOk(debeCambiarPassword: boolean) {
   };
 }
 
-/** Paso 1: escribe el correo y espera a que el colegio quede resuelto. */
-async function identificar(email: string): Promise<void> {
-  const campo = screen.getByLabelText(/^correo electrónico/i);
-  // Limpiar primero: al volver del paso 2 el campo conserva el correo anterior.
+/** Paso 1: escribe el usuario y espera a que el colegio quede resuelto. */
+async function identificar(valor: string): Promise<void> {
+  const campo = screen.getByLabelText(/^nombre de usuario/i);
+  // Limpiar primero: al volver del paso 2 el campo conserva el valor anterior.
   await userEvent.clear(campo);
-  await userEvent.type(campo, email);
+  await userEvent.type(campo, valor);
   await userEvent.click(screen.getByRole('button', { name: /continuar|buscando tu colegio/i }));
   await screen.findByText(/estás entrando como/i);
 }
@@ -94,11 +102,12 @@ async function identificar(email: string): Promise<void> {
 describe('LoginFlow', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(subdominioActual).mockReturnValue(null);
     vi.mocked(getContextoPorDominio).mockResolvedValue(contexto);
     vi.mocked(iniciarSesion).mockResolvedValue(loginOk(false));
   });
 
-  it('resuelve el colegio por el dominio del correo antes de pedir la contraseña', async () => {
+  it('sin subdominio resuelve el colegio por el dominio heredado del usuario', async () => {
     renderFlow();
     expect(screen.getByText('EduPlatform')).toBeInTheDocument();
 
@@ -125,18 +134,50 @@ describe('LoginFlow', () => {
     expect(screen.getByText('EP')).toBeInTheDocument();
   });
 
-  it('el paso 1 valida el correo antes de consultar', async () => {
+  it('con el colegio en el subdominio: branding de entrada y login con subdominio', async () => {
+    vi.mocked(subdominioActual).mockReturnValue('juanaarias');
+    vi.mocked(getContextoColegio).mockResolvedValue({
+      ...contexto,
+      nombre: 'I.E.T.D. Juana Arias',
+      subdominio: 'juanaarias',
+    });
+
+    renderFlow();
+
+    // El nombre del colegio aparece sin escribir el usuario todavía.
+    expect(await screen.findByText('I.E.T.D. Juana Arias')).toBeInTheDocument();
+    expect(getContextoColegio).toHaveBeenCalledWith('juanaarias');
+
+    // El usuario puede ser un correo de cualquier dominio: no se consulta el dominio.
+    await userEvent.type(screen.getByLabelText(/^nombre de usuario/i), 'rector@gmail.com');
+    await userEvent.click(screen.getByRole('button', { name: /continuar|buscando tu colegio/i }));
+    expect(getContextoPorDominio).not.toHaveBeenCalled();
+
+    await userEvent.type(await screen.findByLabelText(/^contraseña/i), 'ClaveLarga1');
+    await userEvent.click(screen.getByRole('button', { name: /ingresar/i }));
+
+    await waitFor(() =>
+      expect(iniciarSesion).toHaveBeenCalledWith(
+        expect.objectContaining({ usuario: 'rector@gmail.com', subdominio: 'juanaarias' }),
+      ),
+    );
+  });
+
+  it('el paso 1 valida el nombre de usuario antes de consultar', async () => {
     renderFlow();
     await userEvent.click(screen.getByRole('button', { name: /continuar/i }));
-    expect(await screen.findByText('Ingresa tu correo institucional.')).toBeInTheDocument();
+    expect(await screen.findByText('Ingresa tu nombre de usuario.')).toBeInTheDocument();
 
-    await userEvent.type(screen.getByLabelText(/^correo electrónico/i), 'no-es-correo');
+    // 'ab' no llega a 3 caracteres: es el mínimo del identificador.
+    await userEvent.type(screen.getByLabelText(/^nombre de usuario/i), 'ab');
     await userEvent.click(screen.getByRole('button', { name: /continuar/i }));
-    expect(await screen.findByText('Formato de correo inválido.')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Solo minúsculas, números, puntos, guiones y @ (3–64 caracteres).'),
+    ).toBeInTheDocument();
     expect(vi.mocked(getContextoPorDominio)).not.toHaveBeenCalled();
   });
 
-  it('dominio sin colegio registrado (404) → error en el campo, sin avanzar', async () => {
+  it('sin subdominio y sin dominio de colegio (404) → error en el campo, sin avanzar', async () => {
     vi.mocked(getContextoPorDominio).mockRejectedValue(
       new ApiError(
         404,
@@ -145,11 +186,11 @@ describe('LoginFlow', () => {
       ),
     );
     renderFlow();
-    await userEvent.type(screen.getByLabelText(/^correo electrónico/i), 'alguien@desconocido.test');
+    await userEvent.type(screen.getByLabelText(/^nombre de usuario/i), 'alguien@desconocido.test');
     await userEvent.click(screen.getByRole('button', { name: /continuar/i }));
 
     expect(
-      await screen.findByText('Este correo no pertenece a ningún colegio registrado.'),
+      await screen.findByText('No encontramos tu colegio con ese usuario. Entra por su dirección.'),
     ).toBeInTheDocument();
     expect(screen.queryByText(/estás entrando como/i)).not.toBeInTheDocument();
   });
@@ -174,7 +215,7 @@ describe('LoginFlow', () => {
 
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/dashboard'));
     expect(vi.mocked(iniciarSesion)).toHaveBeenCalledWith({
-      email: EMAIL,
+      usuario: EMAIL,
       password: 'ClaveSegura123',
       rememberMe: false,
     });
@@ -193,7 +234,7 @@ describe('LoginFlow', () => {
 
   it('credenciales inválidas → error en el campo, sin navegar', async () => {
     vi.mocked(iniciarSesion).mockRejectedValue(
-      new ApiError(401, 'INVALID_CREDENTIALS', 'Correo o contraseña incorrectos'),
+      new ApiError(401, 'INVALID_CREDENTIALS', 'Usuario o contraseña incorrectos'),
     );
     renderFlow();
     await identificar(EMAIL);
@@ -232,14 +273,14 @@ describe('LoginFlow', () => {
     expect(screen.getByText(/15 minutos/i)).toBeInTheDocument();
   });
 
-  it('el aviso de "¿Olvidaste?" desaparece al volver a cambiar el correo', async () => {
+  it('el aviso de "¿Olvidaste?" desaparece al volver a cambiar el usuario', async () => {
     renderFlow();
     await identificar(EMAIL);
 
     await userEvent.click(screen.getByRole('button', { name: /¿olvidaste\?/i }));
     expect(await screen.findByText(/Para restablecer tu contraseña/i)).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: /cambiar correo/i }));
+    await userEvent.click(screen.getByRole('button', { name: /cambiar usuario/i }));
     expect(screen.queryByText(/Para restablecer tu contraseña/i)).not.toBeInTheDocument();
     expect(await screen.findByText('Iniciar sesión')).toBeInTheDocument();
   });
@@ -268,7 +309,7 @@ describe('LoginFlow', () => {
     });
 
     // …y la siguiente identificación ya trae el valor nuevo, sin esperar TTL.
-    await userEvent.click(screen.getByRole('button', { name: /cambiar correo/i }));
+    await userEvent.click(screen.getByRole('button', { name: /cambiar usuario/i }));
     await identificar(EMAIL);
     expect(vi.mocked(getContextoPorDominio)).toHaveBeenCalledTimes(2);
   });

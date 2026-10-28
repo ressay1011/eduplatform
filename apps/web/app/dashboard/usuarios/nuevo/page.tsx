@@ -26,7 +26,7 @@ export default function NuevoUsuarioPage() {
 
   const [nombres, setNombres] = useState('');
   const [apellidos, setApellidos] = useState('');
-  const [email, setEmail] = useState('');
+  const [usuario, setUsuario] = useState('');
   const [tipoDocumento, setTipoDocumento] = useState<string>('CC');
   const [numeroDocumento, setNumeroDocumento] = useState('');
   const [esAdmin, setEsAdmin] = useState(false);
@@ -47,7 +47,7 @@ export default function NuevoUsuarioPage() {
     const resultado = CrearUsuarioSchema.safeParse({
       nombres,
       apellidos,
-      email,
+      usuario,
       tipoDocumento,
       numeroDocumento,
       esAdmin,
@@ -71,7 +71,7 @@ export default function NuevoUsuarioPage() {
         <PantallaPasswordTemporal
           password={creado.passwordTemporal}
           titulo="Usuario creado"
-          descripcion={`Comparte esta contraseña con ${creado.usuario.nombres} ${creado.usuario.apellidos} (${creado.usuario.email}).`}
+          descripcion={`Comparte esta contraseña con ${creado.usuario.nombres} ${creado.usuario.apellidos} (${creado.usuario.usuario}).`}
           textoBoton="Ir a la lista"
           onContinuar={() => router.push('/dashboard/usuarios')}
         />
@@ -134,13 +134,13 @@ export default function NuevoUsuarioPage() {
               </div>
 
               <TextField
-                id="email"
-                label="Correo institucional"
-                tipo="email"
-                value={email}
-                onChange={setEmail}
-                autoComplete="email"
-                ayuda="Debe pertenecer al dominio del colegio."
+                id="usuario"
+                label="Nombre de usuario"
+                tipo="text"
+                value={usuario}
+                onChange={setUsuario}
+                autoComplete="off"
+                ayuda="Con esto entrará a la plataforma (p. ej. rector.garcia)."
               />
 
               <div className="form-grid">

@@ -4,15 +4,16 @@ import { expect, test, type Page } from '@playwright/test';
  * Humo E2E contra API + web reales.
  *
  * Los datos son los del colegio demo (`packages/database/scripts/seed-demo.mjs`):
- * el login resuelve el colegio por el dominio del correo y entra al dashboard.
+ * se entra por la dirección del colegio (`?colegio=`) con su nombre de usuario.
  */
-const EMAIL = process.env['E2E_ADMIN_EMAIL'] ?? 'admin@juanaarias.edu.co';
+const SUBDOMINIO = process.env['E2E_DEMO_SUBDOMINIO'] ?? 'demo-dist-1';
+const USUARIO = process.env['E2E_ADMIN_USUARIO'] ?? `admin@${SUBDOMINIO}`;
 const PASSWORD = process.env['E2E_ADMIN_PASSWORD'] ?? 'Demo2026!';
 const COLEGIO = 'I.E.T.D. Juana Arias de Benavides';
 
 async function entrar(page: Page): Promise<void> {
-  await page.goto('/login');
-  await page.getByLabel('Correo electrónico').fill(EMAIL);
+  await page.goto(`/login?colegio=${SUBDOMINIO}`);
+  await page.getByLabel('Nombre de usuario').fill(USUARIO);
   await page.getByRole('button', { name: /continuar/i }).click();
   await expect(page.getByText(/Estás entrando como/)).toBeVisible();
   await page.getByLabel('Contraseña', { exact: true }).fill(PASSWORD);
@@ -38,14 +39,14 @@ test.describe('humo', () => {
     await expect(page.getByRole('heading', { name: 'Empleados' })).toBeVisible();
 
     const primeraFila = page.locator('table.per-tabla tbody tr').first();
-    await expect(primeraFila).toContainText(EMAIL);
+    await expect(primeraFila).toContainText(USUARIO);
     await expect(primeraFila).toContainText('ADMIN');
     await expect(page.getByRole('columnheader', { name: 'Usuario' })).toBeVisible();
   });
 
   test('una contraseña errada no entra y muestra el error', async ({ page }) => {
-    await page.goto('/login');
-    await page.getByLabel('Correo electrónico').fill(EMAIL);
+    await page.goto(`/login?colegio=${SUBDOMINIO}`);
+    await page.getByLabel('Nombre de usuario').fill(USUARIO);
     await page.getByRole('button', { name: /continuar/i }).click();
     await page.getByLabel('Contraseña', { exact: true }).fill('ClaveIncorrecta123!');
     await page.getByRole('button', { name: /ingresar/i }).click();

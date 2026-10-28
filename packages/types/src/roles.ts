@@ -74,7 +74,7 @@ export interface PersonaEmpleado {
   id: string;
   nombres: string;
   apellidos: string;
-  email: string;
+  usuario: string;
   tipoDocumento: string;
   numeroDocumento: string;
   esAdmin: boolean;
@@ -93,7 +93,7 @@ export interface PersonaEstudiante {
   nombres: string;
   apellidos: string;
   numeroDocumento: string;
-  email: string;
+  usuario: string;
   codigoMatricula: string;
   estado: string;
   curso: string | null;
@@ -108,7 +108,7 @@ export interface PersonaAcudiente {
   nombres: string;
   apellidos: string;
   numeroDocumento: string;
-  email: string;
+  usuario: string;
   /** Teléfono declarado en el vínculo con el estudiante (si lo hay). */
   telefono: string | null;
   activo: boolean;

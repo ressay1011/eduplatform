@@ -82,7 +82,11 @@ export class AuthController {
     res.status(200).json(cuerpo);
   }
 
-  /** Login de usuario de colegio: el colegio se deduce del dominio del correo. */
+  /**
+   * Login de usuario de colegio. El colegio viene en `subdominio` (la web lo
+   * saca del host) o, si no, en el header `X-Colegio-Subdominio`; sin ninguno
+   * de los dos se usa la vía heredada por dominio del identificador.
+   */
   @Public()
   @Throttle({ default: { limit: env.THROTTLE_LOGIN_LIMIT, ttl: THROTTLE_TTL_MS } })
   @Post('login')
@@ -93,7 +97,18 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ): Promise<ApiResponse<LoginResponse>> {
     const dto = LoginRequestSchema.parse(body);
-    const { respuesta, token, expira } = await this.authService.login(dto, metaDeRequest(req));
+    const header = req.headers['x-colegio-subdominio'];
+    const subdominioHeader = Array.isArray(header) ? header[0] : header;
+    const subdominio =
+      dto.subdominio ??
+      (subdominioHeader !== undefined && subdominioHeader !== ''
+        ? SubdominioSchema.parse(subdominioHeader)
+        : undefined);
+
+    const { respuesta, token, expira } = await this.authService.login(
+      { ...dto, subdominio },
+      metaDeRequest(req),
+    );
     this.setCookieSesion(res, token, expira);
     return { success: true, data: respuesta };
   }
@@ -109,7 +124,7 @@ export class AuthController {
   @HttpCode(200)
   async identificarColegio(@Body() body: unknown): Promise<ApiResponse<ContextoPublicoConSede>> {
     const dto = IdentificarColegioRequestSchema.parse(body);
-    const data = await this.authService.identificarColegio(dto.email);
+    const data = await this.authService.identificarColegio(dto.usuario);
     return { success: true, data };
   }
 

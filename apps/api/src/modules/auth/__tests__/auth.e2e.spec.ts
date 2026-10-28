@@ -63,6 +63,8 @@ describe('Auth (e2e)', () => {
   const emailAdminA = `admin-a@${dominioA}`;
   const emailStaffA = `staff-a@${dominioA}`;
   const emailAdminB = `user-b@${dominioB}`;
+  // Correo de un proveedor libre: con el subdominio debe poder entrar igual.
+  const emailGmailA = `rector.juanaarias.${sufijo}@gmail.com`;
   let colegioAId = '';
   let colegioBId = '';
   let adminId = '';
@@ -117,7 +119,7 @@ describe('Auth (e2e)', () => {
         .values([
           {
             colegioId: colegioAId,
-            email: emailAdminA,
+            usuario: emailAdminA,
             passwordHash: hashCostoBajo,
             nombres: 'Admin',
             apellidos: 'A',
@@ -128,7 +130,7 @@ describe('Auth (e2e)', () => {
           },
           {
             colegioId: colegioAId,
-            email: emailStaffA,
+            usuario: emailStaffA,
             passwordHash: hashStaff,
             nombres: 'Staff',
             apellidos: 'A',
@@ -137,8 +139,19 @@ describe('Auth (e2e)', () => {
             debeCambiarPassword: true,
           },
           {
+            colegioId: colegioAId,
+            usuario: emailGmailA,
+            passwordHash: hashStaff,
+            nombres: 'Rector',
+            apellidos: 'Gmail',
+            tipoDocumento: 'CC',
+            numeroDocumento: `74${sufijo}1`,
+            esAdmin: false,
+            debeCambiarPassword: false,
+          },
+          {
             colegioId: colegioBId,
-            email: emailAdminB,
+            usuario: emailAdminB,
             passwordHash: hashCostoBajo,
             nombres: 'User',
             apellidos: 'B',
@@ -211,7 +224,7 @@ describe('Auth (e2e)', () => {
   it('identificar-colegio: el paso 1 resuelve el colegio por el dominio', async () => {
     const res = await request(app.getHttpServer())
       .post('/api/auth/identificar-colegio')
-      .send({ email: `cualquiera@${dominioB}` });
+      .send({ usuario: `cualquiera@${dominioB}` });
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({
       success: true,
@@ -222,15 +235,39 @@ describe('Auth (e2e)', () => {
   it('identificar-colegio con dominio desconocido → 404', async () => {
     const res = await request(app.getHttpServer())
       .post('/api/auth/identificar-colegio')
-      .send({ email: 'alguien@dominio-inexistente.test' });
+      .send({ usuario: 'alguien@dominio-inexistente.test' });
     expect(res.status).toBe(404);
     expect(res.body).toMatchObject({ success: false, error: { code: 'NOT_FOUND' } });
+  });
+
+  it('login por subdominio: el correo puede ser de cualquier dominio', async () => {
+    const { body } = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({ usuario: emailGmailA, password: PASSWORD_STAFF, subdominio: subdominioA })
+      .expect(200);
+
+    expect(body.data.usuario.usuario).toBe(emailGmailA);
+    expect(body.data.colegio.id).toBe(colegioAId);
+  });
+
+  it('el mismo correo con el subdominio de OTRO colegio → 401 (aislamiento)', async () => {
+    await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({ usuario: emailGmailA, password: PASSWORD_STAFF, subdominio: subdominioB })
+      .expect(401);
+  });
+
+  it('sin subdominio, un correo de Gmail no resuelve colegio → 401', async () => {
+    await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({ usuario: emailGmailA, password: PASSWORD_STAFF })
+      .expect(401);
   });
 
   it('login con un dominio de correo desconocido → 401 INVALID_CREDENTIALS', async () => {
     const res = await request(app.getHttpServer())
       .post('/api/auth/login')
-      .send({ email: 'alguien@dominio-inexistente.test', password: PASSWORD_ADMIN });
+      .send({ usuario: 'alguien@dominio-inexistente.test', password: PASSWORD_ADMIN });
     expect(res.status).toBe(401);
     expect(res.body).toMatchObject({ success: false, error: { code: 'INVALID_CREDENTIALS' } });
   });
@@ -243,13 +280,13 @@ describe('Auth (e2e)', () => {
     for (let i = 0; i < 5; i += 1) {
       const intento = await request(app.getHttpServer())
         .post('/api/auth/login')
-        .send({ email: correoFantasma, password: 'Incorrecta999' });
+        .send({ usuario: correoFantasma, password: 'Incorrecta999' });
       expect(intento.status).toBe(401);
     }
 
     const bloqueado = await request(app.getHttpServer())
       .post('/api/auth/login')
-      .send({ email: correoFantasma, password: 'Incorrecta999' });
+      .send({ usuario: correoFantasma, password: 'Incorrecta999' });
     expect(bloqueado.status).toBe(423);
     expect(bloqueado.body).toMatchObject({ success: false, error: { code: 'ACCOUNT_LOCKED' } });
   });
@@ -260,12 +297,12 @@ describe('Auth (e2e)', () => {
     for (let i = 0; i < 5; i += 1) {
       await request(app.getHttpServer())
         .post('/api/auth/login')
-        .send({ email: correo, password: 'Incorrecta999' })
+        .send({ usuario: correo, password: 'Incorrecta999' })
         .expect(401);
     }
     const bloqueado = await request(app.getHttpServer())
       .post('/api/auth/login')
-      .send({ email: correo, password: 'Incorrecta999' });
+      .send({ usuario: correo, password: 'Incorrecta999' });
     expect(bloqueado.status).toBe(423);
   });
 
@@ -273,7 +310,7 @@ describe('Auth (e2e)', () => {
     const res = await request(app.getHttpServer())
       .post('/api/auth/login')
       .set('X-Colegio-Subdominio', subdominioA)
-      .send({ email: emailAdminA, password: 'Incorrecta999' });
+      .send({ usuario: emailAdminA, password: 'Incorrecta999' });
     expect(res.status).toBe(401);
     expect(res.body.error.code).toBe('INVALID_CREDENTIALS');
     const filas = await withTenant(db, platformCtx, (tx) =>
@@ -289,12 +326,12 @@ describe('Auth (e2e)', () => {
     const res = await request(app.getHttpServer())
       .post('/api/auth/login')
       .set('X-Colegio-Subdominio', subdominioA)
-      .send({ email: emailAdminA, password: PASSWORD_ADMIN });
+      .send({ usuario: emailAdminA, password: PASSWORD_ADMIN });
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({
       success: true,
       data: {
-        usuario: { email: emailAdminA, esAdmin: true },
+        usuario: { usuario: emailAdminA, esAdmin: true },
         colegio: { nombre: 'Colegio E2E A' },
       },
     });
@@ -316,9 +353,9 @@ describe('Auth (e2e)', () => {
     const res = await request(app.getHttpServer())
       .post('/api/auth/login')
       .set('X-Colegio-Subdominio', subdominioA)
-      .send({ email: 'nadie@e2e.co', password: 'Cualquiera123' });
+      .send({ usuario: 'nadie@e2e.co', password: 'Cualquiera123' });
     expect(res.status).toBe(401);
-    expect(res.body.error.message).toBe('Correo o contraseña incorrectos');
+    expect(res.body.error.message).toBe('Usuario o contraseña incorrectos');
   });
 
   it('me sin cookie → 401', async () => {
@@ -332,7 +369,7 @@ describe('Auth (e2e)', () => {
     await agent
       .post('/api/auth/login')
       .set('X-Colegio-Subdominio', subdominioA)
-      .send({ email: emailAdminA, password: PASSWORD_ADMIN })
+      .send({ usuario: emailAdminA, password: PASSWORD_ADMIN })
       .expect(200);
 
     const me = await agent.get('/api/auth/me');
@@ -343,7 +380,7 @@ describe('Auth (e2e)', () => {
         tipo: 'colegio',
         esAdmin: true,
         permisos: [],
-        usuario: { email: emailAdminA },
+        usuario: { usuario: emailAdminA },
         colegio: { nombre: 'Colegio E2E A' },
       },
     });
@@ -357,7 +394,7 @@ describe('Auth (e2e)', () => {
     await agent
       .post('/api/auth/login')
       .set('X-Colegio-Subdominio', subdominioA)
-      .send({ email: emailStaffA, password: PASSWORD_STAFF })
+      .send({ usuario: emailStaffA, password: PASSWORD_STAFF })
       .expect(200);
 
     const denegado = await agent.get('/api/test-guard/protegido');
@@ -398,7 +435,7 @@ describe('Auth (e2e)', () => {
     await agent
       .post('/api/auth/login')
       .set('X-Colegio-Subdominio', subdominioA)
-      .send({ email: emailAdminA, password: PASSWORD_ADMIN })
+      .send({ usuario: emailAdminA, password: PASSWORD_ADMIN })
       .expect(200);
     const res = await agent.get('/api/auth/me').set('X-Colegio-Subdominio', subdominioB);
     expect(res.status).toBe(403);
@@ -409,13 +446,13 @@ describe('Auth (e2e)', () => {
     await agent
       .post('/api/auth/login')
       .set('X-Colegio-Subdominio', subdominioA)
-      .send({ email: emailStaffA, password: PASSWORD_STAFF })
+      .send({ usuario: emailStaffA, password: PASSWORD_STAFF })
       .expect(200);
     const agent2 = request.agent(app.getHttpServer());
     await agent2
       .post('/api/auth/login')
       .set('X-Colegio-Subdominio', subdominioA)
-      .send({ email: emailStaffA, password: PASSWORD_STAFF })
+      .send({ usuario: emailStaffA, password: PASSWORD_STAFF })
       .expect(200);
 
     const cambio = await agent
@@ -431,14 +468,14 @@ describe('Auth (e2e)', () => {
     const viejo = await request(app.getHttpServer())
       .post('/api/auth/login')
       .set('X-Colegio-Subdominio', subdominioA)
-      .send({ email: emailStaffA, password: PASSWORD_STAFF });
+      .send({ usuario: emailStaffA, password: PASSWORD_STAFF });
     expect(viejo.status).toBe(401);
 
     const nuevo = await request
       .agent(app.getHttpServer())
       .post('/api/auth/login')
       .set('X-Colegio-Subdominio', subdominioA)
-      .send({ email: emailStaffA, password: PASSWORD_NUEVA });
+      .send({ usuario: emailStaffA, password: PASSWORD_NUEVA });
     expect(nuevo.status).toBe(200);
     expect(nuevo.body.data.usuario.debeCambiarPassword).toBe(false);
   });
@@ -448,7 +485,7 @@ describe('Auth (e2e)', () => {
     await agent
       .post('/api/auth/login')
       .set('X-Colegio-Subdominio', subdominioA)
-      .send({ email: emailAdminA, password: PASSWORD_ADMIN })
+      .send({ usuario: emailAdminA, password: PASSWORD_ADMIN })
       .expect(200);
     const res = await agent
       .post('/api/auth/cambiar-password')
@@ -461,7 +498,7 @@ describe('Auth (e2e)', () => {
     await agent
       .post('/api/auth/login')
       .set('X-Colegio-Subdominio', subdominioA)
-      .send({ email: emailAdminA, password: PASSWORD_ADMIN })
+      .send({ usuario: emailAdminA, password: PASSWORD_ADMIN })
       .expect(200);
     const out = await agent.post('/api/auth/logout');
     expect(out.status).toBe(200);
@@ -473,7 +510,7 @@ describe('Auth (e2e)', () => {
     const loginB = await agentB
       .post('/api/auth/login')
       .set('X-Colegio-Subdominio', subdominioB)
-      .send({ email: emailAdminB, password: PASSWORD_ADMIN });
+      .send({ usuario: emailAdminB, password: PASSWORD_ADMIN });
     expect(loginB.status).toBe(200);
 
     const meB = await agentB.get('/api/auth/me');
@@ -487,7 +524,7 @@ describe('Auth (e2e)', () => {
     const filas = await withTenant(db, { colegioId: colegioAId, isPlatformAdmin: false }, (tx) =>
       tx.select({ id: usuarios.id }).from(usuarios),
     );
-    expect(filas).toHaveLength(2);
+    expect(filas).toHaveLength(3);
     const idsVisibles = filas.map((f) => f.id);
     expect(idsVisibles).toContain(adminId);
     expect(idsVisibles).toContain(staffId);

@@ -36,6 +36,18 @@ export function resolverSubdominio(hostname: string, colegioParam: string | null
   return primero;
 }
 
+/**
+ * Subdominio del colegio según la URL actual del navegador.
+ * Devuelve null en el dominio pelado (o sin navegador, en SSR).
+ */
+export function subdominioActual(): string | null {
+  if (typeof window === 'undefined') return null;
+  return resolverSubdominio(
+    window.location.hostname,
+    new URLSearchParams(window.location.search).get('colegio'),
+  );
+}
+
 /** Iniciales para el avatar del colegio ("Colegio Norte" → "CN"). */
 export function inicialesDe(nombre: string): string {
   const palabras = nombre

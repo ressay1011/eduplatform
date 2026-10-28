@@ -21,7 +21,8 @@ if (!URL || !HASH) {
 
 const SUBDOMINIO = process.env.DEMO_SUBDOMINIO ?? 'demo-dist-1';
 const DOMINIO_EMAIL = process.env.DEMO_DOMINIO ?? 'juanaarias.edu.co';
-const EMAIL_ADMIN = process.env.DEMO_ADMIN ?? `admin@${DOMINIO_EMAIL}`;
+// El acceso es con nombre de usuario, no un correo: admin@<subdominio>.
+const USUARIO_ADMIN = process.env.DEMO_ADMIN ?? `admin@${SUBDOMINIO}`;
 const NOMBRE_COLEGIO = process.env.DEMO_COLEGIO ?? 'I.E.T.D. Juana Arias de Benavides';
 
 const sql = postgres(URL, { max: 1 });
@@ -58,11 +59,11 @@ try {
             WHERE id = ${colegioId}`;
 
   const [admin] = await sql`
-    INSERT INTO usuarios (colegio_id, email, password_hash, nombres, apellidos, tipo_documento,
+    INSERT INTO usuarios (colegio_id, usuario, password_hash, nombres, apellidos, tipo_documento,
                           numero_documento, es_admin, activo, debe_cambiar_password)
-    VALUES (${colegioId}, ${EMAIL_ADMIN}, ${HASH}, 'Yasser Daniel', 'Ariza Barrios', 'CC',
+    VALUES (${colegioId}, ${USUARIO_ADMIN}, ${HASH}, 'Yasser Daniel', 'Ariza Barrios', 'CC',
             '1000000001', true, true, false)
-    ON CONFLICT (colegio_id, email) DO UPDATE
+    ON CONFLICT (colegio_id, usuario) DO UPDATE
       SET password_hash = EXCLUDED.password_hash,
           es_admin = true,
           activo = true,
@@ -71,7 +72,7 @@ try {
           bloqueado_hasta = NULL
     RETURNING id
   `;
-  console.log(`# admin listo: ${EMAIL_ADMIN} (${admin?.id})`);
+  console.log(`# admin listo: ${USUARIO_ADMIN} (${admin?.id})`);
 
   const [{ total }] = await sql`SELECT count(*)::int AS total FROM permisos`;
   console.log(`# permisos en catálogo: ${total}`);

@@ -25,7 +25,7 @@ export interface UsuarioRow {
   colegioId: string;
   nombres: string;
   apellidos: string;
-  email: string;
+  usuario: string;
   tipoDocumento: TipoDocumento;
   numeroDocumento: string;
   esAdmin: boolean;
@@ -41,7 +41,7 @@ const USUARIO_COLUMNS = {
   colegioId: usuarios.colegioId,
   nombres: usuarios.nombres,
   apellidos: usuarios.apellidos,
-  email: usuarios.email,
+  usuario: usuarios.usuario,
   tipoDocumento: usuarios.tipoDocumento,
   numeroDocumento: usuarios.numeroDocumento,
   esAdmin: usuarios.esAdmin,
@@ -70,7 +70,7 @@ export class UsuariosRepository extends BaseRepository {
         const busqueda = or(
           ilike(usuarios.nombres, patron),
           ilike(usuarios.apellidos, patron),
-          ilike(usuarios.email, patron),
+          ilike(usuarios.usuario, patron),
           ilike(usuarios.numeroDocumento, patron),
         );
         if (busqueda !== undefined) condiciones.push(busqueda);
@@ -138,14 +138,14 @@ export class UsuariosRepository extends BaseRepository {
     });
   }
 
-  async findPorEmail(ctx: TenantContext, email: string): Promise<UsuarioRow | null> {
+  async findPorUsuario(ctx: TenantContext, usuario: string): Promise<UsuarioRow | null> {
     return this.withTenant(ctx, async (tx) => {
       const filas = await tx
         .select(USUARIO_COLUMNS)
         .from(usuarios)
         .where(
           and(
-            eq(usuarios.email, email.toLowerCase()),
+            eq(usuarios.usuario, usuario.toLowerCase()),
             eq(usuarios.colegioId, ctx.colegioId),
             isNull(usuarios.deletedAt),
           ),
@@ -177,12 +177,12 @@ export class UsuariosRepository extends BaseRepository {
     });
   }
 
-  /** ¿Otro usuario (distinto de `exceptoId`) ya usa ese correo/documento? */
-  async existeEmail(ctx: TenantContext, email: string, exceptoId?: string): Promise<boolean> {
+  /** ¿Otro usuario (distinto de `exceptoId`) ya usa ese usuario/documento? */
+  async existeUsuario(ctx: TenantContext, usuario: string, exceptoId?: string): Promise<boolean> {
     return this.withTenant(ctx, async (tx) => {
       const condiciones = [
         eq(usuarios.colegioId, ctx.colegioId),
-        eq(usuarios.email, email.toLowerCase()),
+        eq(usuarios.usuario, usuario.toLowerCase()),
         isNull(usuarios.deletedAt),
       ];
       if (exceptoId !== undefined) condiciones.push(ne(usuarios.id, exceptoId));
@@ -231,7 +231,7 @@ export class UsuariosRepository extends BaseRepository {
   async crear(
     ctx: TenantContext,
     valores: {
-      email: string;
+      usuario: string;
       passwordHash: string;
       nombres: string;
       apellidos: string;
@@ -247,7 +247,7 @@ export class UsuariosRepository extends BaseRepository {
         .insert(usuarios)
         .values({
           colegioId: ctx.colegioId,
-          email: valores.email.toLowerCase(),
+          usuario: valores.usuario.toLowerCase(),
           passwordHash: valores.passwordHash,
           nombres: valores.nombres,
           apellidos: valores.apellidos,
@@ -272,7 +272,7 @@ export class UsuariosRepository extends BaseRepository {
     cambios: {
       nombres?: string | undefined;
       apellidos?: string | undefined;
-      email?: string | undefined;
+      usuario?: string | undefined;
       tipoDocumento?: TipoDocumento | undefined;
       numeroDocumento?: string | undefined;
       activo?: boolean | undefined;
@@ -286,7 +286,7 @@ export class UsuariosRepository extends BaseRepository {
         .set({
           ...(cambios.nombres !== undefined ? { nombres: cambios.nombres } : {}),
           ...(cambios.apellidos !== undefined ? { apellidos: cambios.apellidos } : {}),
-          ...(cambios.email !== undefined ? { email: cambios.email.toLowerCase() } : {}),
+          ...(cambios.usuario !== undefined ? { usuario: cambios.usuario.toLowerCase() } : {}),
           ...(cambios.tipoDocumento !== undefined ? { tipoDocumento: cambios.tipoDocumento } : {}),
           ...(cambios.numeroDocumento !== undefined
             ? { numeroDocumento: cambios.numeroDocumento }

@@ -21,14 +21,6 @@ export const EmailSchema = z
  * Request del login multipasos (paso 2).
  * El colegio ya se resolvió en el paso 1 a partir del dominio del correo.
  */
-export const LoginRequestSchema = z.object({
-  email: EmailSchema,
-  password: z.string().min(8, 'Mínimo 8 caracteres').max(200),
-  rememberMe: z.boolean().default(false),
-});
-/** Tipo de ENTRADA del login (rememberMe es opcional: el server lo defaultea). */
-export type LoginRequest = z.input<typeof LoginRequestSchema>;
-
 /**
  * Subdominio de colegio (usado en la landing pública y al crear colegios).
  * Formato: minúsculas, números y guiones; 3–32 caracteres; no empieza ni
@@ -41,6 +33,37 @@ export const SubdominioSchema = z
     'Usa minúsculas, números y guiones (3–32 caracteres, sin empezar/terminar en guion)',
   );
 export type Subdominio = z.infer<typeof SubdominioSchema>;
+
+/**
+ * Nombre de usuario: el identificador de acceso del personal del colegio.
+ *
+ * NO es un correo. El colegio se resuelve por el subdominio del host, así que
+ * el identificador solo tiene que ser único dentro del colegio; se admiten
+ * letras, números, punto, guion, guion bajo y `@` (p. ej. `admin@juanaarias`).
+ */
+export const UsuarioSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .min(3, 'Mínimo 3 caracteres')
+  .max(64, 'Máximo 64 caracteres')
+  .regex(/^[a-z0-9](?:[a-z0-9._@-]*[a-z0-9])$/, 'Solo minúsculas, números, puntos, guiones y @');
+
+/**
+ * Login de usuario de colegio.
+ *
+ * `subdominio` es opcional: cuando la web se sirve en `colegio.<dominio>` el
+ * tenant ya se conoce por el host y el usuario solo se identifica a sí mismo.
+ * Sin él se mantiene la resolución heredada por dominio del identificador.
+ */
+export const LoginRequestSchema = z.object({
+  usuario: UsuarioSchema,
+  password: z.string().min(8, 'Mínimo 8 caracteres').max(200),
+  rememberMe: z.boolean().default(false),
+  subdominio: SubdominioSchema.optional(),
+});
+/** Tipo de ENTRADA del login (rememberMe es opcional: el server lo defaultea). */
+export type LoginRequest = z.input<typeof LoginRequestSchema>;
 
 /**
  * Dominio de correo institucional del colegio (lo que va después de la @).
@@ -69,9 +92,12 @@ export function dominioDeEmail(email: string): string | null {
   return DominioEmailSchema.safeParse(dominio).success ? dominio : null;
 }
 
-/** Paso 1 del login unificado: solo el correo, para resolver el colegio. */
+/**
+ * Paso 1 del login sin subdominio: solo el identificador, para resolver el
+ * colegio por el dominio heredado (`admin@colegio.edu.co`).
+ */
 export const IdentificarColegioRequestSchema = z.object({
-  email: EmailSchema,
+  usuario: UsuarioSchema,
 });
 export type IdentificarColegioRequest = z.infer<typeof IdentificarColegioRequestSchema>;
 
@@ -96,7 +122,7 @@ export type CambioPassword = z.infer<typeof CambioPasswordSchema>;
 /** Datos del usuario del colegio expuestos a la sesión. */
 export interface UsuarioSesion {
   id: string;
-  email: string;
+  usuario: string;
   nombres: string;
   apellidos: string;
   esAdmin: boolean;

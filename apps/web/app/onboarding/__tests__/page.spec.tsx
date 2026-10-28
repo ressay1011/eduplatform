@@ -128,7 +128,7 @@ const EMPLEADO: PersonaEmpleado = {
   id: 'persona-1',
   nombres: 'Carlos',
   apellidos: 'Pérez',
-  email: 'carlos@demo.edu.co',
+  usuario: 'carlos@demo',
   tipoDocumento: 'CC',
   numeroDocumento: '1088123456',
   esAdmin: false,
@@ -144,7 +144,7 @@ const USUARIO: UsuarioListado = {
   id: 'persona-1',
   nombres: 'Carlos',
   apellidos: 'Pérez',
-  email: 'carlos@demo.edu.co',
+  usuario: 'carlos@demo',
   tipoDocumento: 'CC',
   numeroDocumento: '1088123456',
   esAdmin: false,
@@ -233,13 +233,14 @@ function estadoSinCodigo(): EstadoOnboarding {
 }
 
 describe('Onboarding · paso 1 (identidad)', () => {
-  it('no ofrece el dominio de correo como campo editable', async () => {
+  it('no ofrece el dominio de correo como campo editable y explica la entrada por colegio', async () => {
     vi.mocked(getOnboarding).mockResolvedValue(estado(1));
     renderPagina();
 
     expect(await screen.findByLabelText('Nombre')).toHaveValue('I.E. Demo');
     expect(screen.queryByLabelText('Dominio de correo')).toBeNull();
-    expect(screen.getByText('demo.edu.co')).toBeInTheDocument();
+    // La entrada ya no depende del dominio del correo: se explica por la dirección.
+    expect(screen.getByText(/entran por la dirección del colegio/i)).toBeInTheDocument();
   });
 
   it('oculta el formulario hasta que hay código DANE', async () => {
@@ -607,7 +608,7 @@ describe('Onboarding · paso 4 (personal)', () => {
         ...USUARIO,
         nombres: 'Laura',
         apellidos: 'Ramírez',
-        email: 'laura@demo.edu.co',
+        usuario: 'laura@demo',
         numeroDocumento: '1088999',
         debeCambiarPassword: true,
       },
@@ -621,7 +622,7 @@ describe('Onboarding · paso 4 (personal)', () => {
     await userEvent.type(screen.getByLabelText('Apellidos'), 'Ramírez');
     await userEvent.selectOptions(screen.getByLabelText(/^Tipo de documento/), 'TI');
     await userEvent.type(screen.getByLabelText('Número de documento'), '1088999');
-    await userEvent.type(screen.getByLabelText('Correo electrónico'), 'laura@demo.edu.co');
+    await userEvent.type(screen.getByLabelText('Nombre de usuario'), 'laura@demo');
     await userEvent.selectOptions(screen.getByLabelText(/^Rol/), 'rol-1');
     await userEvent.selectOptions(screen.getByLabelText(/^Sede/), 'sede-1');
 
@@ -632,7 +633,7 @@ describe('Onboarding · paso 4 (personal)', () => {
       expect.objectContaining({
         nombres: 'Laura',
         apellidos: 'Ramírez',
-        email: 'laura@demo.edu.co',
+        usuario: 'laura@demo',
         tipoDocumento: 'TI',
         numeroDocumento: '1088999',
         rolId: 'rol-1',
@@ -652,7 +653,7 @@ describe('Onboarding · paso 4 (personal)', () => {
     await userEvent.click(screen.getByRole('button', { name: /agregar al equipo/i }));
 
     expect(
-      await screen.findByText(/Completa nombres, apellidos, documento, correo y rol/i),
+      await screen.findByText(/Completa nombres, apellidos, documento, usuario y rol/i),
     ).toBeInTheDocument();
     expect(crearUsuario).not.toHaveBeenCalled();
   });
@@ -666,7 +667,7 @@ describe('Onboarding · paso 4 (personal)', () => {
     await userEvent.type(screen.getByLabelText('Nombres'), 'Laura');
     await userEvent.type(screen.getByLabelText('Apellidos'), 'Ramírez');
     await userEvent.type(screen.getByLabelText('Número de documento'), '1088999');
-    await userEvent.type(screen.getByLabelText('Correo electrónico'), 'laura@demo.edu.co');
+    await userEvent.type(screen.getByLabelText('Nombre de usuario'), 'laura@demo.edu.co');
     await userEvent.selectOptions(screen.getByLabelText(/^Rol/), 'rol-1');
     await userEvent.click(screen.getByRole('button', { name: /agregar al equipo/i }));
 

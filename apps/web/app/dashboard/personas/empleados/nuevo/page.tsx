@@ -33,7 +33,7 @@ export default function NuevoEmpleadoPage() {
 
   const [nombres, setNombres] = useState('');
   const [apellidos, setApellidos] = useState('');
-  const [email, setEmail] = useState('');
+  const [usuario, setUsuario] = useState('');
   const [tipoDocumento, setTipoDocumento] = useState<TipoDocumento>('CC');
   const [numeroDocumento, setNumeroDocumento] = useState('');
   const [rolId, setRolId] = useState('');
@@ -76,7 +76,7 @@ export default function NuevoEmpleadoPage() {
       {
         nombres,
         apellidos,
-        email,
+        usuario,
         tipoDocumento,
         numeroDocumento,
         esAdmin: false,
@@ -119,7 +119,7 @@ export default function NuevoEmpleadoPage() {
               setPassword(null);
               setNombres('');
               setApellidos('');
-              setEmail('');
+              setUsuario('');
               setNumeroDocumento('');
               setRolId('');
             }}
@@ -172,14 +172,14 @@ export default function NuevoEmpleadoPage() {
             </div>
 
             <div className="per-campo">
-              <label htmlFor="emp-email">Correo institucional</label>
+              <label htmlFor="emp-usuario">Nombre de usuario</label>
               <input
-                id="emp-email"
-                type="email"
-                value={email}
-                onChange={(evento) => setEmail(evento.target.value)}
-                autoComplete="email"
-                placeholder="nombre@juanaarias.edu.co"
+                id="emp-usuario"
+                type="text"
+                value={usuario}
+                onChange={(evento) => setUsuario(evento.target.value)}
+                autoComplete="off"
+                placeholder="rector.garcia"
               />
             </div>
 
