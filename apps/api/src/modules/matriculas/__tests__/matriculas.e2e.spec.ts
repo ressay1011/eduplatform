@@ -300,14 +300,14 @@ describe('Matrículas (e2e)', () => {
     const agente = await login(tenantA.adminEmail);
 
     // Estudiantes y acudientes usan `coalesce(..., '')`: nunca null en la API.
-    const estudiantes = await agente.get('/api/personas/estudiantes').expect(200);
+    const estudiantes = await agente.get('/api/personas/estudiantes?q=a').expect(200);
     expect(estudiantes.body.data.total).toBeGreaterThan(0);
     expect(typeof estudiantes.body.data.items[0].nombres).toBe('string');
 
-    const acudientes = await agente.get('/api/personas/acudientes').expect(200);
+    const acudientes = await agente.get('/api/personas/acudientes?q=a').expect(200);
     expect(Array.isArray(acudientes.body.data.items)).toBe(true);
 
-    const empleados = await agente.get('/api/personas/empleados').expect(200);
+    const empleados = await agente.get('/api/personas/empleados?q=a').expect(200);
     expect(empleados.body.data.total).toBeGreaterThan(0);
   });
 
