@@ -41,8 +41,8 @@ jobs:
     env:
       # Mismos roles que en local: el runtime va con app_user (sujeto a RLS) y
       # el esquema lo crea app_migrator. Los tests e2e necesitan ambos.
-      DATABASE_URL: postgresql://app_user:***@localhost:5432/eduplatform
-      MIGRATOR_URL: postgresql://app_migrator:***@localhost:5432/eduplatform
+      DATABASE_URL: postgresql://app_user:app_user_dev@localhost:5432/eduplatform
+      MIGRATOR_URL: postgresql://app_migrator:app_migrator_dev@localhost:5432/eduplatform
       TOKEN_PEPPER: ci-pepper-0123456789abcdef0123456789abcdef
       NEXT_PUBLIC_API_URL: http://localhost:4000/api
       NODE_ENV: test
