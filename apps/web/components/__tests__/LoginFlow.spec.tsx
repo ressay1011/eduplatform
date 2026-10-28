@@ -189,6 +189,21 @@ describe('LoginFlow', () => {
     expect(vi.mocked(iniciarSesion).mock.calls[0]?.[0]).not.toHaveProperty('subdominio');
   });
 
+  it('subdominio que no existe → aviso y se puede seguir con el usuario', async () => {
+    vi.mocked(subdominioActual).mockReturnValue('fantasma');
+    vi.mocked(getContextoColegio).mockRejectedValue(
+      new ApiError(404, 'NOT_FOUND', 'No existe un colegio con ese subdominio'),
+    );
+
+    renderFlow();
+
+    expect(
+      await screen.findByText('No encontramos un colegio en esta dirección. Revisa el enlace.'),
+    ).toBeInTheDocument();
+    // El formulario sigue disponible: el usuario puede entrar igual.
+    expect(screen.getByLabelText(/^nombre de usuario/i)).toBeInTheDocument();
+  });
+
   it('el paso 1 valida el nombre de usuario antes de consultar', async () => {
     renderFlow();
     await userEvent.click(screen.getByRole('button', { name: /continuar/i }));
