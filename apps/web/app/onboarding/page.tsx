@@ -96,7 +96,7 @@ interface EmpleadoForm {
   apellidos: string;
   tipoDocumento: TipoDocumento;
   numeroDocumento: string;
-  email: string;
+  usuario: string;
   rolId: string;
   sedeId: string;
 }
@@ -106,7 +106,7 @@ const EMPLEADO_VACIO: EmpleadoForm = {
   apellidos: '',
   tipoDocumento: 'CC',
   numeroDocumento: '',
-  email: '',
+  usuario: '',
   rolId: '',
   sedeId: '',
 };
@@ -666,10 +666,10 @@ export default function OnboardingPage() {
       empleado.nombres.trim().length < 2 ||
       empleado.apellidos.trim().length < 2 ||
       empleado.numeroDocumento.trim().length < 4 ||
-      empleado.email.trim() === '' ||
+      empleado.usuario.trim() === '' ||
       empleado.rolId === ''
     ) {
-      setAviso('Completa nombres, apellidos, documento, correo y rol para agregar personal.');
+      setAviso('Completa nombres, apellidos, documento, usuario y rol para agregar personal.');
       return;
     }
 
@@ -680,7 +680,7 @@ export default function OnboardingPage() {
       const creado = await crearUsuario({
         nombres: empleado.nombres.trim(),
         apellidos: empleado.apellidos.trim(),
-        email: empleado.email.trim(),
+        usuario: empleado.usuario.trim(),
         tipoDocumento: empleado.tipoDocumento,
         numeroDocumento: empleado.numeroDocumento.trim(),
         esAdmin: false,
@@ -989,9 +989,9 @@ export default function OnboardingPage() {
                 </div>
 
                 <p className="onb-nota">
-                  Los usuarios entran con su correo institucional: el dominio{' '}
-                  <strong>{data.colegio.dominioEmail ?? 'del administrador'}</strong> identifica al
-                  colegio en el login. No se edita aquí para que nadie pierda el acceso.
+                  Tus usuarios entran por la dirección del colegio (
+                  <strong>{data.colegio.subdominio}</strong>) con su nombre de usuario y contraseña;
+                  no hace falta que sea un correo real.
                 </p>
 
                 <div className="onb-fila-calendario">
@@ -1278,12 +1278,11 @@ export default function OnboardingPage() {
                 onChange={(v) => setEmpleado({ ...empleado, numeroDocumento: v })}
               />
               <TextField
-                id="onb-emp-email"
-                label="Correo electrónico"
-                tipo="email"
-                value={empleado.email}
-                onChange={(v) => setEmpleado({ ...empleado, email: v })}
-                ayuda="Será su usuario para entrar a la plataforma"
+                id="onb-emp-usuario"
+                label="Nombre de usuario"
+                value={empleado.usuario}
+                onChange={(v) => setEmpleado({ ...empleado, usuario: v })}
+                ayuda="Con esto entrará a la plataforma (p. ej. rector.garcia)"
               />
               <label className="onb-campo">
                 Rol
@@ -1364,7 +1363,7 @@ export default function OnboardingPage() {
                           <strong>
                             {persona.nombres} {persona.apellidos}
                           </strong>
-                          <span className="onb-celda-detalle">{persona.email}</span>
+                          <span className="onb-celda-detalle">{persona.usuario}</span>
                         </td>
                         <td>{persona.numeroDocumento}</td>
                         <td>{persona.rolNombre ?? 'Sin rol'}</td>

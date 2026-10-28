@@ -18,7 +18,6 @@ import type { AuditService } from '../../../shared/audit.service';
 const ACTOR: ActorOnboarding = {
   colegioId: 'colegio-1',
   usuarioId: 'usuario-1',
-  email: 'admin@juanaarias.edu.co',
   esAdmin: true,
 };
 
@@ -103,7 +102,7 @@ describe('OnboardingService · paso 1', () => {
     });
   });
 
-  it('no manda dominioEmail al repositorio y usa el del correo del admin', async () => {
+  it('no manda dominioEmail al repositorio y usa el del correo de contacto del colegio', async () => {
     const { servicio, repo } = montar();
     repo.contextoPublico.mockResolvedValue({ subdominio: 'juana-arias', dominioEmail: null });
 
@@ -111,7 +110,7 @@ describe('OnboardingService · paso 1', () => {
 
     const enviado = repo.guardarColegio.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(enviado).not.toHaveProperty('dominioEmail');
-    expect(enviado['dominioAdmin']).toBe('juanaarias.edu.co');
+    expect(enviado['dominioColegio']).toBe('juanaarias.edu.co');
   });
 
   it('pasa el nombre oficial al repositorio sin tocarlo', async () => {

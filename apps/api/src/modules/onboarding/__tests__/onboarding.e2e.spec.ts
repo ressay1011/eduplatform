@@ -50,9 +50,9 @@ describe('Onboarding (e2e)', () => {
   let staffEmail = '';
   let sedeId = '';
 
-  async function login(email: string) {
+  async function login(usuario: string) {
     const agente = request.agent(app.getHttpServer());
-    await agente.post('/api/auth/login').send({ email, password: PASSWORD }).expect(200);
+    await agente.post('/api/auth/login').send({ usuario, password: PASSWORD }).expect(200);
     return agente;
   }
 
@@ -91,7 +91,7 @@ describe('Onboarding (e2e)', () => {
         .values([
           {
             colegioId,
-            email: adminEmail,
+            usuario: adminEmail,
             passwordHash: hash,
             nombres: 'Admin',
             apellidos: 'Onboarding',
@@ -102,7 +102,7 @@ describe('Onboarding (e2e)', () => {
           },
           {
             colegioId,
-            email: staffEmail,
+            usuario: staffEmail,
             passwordHash: hash,
             nombres: 'Staff',
             apellidos: 'Onboarding',
@@ -111,9 +111,9 @@ describe('Onboarding (e2e)', () => {
             debeCambiarPassword: false,
           },
         ])
-        .returning({ id: usuarios.id, email: usuarios.email });
+        .returning({ id: usuarios.id, usuario: usuarios.usuario });
 
-      const staff = creados.find((u) => u.email === staffEmail);
+      const staff = creados.find((u) => u.usuario === staffEmail);
       const [permiso] = await tx
         .select({ id: permisos.id })
         .from(permisos)

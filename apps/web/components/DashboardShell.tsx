@@ -12,9 +12,9 @@
  */
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useQueryClient, useQuery } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { SESION_KEY, useSesion } from '@/hooks/useSesion';
-import { cerrarSesion, getOnboarding } from '@/lib/api';
+import { cerrarSesion } from '@/lib/api';
 import { inicialesDe } from '@/lib/subdominio';
 
 interface ItemNav {
@@ -53,37 +53,13 @@ export interface DashboardShellProps {
 export function DashboardShell({ seccion, breadcrumb, children }: DashboardShellProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { data: sesion, isError } = useSesion();
-  const esAdminColegio = sesion?.tipo === 'colegio' && sesion.usuario.esAdmin;
-  // El wizard es obligatorio para el admin hasta cerrarlo (mínimo: sede+curso).
-  const { data: onboarding } = useQuery({
-    queryKey: ['onboarding'],
-    queryFn: getOnboarding,
-    enabled: esAdminColegio,
-    retry: false,
-    staleTime: 30_000,
-  });
+  const { data: sesion } = useSesion();
   const [aviso, setAviso] = useState<string | null>(null);
   const [saliendo, setSaliendo] = useState(false);
   const [menuAbierto, setMenuAbierto] = useState(false);
 
-  useEffect(() => {
-    if (isError) router.replace('/login');
-  }, [isError, router]);
-
-  // Primer administrador: antes del dashboard, la configuración inicial.
-  useEffect(() => {
-    if (esAdminColegio && onboarding !== undefined && !onboarding.completado) {
-      router.replace('/onboarding');
-    }
-  }, [esAdminColegio, onboarding, router]);
-
-  // Primer login: la contraseña temporal debe cambiarse antes de seguir.
-  useEffect(() => {
-    if (sesion !== undefined && sesion.tipo === 'colegio' && sesion.usuario.debeCambiarPassword) {
-      router.replace('/cambiar-password');
-    }
-  }, [sesion, router]);
+  // Sesión, contraseña temporal y onboarding pendiente los resuelve
+  // `app/dashboard/layout.tsx` (GuardiaAcceso) para todas las páginas del panel.
 
   useEffect(() => {
     if (aviso === null) return;

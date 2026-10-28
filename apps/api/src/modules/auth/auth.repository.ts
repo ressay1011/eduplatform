@@ -50,7 +50,7 @@ export interface SesionAuthRow {
 export interface UsuarioAuthRow {
   id: string;
   colegioId: string;
-  email: string;
+  usuario: string;
   passwordHash: string;
   nombres: string;
   apellidos: string;
@@ -84,7 +84,7 @@ export interface PlataformaUsuarioRow {
 const USUARIO_COLUMNS = {
   id: usuarios.id,
   colegioId: usuarios.colegioId,
-  email: usuarios.email,
+  usuario: usuarios.usuario,
   passwordHash: usuarios.passwordHash,
   nombres: usuarios.nombres,
   apellidos: usuarios.apellidos,
@@ -185,13 +185,15 @@ export class AuthRepository extends BaseRepository {
   // Usuarios de colegio (tenant)
   // ------------------------------------------------------------------
 
-  /** Usuario por email dentro del colegio (email normalizado a minúsculas). */
-  async findUsuarioPorEmail(ctx: TenantContext, email: string): Promise<UsuarioAuthRow | null> {
+  /** Usuario por nombre de usuario dentro del colegio (normalizado a minúsculas). */
+  async findUsuarioPorUsuario(ctx: TenantContext, usuario: string): Promise<UsuarioAuthRow | null> {
     return this.withTenant(ctx, async (tx) => {
       const filas = await tx
         .select(USUARIO_COLUMNS)
         .from(usuarios)
-        .where(and(eq(usuarios.colegioId, ctx.colegioId), eq(usuarios.email, email.toLowerCase())))
+        .where(
+          and(eq(usuarios.colegioId, ctx.colegioId), eq(usuarios.usuario, usuario.toLowerCase())),
+        )
         .limit(1);
       return filas[0] ?? null;
     });

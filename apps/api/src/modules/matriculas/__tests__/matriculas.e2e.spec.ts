@@ -72,9 +72,9 @@ describe('Matrículas (e2e)', () => {
   let fixturesListas = false;
   let matriculaA = '';
 
-  async function login(email: string) {
+  async function login(usuario: string) {
     const agente = request.agent(app.getHttpServer());
-    await agente.post('/api/auth/login').send({ email, password: PASSWORD }).expect(200);
+    await agente.post('/api/auth/login').send({ usuario, password: PASSWORD }).expect(200);
     return agente;
   }
 
@@ -161,7 +161,7 @@ describe('Matrículas (e2e)', () => {
         .values([
           {
             colegioId,
-            email: adminEmail,
+            usuario: adminEmail,
             passwordHash: hash,
             nombres: 'Admin',
             apellidos: `Colegio ${indice}`,
@@ -172,7 +172,7 @@ describe('Matrículas (e2e)', () => {
           },
           {
             colegioId,
-            email: staffEmail,
+            usuario: staffEmail,
             passwordHash: hash,
             nombres: 'Staff',
             apellidos: `Colegio ${indice}`,
@@ -182,7 +182,7 @@ describe('Matrículas (e2e)', () => {
           },
           {
             colegioId,
-            email: `estudiante.${indice}@${dominio}`,
+            usuario: `estudiante.${indice}@${dominio}`,
             passwordHash: hash,
             nombres: 'Estudiante',
             apellidos: `Ficha ${indice}`,
@@ -192,7 +192,7 @@ describe('Matrículas (e2e)', () => {
           },
           {
             colegioId,
-            email: `cuenta.${indice}@${dominio}`,
+            usuario: `cuenta.${indice}@${dominio}`,
             passwordHash: hash,
             nombres: 'Cuenta',
             apellidos: `Sin Ficha ${indice}`,
@@ -202,12 +202,12 @@ describe('Matrículas (e2e)', () => {
             debeCambiarPassword: false,
           },
         ])
-        .returning({ id: usuarios.id, email: usuarios.email });
+        .returning({ id: usuarios.id, usuario: usuarios.usuario });
 
-      const admin = creados.find((u) => u.email === adminEmail);
-      const staff = creados.find((u) => u.email === staffEmail);
-      const estudiante = creados.find((u) => u.email === `estudiante.${indice}@${dominio}`);
-      const cuenta = creados.find((u) => u.email === `cuenta.${indice}@${dominio}`);
+      const admin = creados.find((u) => u.usuario === adminEmail);
+      const staff = creados.find((u) => u.usuario === staffEmail);
+      const estudiante = creados.find((u) => u.usuario === `estudiante.${indice}@${dominio}`);
+      const cuenta = creados.find((u) => u.usuario === `cuenta.${indice}@${dominio}`);
       if (
         admin === undefined ||
         staff === undefined ||

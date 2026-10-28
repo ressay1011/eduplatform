@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { esEmailValido, esNitValido, esTelefonoValido, normalizarNit } from '../validacion';
+import {
+  esEmailValido,
+  esNitValido,
+  esTelefonoValido,
+  normalizarNit,
+  esUsuarioValido,
+} from '../validacion';
 
 describe('esEmailValido', () => {
   it('acepta correos institucionales normales', () => {
@@ -62,5 +68,26 @@ describe('esTelefonoValido', () => {
     expect(esTelefonoValido('12345')).toBe(false);
     expect(esTelefonoValido('300-123-4567 ext 2')).toBe(false);
     expect(esTelefonoValido('telefono')).toBe(false);
+  });
+});
+
+describe('esUsuarioValido', () => {
+  it.each(['admin@juanaarias', 'rector.garcia', 'ana_maria-2', 'cc1088123456', 'abc'])(
+    'acepta %s',
+    (valor) => {
+      expect(esUsuarioValido(valor)).toBe(true);
+    },
+  );
+
+  it.each([
+    'ab', // menos de 3
+    'Admin@Juana', // mayúsculas
+    'con espacio',
+    'usuario!',
+    '.empieza-por-punto',
+    'termina-en-guion-',
+    'a'.repeat(65),
+  ])('rechaza %s', (valor) => {
+    expect(esUsuarioValido(valor)).toBe(false);
   });
 });

@@ -43,7 +43,7 @@ export class PersonasRepository extends BaseRepository {
         const busqueda = or(
           ilike(usuarios.nombres, patron),
           ilike(usuarios.apellidos, patron),
-          ilike(usuarios.email, patron),
+          ilike(usuarios.usuario, patron),
           ilike(usuarios.numeroDocumento, patron),
         );
         if (busqueda !== undefined) condiciones.push(busqueda);
@@ -55,7 +55,7 @@ export class PersonasRepository extends BaseRepository {
           id: usuarios.id,
           nombres: usuarios.nombres,
           apellidos: usuarios.apellidos,
-          email: usuarios.email,
+          usuario: usuarios.usuario,
           tipoDocumento: usuarios.tipoDocumento,
           numeroDocumento: usuarios.numeroDocumento,
           esAdmin: usuarios.esAdmin,
@@ -78,7 +78,7 @@ export class PersonasRepository extends BaseRepository {
           id: fila.id,
           nombres: fila.nombres,
           apellidos: fila.apellidos,
-          email: fila.email,
+          usuario: fila.usuario,
           tipoDocumento: fila.tipoDocumento,
           numeroDocumento: fila.numeroDocumento,
           esAdmin: fila.esAdmin,
@@ -121,7 +121,7 @@ export class PersonasRepository extends BaseRepository {
           nombres: usuarios.nombres,
           apellidos: usuarios.apellidos,
           numeroDocumento: usuarios.numeroDocumento,
-          email: usuarios.email,
+          usuario: usuarios.usuario,
           codigoMatricula: estudiantes.codigoMatricula,
           estado: estudiantes.estado,
           activo: usuarios.activo,
@@ -185,7 +185,7 @@ export class PersonasRepository extends BaseRepository {
           nombres: usuarios.nombres,
           apellidos: usuarios.apellidos,
           numeroDocumento: usuarios.numeroDocumento,
-          email: usuarios.email,
+          usuario: usuarios.usuario,
           activo: usuarios.activo,
           estudiantes: sql<
             string[]
@@ -203,7 +203,7 @@ export class PersonasRepository extends BaseRepository {
           usuarios.nombres,
           usuarios.apellidos,
           usuarios.numeroDocumento,
-          usuarios.email,
+          usuarios.usuario,
           usuarios.activo,
         )
         .orderBy(asc(usuarios.apellidos), asc(usuarios.nombres))
@@ -216,7 +216,7 @@ export class PersonasRepository extends BaseRepository {
           nombres: fila.nombres,
           apellidos: fila.apellidos,
           numeroDocumento: fila.numeroDocumento,
-          email: fila.email,
+          usuario: fila.usuario,
           telefono: fila.telefono,
           activo: fila.activo,
           estudiantes: fila.estudiantes.filter((nombre): nombre is string => nombre !== null),

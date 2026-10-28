@@ -93,22 +93,14 @@ const PENDIENTES = [
 export default function DashboardPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { data: sesion, isError } = useSesion();
+  const { data: sesion } = useSesion();
   const [aviso, setAviso] = useState<string | null>(null);
   const [saliendo, setSaliendo] = useState(false);
   /** Drawer de navegación en móvil/tablet (<1024 px). */
   const [menuAbierto, setMenuAbierto] = useState(false);
 
-  useEffect(() => {
-    if (isError) router.replace('/login');
-  }, [isError, router]);
-
-  // Primer login: la contraseña temporal debe cambiarse antes de seguir.
-  useEffect(() => {
-    if (sesion !== undefined && sesion.tipo === 'colegio' && sesion.usuario.debeCambiarPassword) {
-      router.replace('/cambiar-password');
-    }
-  }, [sesion, router]);
+  // Sesión, contraseña temporal y onboarding pendiente los resuelve
+  // `app/dashboard/layout.tsx` (GuardiaAcceso).
 
   // El aviso «próximamente» se oculta solo.
   useEffect(() => {

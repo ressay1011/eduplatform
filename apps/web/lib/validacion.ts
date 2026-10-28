@@ -36,6 +36,17 @@ export function esEmailValido(valor: string): boolean {
  * educativos: una regla estricta de «9 + 1» rechazaría casos reales, así que se
  * acepta de 8 a 15 dígitos con un verificador opcional.
  */
+/**
+ * Nombre de usuario del colegio (no es un correo): 3–64 caracteres, solo
+ * minúsculas, números, punto, guion, guion bajo y `@`, sin espacios.
+ * Espejo de `UsuarioSchema` de @eduplatform/types.
+ */
+export function esUsuarioValido(valor: string): boolean {
+  return (
+    /^[a-z0-9](?:[a-z0-9._@-]*[a-z0-9])$/.test(valor) && valor.length >= 3 && valor.length <= 64
+  );
+}
+
 export function normalizarNit(valor: string): string {
   return valor.replace(/[.\s]/g, '');
 }

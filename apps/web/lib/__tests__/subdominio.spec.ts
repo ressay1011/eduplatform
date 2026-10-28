@@ -1,6 +1,7 @@
+// @vitest-environment jsdom
 /** Tests unitarios de la resolución de subdominio y utilidades. */
-import { describe, expect, it } from 'vitest';
-import { inicialesDe, resolverSubdominio } from '../subdominio';
+import { afterEach, describe, expect, it } from 'vitest';
+import { inicialesDe, resolverSubdominio, subdominioActual } from '../subdominio';
 
 describe('resolverSubdominio', () => {
   it('usa el override ?colegio= cuando es un subdominio válido', () => {
@@ -38,5 +39,21 @@ describe('inicialesDe', () => {
     ['   ', '?'],
   ])('"%s" → "%s"', (nombre, esperado) => {
     expect(inicialesDe(nombre)).toBe(esperado);
+  });
+});
+
+describe('subdominioActual', () => {
+  afterEach(() => {
+    window.history.replaceState({}, '', '/');
+  });
+
+  it('sale del parámetro ?colegio= cuando el host no trae subdominio', () => {
+    window.history.replaceState({}, '', '/login?colegio=juanaarias');
+    expect(subdominioActual()).toBe('juanaarias');
+  });
+
+  it('devuelve null en el dominio pelado', () => {
+    window.history.replaceState({}, '', '/login');
+    expect(subdominioActual()).toBeNull();
   });
 });

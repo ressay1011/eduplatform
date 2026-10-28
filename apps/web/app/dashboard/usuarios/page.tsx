@@ -177,7 +177,7 @@ export default function UsuariosPage() {
                           className="m3-body-small usuario-email"
                           style={{ margin: 0, color: 'var(--md-sys-color-on-surface-variant)' }}
                         >
-                          {usuario.email}
+                          {usuario.usuario}
                         </p>
                         <div className="usuario-chips">
                           {usuario.esAdmin ? (

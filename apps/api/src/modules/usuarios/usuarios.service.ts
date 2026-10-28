@@ -13,7 +13,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import type { TenantContext } from '@eduplatform/database';
 import {
   ErrorCodes,
-  dominioDeEmail,
   type ActualizarUsuarioRequest,
   type CrearUsuarioRequest,
   type EstablecerPermisosRequest,
@@ -112,14 +111,11 @@ export class UsuariosService {
       );
     }
 
-    const colegio = await this.repo.dominioDelColegio(contexto);
-    this.validarDominio(dto.email, colegio.dominioEmail);
-
-    if (await this.repo.existeEmail(contexto, dto.email)) {
+    if (await this.repo.existeUsuario(contexto, dto.usuario)) {
       throw apiError(
         ErrorCodes.ALREADY_EXISTS,
         409,
-        'Ya existe un usuario con ese correo electrónico',
+        'Ya existe un usuario con ese nombre de usuario',
       );
     }
     if (
@@ -147,7 +143,7 @@ export class UsuariosService {
     let creado: UsuarioRow;
     try {
       creado = await this.repo.crear(contexto, {
-        email: dto.email,
+        usuario: dto.usuario,
         passwordHash,
         nombres: dto.nombres,
         apellidos: dto.apellidos,
@@ -189,7 +185,7 @@ export class UsuariosService {
       metadata: {
         motivo: 'usuario creado',
         cambios: {
-          email: { antes: null, despues: creado.email },
+          usuario: { antes: null, despues: creado.usuario },
           esAdmin: { antes: null, despues: creado.esAdmin },
         },
       },
@@ -237,10 +233,8 @@ export class UsuariosService {
       }
     }
 
-    if (dto.email !== undefined && dto.email !== actual.email) {
-      const colegio = await this.repo.dominioDelColegio(contexto);
-      this.validarDominio(dto.email, colegio.dominioEmail);
-      if (await this.repo.existeEmail(contexto, dto.email, id)) {
+    if (dto.usuario !== undefined && dto.usuario !== actual.usuario) {
+      if (await this.repo.existeUsuario(contexto, dto.usuario, id)) {
         throw apiError(
           ErrorCodes.ALREADY_EXISTS,
           409,
@@ -407,19 +401,6 @@ export class UsuariosService {
   // Reglas y utilidades
   // ------------------------------------------------------------------
 
-  /** El correo debe pertenecer al dominio institucional configurado. */
-  private validarDominio(email: string, dominio: string | null): void {
-    if (dominio === null || dominio === '') return;
-    const dominioCorreo = dominioDeEmail(email);
-    if (dominioCorreo !== dominio.toLowerCase()) {
-      throw apiError(
-        ErrorCodes.VALIDATION_ERROR,
-        400,
-        `El correo debe pertenecer al dominio institucional @${dominio}`,
-      );
-    }
-  }
-
   /** Todos los códigos deben existir en el catálogo (evita permisos fantasma). */
   private async validarPermisos(
     contexto: TenantContext,
@@ -524,7 +505,7 @@ export class UsuariosService {
       id: fila.id,
       nombres: fila.nombres,
       apellidos: fila.apellidos,
-      email: fila.email,
+      usuario: fila.usuario,
       tipoDocumento: fila.tipoDocumento as TipoDocumento,
       numeroDocumento: fila.numeroDocumento,
       esAdmin: fila.esAdmin,

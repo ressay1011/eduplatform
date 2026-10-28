@@ -55,7 +55,7 @@ jobs:
       # El humo levanta API y web en localhost: el login necesita CORS y cookie.
       CORS_ORIGINS: http://localhost:3000
       COOKIE_SAMESITE: lax
-      E2E_ADMIN_EMAIL: admin@juanaarias.edu.co
+      E2E_ADMIN_USUARIO: admin@demo-dist-1
       E2E_ADMIN_PASSWORD: Demo2026!
 
     steps:

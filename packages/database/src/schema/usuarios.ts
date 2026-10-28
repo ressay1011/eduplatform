@@ -36,7 +36,7 @@ export const usuarios = pgTable(
     colegioId: uuid('colegio_id')
       .notNull()
       .references(() => colegios.id, { onDelete: 'restrict' }),
-    email: text('email').notNull(),
+    usuario: text('usuario').notNull(),
     passwordHash: text('password_hash').notNull(),
     nombres: text('nombres').notNull(),
     apellidos: text('apellidos').notNull(),
@@ -73,10 +73,10 @@ export const usuarios = pgTable(
     ...softDelete,
   },
   (t) => [
-    // El mismo email puede existir en colegios distintos; dentro del colegio es único.
-    unique('usuarios_colegio_email_unique').on(t.colegioId, t.email),
+    // El mismo usuario puede existir en colegios distintos; dentro del colegio es único.
+    unique('usuarios_colegio_usuario_unique').on(t.colegioId, t.usuario),
     unique('usuarios_colegio_documento_unique').on(t.colegioId, t.tipoDocumento, t.numeroDocumento),
-    index('usuarios_colegio_email_idx').on(t.colegioId, t.email),
+    index('usuarios_colegio_usuario_idx').on(t.colegioId, t.usuario),
     index('usuarios_colegio_activo_idx').on(t.colegioId, t.activo),
   ],
 );

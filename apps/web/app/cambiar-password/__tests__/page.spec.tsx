@@ -27,7 +27,7 @@ const SESION: MeResponse = {
   tipo: 'colegio',
   usuario: {
     id: 'u-1',
-    email: 'rector@colegio.edu.co',
+    usuario: 'rector@colegio',
     nombres: 'Ana',
     apellidos: 'Pérez',
     esAdmin: true,

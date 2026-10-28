@@ -138,12 +138,12 @@ export default function AcudientesPage() {
                           <span className="per-persona-nombre">
                             {persona.nombres} {persona.apellidos}
                           </span>
-                          <span className="per-persona-detalle">{persona.email}</span>
+                          <span className="per-persona-detalle">{persona.usuario}</span>
                         </div>
                       </div>
                     </td>
                     <td>CC {persona.numeroDocumento}</td>
-                    <td>{persona.telefono ?? persona.email}</td>
+                    <td>{persona.telefono ?? persona.usuario}</td>
                     <td>
                       {persona.estudiantes.length === 0 ? '—' : persona.estudiantes.join(' · ')}
                     </td>
