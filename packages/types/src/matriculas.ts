@@ -108,9 +108,9 @@ export type ListarMatriculasQuery = z.output<typeof ListarMatriculasQuerySchema>
 export interface MatriculaListado {
   id: string;
   estudianteId: string;
-  nombres: string | null;
-  apellidos: string | null;
-  numeroDocumento: string | null;
+  nombres: string;
+  apellidos: string;
+  numeroDocumento: string;
   cursoId: string;
   /** «6° A». */
   curso: string;

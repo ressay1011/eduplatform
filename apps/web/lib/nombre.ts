@@ -32,3 +32,13 @@ export function inicialesVisible(persona: ConNombre): string {
   const base = persona.usuario.split('@')[0] ?? persona.usuario;
   return base.slice(0, 2).toUpperCase() || '?';
 }
+
+/** Saludo corto: «Ana P.» o el usuario si no hay datos personales. */
+export function nombreCorto(persona: ConNombre): string {
+  const nombre = nombreVisible(persona);
+  if (nombre === persona.usuario) return nombre;
+  const palabras = nombre.split(/\s+/).filter((p) => p !== '');
+  const inicial =
+    palabras.length > 1 ? ` ${(palabras[palabras.length - 1] ?? '').charAt(0).toUpperCase()}.` : '';
+  return `${palabras[0] ?? persona.usuario}${inicial}`;
+}

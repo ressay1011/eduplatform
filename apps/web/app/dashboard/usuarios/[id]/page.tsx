@@ -50,11 +50,11 @@ export default function EditarUsuarioPage() {
 
   useEffect(() => {
     if (usuario === undefined || inicializado) return;
-    setNombres(usuario.nombres ?? '');
-    setApellidos(usuario.apellidos ?? '');
+    setNombres(usuario.nombres);
+    setApellidos(usuario.apellidos);
     setNombreUsuario(usuario.usuario);
     setTipoDocumento(usuario.tipoDocumento ?? 'CC');
-    setNumeroDocumento(usuario.numeroDocumento ?? '');
+    setNumeroDocumento(usuario.numeroDocumento);
     setActivo(usuario.activo);
     setPermisos(usuario.permisos);
     setInicializado(true);

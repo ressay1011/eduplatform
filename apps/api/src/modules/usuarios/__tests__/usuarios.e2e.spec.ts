@@ -344,7 +344,7 @@ describe('Usuarios (e2e)', () => {
     expect(res.status).toBe(200);
     // La respuesta del PATCH es el usuario listado, sin envoltorio extra.
     expect(res.body.data.numeroDocumento).toBe(`99${sufijo}`);
-    expect(res.body.data.nombres).toBeNull();
+    expect(res.body.data.nombres).toBe('');
   });
 
   it('rechaza correo duplicado (409)', async () => {

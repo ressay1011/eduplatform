@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { inicialesVisible, nombreVisible } from '../nombre';
+import { inicialesVisible, nombreCorto, nombreVisible } from '../nombre';
 
 describe('nombreVisible', () => {
   it('usa nombres y apellidos cuando existen', () => {
@@ -34,5 +34,21 @@ describe('inicialesVisible', () => {
 
   it('nunca devuelve vacío', () => {
     expect(inicialesVisible({ usuario: '' })).toBe('?');
+  });
+});
+
+describe('nombreCorto', () => {
+  it('usa el primer nombre y la inicial del apellido', () => {
+    expect(nombreCorto({ usuario: 'ana@colegio', nombres: 'Ana María', apellidos: 'Pérez' })).toBe(
+      'Ana P.',
+    );
+  });
+
+  it('sin datos personales devuelve el usuario', () => {
+    expect(nombreCorto({ usuario: 'admin@juanaarias' })).toBe('admin@juanaarias');
+  });
+
+  it('con un solo nombre no añade inicial', () => {
+    expect(nombreCorto({ usuario: 'x@y', nombres: 'Ana', apellidos: '' })).toBe('Ana');
   });
 });

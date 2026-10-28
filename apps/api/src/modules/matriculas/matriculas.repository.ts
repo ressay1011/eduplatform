@@ -337,9 +337,9 @@ export class MatriculasRepository extends BaseRepository {
         items: filas.map((fila) => ({
           id: fila.id,
           estudianteId: fila.estudianteId,
-          nombres: fila.nombres,
-          apellidos: fila.apellidos,
-          numeroDocumento: fila.numeroDocumento,
+          nombres: fila.nombres ?? '',
+          apellidos: fila.apellidos ?? '',
+          numeroDocumento: fila.numeroDocumento ?? '',
           cursoId: fila.cursoId,
           curso: `${fila.gradoNombre} ${fila.letra}`.trim(),
           sede: fila.sede,

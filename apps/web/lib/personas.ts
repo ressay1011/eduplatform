@@ -46,8 +46,8 @@ export function textoAlcance(alcance: 'TODAS' | 'ESPECIFICAS', sedes: readonly s
 }
 
 /** Iniciales para el avatar circular de una persona. */
-export function iniciales(nombres: string | null, apellidos: string | null): string {
-  const primera = (nombres ?? '').trim().charAt(0);
-  const segunda = (apellidos ?? '').trim().charAt(0);
-  return `${primera}${segunda}`.toUpperCase() || '?';
+export function iniciales(nombres: string, apellidos: string): string {
+  const primera = nombres.trim().charAt(0);
+  const segunda = apellidos.trim().charAt(0);
+  return `${primera}${segunda}`.toUpperCase();
 }

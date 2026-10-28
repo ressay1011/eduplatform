@@ -507,11 +507,11 @@ export class UsuariosService {
   ): UsuarioListado {
     return {
       id: fila.id,
-      nombres: fila.nombres,
-      apellidos: fila.apellidos,
+      nombres: fila.nombres ?? '',
+      apellidos: fila.apellidos ?? '',
       usuario: fila.usuario,
       tipoDocumento: fila.tipoDocumento as TipoDocumento,
-      numeroDocumento: fila.numeroDocumento,
+      numeroDocumento: fila.numeroDocumento ?? '',
       esAdmin: fila.esAdmin,
       activo: fila.activo,
       debeCambiarPassword: fila.debeCambiarPassword,

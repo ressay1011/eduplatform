@@ -29,8 +29,8 @@ export function toUsuarioSesion(usuario: UsuarioSesionFuente): UsuarioSesion {
   return {
     id: usuario.id,
     usuario: usuario.usuario,
-    nombres: usuario.nombres,
-    apellidos: usuario.apellidos,
+    nombres: usuario.nombres ?? '',
+    apellidos: usuario.apellidos ?? '',
     esAdmin: usuario.esAdmin,
     debeCambiarPassword: usuario.debeCambiarPassword,
   };

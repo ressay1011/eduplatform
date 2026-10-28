@@ -93,11 +93,11 @@ export type ListarUsuariosQuery = z.output<typeof ListarUsuariosQuerySchema>;
 /** Usuario tal como lo lista/entrega la API (sin hash ni PII sensible extra). */
 export interface UsuarioListado {
   id: string;
-  nombres: string | null;
-  apellidos: string | null;
+  nombres: string;
+  apellidos: string;
   usuario: string;
   tipoDocumento: TipoDocumento | null;
-  numeroDocumento: string | null;
+  numeroDocumento: string;
   esAdmin: boolean;
   activo: boolean;
   debeCambiarPassword: boolean;

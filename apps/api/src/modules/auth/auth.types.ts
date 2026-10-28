@@ -20,8 +20,8 @@ export interface UsuarioColegioAuth {
   readonly id: string;
   readonly colegioId: string;
   readonly usuario: string;
-  readonly nombres: string | null;
-  readonly apellidos: string | null;
+  readonly nombres: string;
+  readonly apellidos: string;
   readonly esAdmin: boolean;
   readonly debeCambiarPassword: boolean;
   readonly activo: boolean;

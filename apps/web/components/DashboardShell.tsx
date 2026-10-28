@@ -16,7 +16,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { SESION_KEY, useSesion } from '@/hooks/useSesion';
 import { cerrarSesion } from '@/lib/api';
 import { inicialesDe } from '@/lib/subdominio';
-import { inicialesVisible } from '@/lib/nombre';
+import { inicialesVisible, nombreCorto } from '@/lib/nombre';
 
 interface ItemNav {
   id: string;
@@ -135,9 +135,7 @@ export function DashboardShell({ seccion, breadcrumb, children }: DashboardShell
   }
 
   const { usuario, colegio } = sesion;
-  const primerNombre = usuario.nombres?.split(' ')[0] ?? usuario.usuario;
-  const apellidoInicial = (usuario.apellidos ?? '').trim().charAt(0).toUpperCase();
-  const nombreCorto = apellidoInicial === '' ? primerNombre : `${primerNombre} ${apellidoInicial}.`;
+  const saludo = nombreCorto(usuario);
   const rolVisible = sesion.esAdmin ? 'Rector' : 'Personal del colegio';
   const anio = new Date().getFullYear();
 
@@ -190,7 +188,7 @@ export function DashboardShell({ seccion, breadcrumb, children }: DashboardShell
             {inicialesVisible(usuario)}
           </div>
           <div className="dash-usuario-textos">
-            <p>{nombreCorto}</p>
+            <p>{saludo}</p>
             <p>{rolVisible}</p>
           </div>
           <button

@@ -115,8 +115,8 @@ export type CambioPassword = z.infer<typeof CambioPasswordSchema>;
 export interface UsuarioSesion {
   id: string;
   usuario: string;
-  nombres: string | null;
-  apellidos: string | null;
+  nombres: string;
+  apellidos: string;
   esAdmin: boolean;
   debeCambiarPassword: boolean;
 }
