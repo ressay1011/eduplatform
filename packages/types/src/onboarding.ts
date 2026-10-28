@@ -69,7 +69,9 @@ export function subdominioDeNombre(nombre: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+/, '')
     .slice(0, 32)
-    .replace(/-+$/, '');
+    // Solo puede quedar un guion: la pasada anterior colapsa las rachas en uno.
+    // `-+$` con ancla es lo que Sonar marca como superlineal (typescript:S8786).
+    .replace(/-$/, '');
   return base.length >= 3 ? base : '';
 }
 
