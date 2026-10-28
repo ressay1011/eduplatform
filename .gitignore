@@ -49,8 +49,6 @@ Thumbs.db
 /playwright-report/
 /blob-report/
 /playwright/.cache/
-# Videos de prueba (se regeneran y se sobrescriben; no van al repo)
-/pruebas-video/
 
 # Solo local: hooks de git y plantilla de PR (no hacen falta para desplegar)
 /.husky/
