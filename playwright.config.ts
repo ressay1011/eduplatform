@@ -25,10 +25,7 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   retries: process.env['CI'] === 'true' ? 1 : 0,
-  reporter:
-    process.env['CI'] === 'true'
-      ? [['list'], ['html', { open: 'never' }]]
-      : [['list']],
+  reporter: process.env['CI'] === 'true' ? [['list'], ['html', { open: 'never' }]] : [['list']],
   use: {
     baseURL: WEB,
     locale: 'es-CO',
