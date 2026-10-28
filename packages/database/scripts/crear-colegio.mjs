@@ -12,6 +12,7 @@
  * Idempotente en el sentido contrario: si el subdominio ya existe, falla sin
  * tocar nada (para no pisar un colegio en producción).
  */
+import { randomInt } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
@@ -34,10 +35,15 @@ function passwordTemporal() {
   const digitos = '23456789';
   const simbolos = '!@#$%&*';
   const todos = mayus + minus + digitos + simbolos;
-  const uno = (juego) => juego[Math.floor(Math.random() * juego.length)];
+  const uno = (juego) => juego[randomInt(juego.length)];
   const base = [uno(mayus), uno(minus), uno(digitos), uno(simbolos)];
   while (base.length < 12) base.push(uno(todos));
-  return base.sort(() => Math.random() - 0.5).join('');
+  // Mezcla Fisher–Yates con el RNG criptográfico (nada de Math.random).
+  for (let i = base.length - 1; i > 0; i -= 1) {
+    const j = randomInt(i + 1);
+    [base[i], base[j]] = [base[j], base[i]];
+  }
+  return base.join('');
 }
 
 function argumento(nombre) {

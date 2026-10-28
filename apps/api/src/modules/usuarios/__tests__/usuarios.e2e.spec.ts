@@ -41,6 +41,7 @@ describe('Usuarios (e2e)', () => {
   // `Date.now()` compartían milisegundo (choque de codigo_dane/subdominio).
   const sufijo = String(randomInt(0, 100_000_000)).padStart(8, '0');
   const subdominioA = `usr-a-${sufijo}`;
+  const sinDatosEmail = `sin-datos@${subdominioA}`;
   const subdominioB = `usr-b-${sufijo}`;
 
   let colegioAId = '';
@@ -118,6 +119,13 @@ describe('Usuarios (e2e)', () => {
             numeroDocumento: `81${sufijo}1`,
             esAdmin: true,
             debeCambiarPassword: false,
+          },
+          {
+            colegioId: colegioAId,
+            usuario: sinDatosEmail,
+            passwordHash: hashStaff,
+            esAdmin: false,
+            debeCambiarPassword: true,
           },
           {
             colegioId: colegioAId,
@@ -241,7 +249,7 @@ describe('Usuarios (e2e)', () => {
     expect(emails).toContain(adminEmail);
     expect(emails).toContain(lectorEmail);
     expect(emails).not.toContain(adminBEmail);
-    expect(res.body.data.total).toBe(4);
+    expect(res.body.data.total).toBe(5);
   });
 
   it('sin usuarios.ver → 403 (audita PERMISSION_DENIED)', async () => {
@@ -319,6 +327,24 @@ describe('Usuarios (e2e)', () => {
 
     expect(res.status).toBe(201);
     expect(res.body.data.usuario).toMatchObject({ usuario: 'portero.garcia', activo: true });
+  });
+
+  it('editar una cuenta sin datos personales no rompe (solo documento)', async () => {
+    const agente = await login(adminEmail, PASSWORD_ADMIN);
+    const lista = await agente.get('/api/usuarios?limit=100').expect(200);
+    const sinDatos = (lista.body.data.items as Array<{ id: string; usuario: string }>).find(
+      (u) => u.usuario === sinDatosEmail,
+    );
+    if (sinDatos === undefined) throw new Error('Fixtures: cuenta sin datos no encontrada');
+
+    const res = await agente
+      .patch(`/api/usuarios/${sinDatos.id}`)
+      .send({ numeroDocumento: `99${sufijo}` });
+
+    expect(res.status).toBe(200);
+    // La respuesta del PATCH es el usuario listado, sin envoltorio extra.
+    expect(res.body.data.numeroDocumento).toBe(`99${sufijo}`);
+    expect(res.body.data.nombres).toBeNull();
   });
 
   it('rechaza correo duplicado (409)', async () => {
