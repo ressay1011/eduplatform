@@ -135,8 +135,8 @@ jobs:
       - name: Instalar Chromium
         run: pnpm exec playwright install --with-deps chromium
 
-      # El video por test se graba SOLO en local, donde sí se revisa; en CI no
-      # se sube porque nadie lo abre. Si el humo falla quedan traza y captura.
+      # El humo corre sin grabar video de todo: si falla, Playwright deja
+      # traza, captura y video en test-results (retain-on-failure).
       - name: Humo E2E
         run: pnpm e2e
 

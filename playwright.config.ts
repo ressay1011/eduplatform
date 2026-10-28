@@ -27,15 +27,14 @@ export default defineConfig({
   retries: process.env['CI'] === 'true' ? 1 : 0,
   reporter:
     process.env['CI'] === 'true'
-      ? [['list'], ['./e2e/reporter-video.mjs'], ['html', { open: 'never' }]]
-      : [['list'], ['./e2e/reporter-video.mjs']],
+      ? [['list'], ['html', { open: 'never' }]]
+      : [['list']],
   use: {
     baseURL: WEB,
     locale: 'es-CO',
-    // Un video por test se graba SOLO en local: el reporter los copia a
-    // `pruebas-video/` con nombre estable para revisarlos a mano. En CI nadie
-    // abre ese artefacto, así que se ahorra la grabación (y su subida).
-    video: process.env['CI'] === 'true' ? 'off' : 'on',
+    // Video solo si el test falla: se revisa desde `test-results/`, junto a la
+    // traza y la captura. Ya no se graba todo ni se copia a `pruebas-video/`.
+    video: 'retain-on-failure',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
