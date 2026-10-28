@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /** Tests unitarios de la resolución de subdominio y utilidades. */
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { inicialesDe, resolverSubdominio, subdominioActual } from '../subdominio';
 
 describe('resolverSubdominio', () => {
