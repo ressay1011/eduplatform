@@ -65,6 +65,8 @@ describe('Auth (e2e)', () => {
   const emailAdminB = `user-b@${dominioB}`;
   // Correo de un proveedor libre: con el subdominio debe poder entrar igual.
   const emailGmailA = `rector.juanaarias.${sufijo}@gmail.com`;
+  // Usuario cuyo sufijo ES el subdominio: resuelve el colegio sin URL de colegio.
+  const usuarioSufijoA = `rector@${subdominioA}`;
   let colegioAId = '';
   let colegioBId = '';
   let adminId = '';
@@ -137,6 +139,17 @@ describe('Auth (e2e)', () => {
             tipoDocumento: 'CC',
             numeroDocumento: `72${sufijo}1`,
             debeCambiarPassword: true,
+          },
+          {
+            colegioId: colegioAId,
+            usuario: usuarioSufijoA,
+            passwordHash: hashCostoBajo,
+            nombres: 'Rector',
+            apellidos: 'Sufijo',
+            tipoDocumento: 'CC',
+            numeroDocumento: `75${sufijo}1`,
+            esAdmin: false,
+            debeCambiarPassword: false,
           },
           {
             colegioId: colegioAId,
@@ -248,6 +261,16 @@ describe('Auth (e2e)', () => {
 
     expect(body.data.usuario.usuario).toBe(emailGmailA);
     expect(body.data.colegio.id).toBe(colegioAId);
+  });
+
+  it('sin URL de colegio, el colegio sale del sufijo del usuario (admin@colegio)', async () => {
+    const { body } = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({ usuario: usuarioSufijoA, password: PASSWORD_ADMIN })
+      .expect(200);
+
+    expect(body.data.colegio.id).toBe(colegioAId);
+    expect(body.data.usuario.usuario).toBe(usuarioSufijoA);
   });
 
   it('el mismo correo con el subdominio de OTRO colegio → 401 (aislamiento)', async () => {
@@ -524,7 +547,7 @@ describe('Auth (e2e)', () => {
     const filas = await withTenant(db, { colegioId: colegioAId, isPlatformAdmin: false }, (tx) =>
       tx.select({ id: usuarios.id }).from(usuarios),
     );
-    expect(filas).toHaveLength(3);
+    expect(filas).toHaveLength(4);
     const idsVisibles = filas.map((f) => f.id);
     expect(idsVisibles).toContain(adminId);
     expect(idsVisibles).toContain(staffId);

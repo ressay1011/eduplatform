@@ -163,6 +163,32 @@ describe('LoginFlow', () => {
     );
   });
 
+  it('sin subdominio en la URL, el colegio sale del sufijo del usuario', async () => {
+    vi.mocked(getContextoColegio).mockResolvedValue({
+      ...contexto,
+      nombre: 'I.E.T.D. Juana Arias',
+      subdominio: 'juanaarias',
+    });
+
+    renderFlow();
+    await identificar('maria@juanaarias');
+
+    // El sufijo `juanaarias` es el colegio: no se consulta por dominio.
+    expect(getContextoColegio).toHaveBeenCalledWith('juanaarias');
+    expect(getContextoPorDominio).not.toHaveBeenCalled();
+
+    await userEvent.type(screen.getByLabelText(/^contraseña/i), 'ClaveSegura123');
+    await userEvent.click(screen.getByRole('button', { name: /ingresar/i }));
+
+    await waitFor(() =>
+      expect(iniciarSesion).toHaveBeenCalledWith(
+        expect.objectContaining({ usuario: 'maria@juanaarias' }),
+      ),
+    );
+    // Sin subdominio en la URL no se manda el campo.
+    expect(vi.mocked(iniciarSesion).mock.calls[0]?.[0]).not.toHaveProperty('subdominio');
+  });
+
   it('el paso 1 valida el nombre de usuario antes de consultar', async () => {
     renderFlow();
     await userEvent.click(screen.getByRole('button', { name: /continuar/i }));
@@ -190,7 +216,7 @@ describe('LoginFlow', () => {
     await userEvent.click(screen.getByRole('button', { name: /continuar/i }));
 
     expect(
-      await screen.findByText('No encontramos tu colegio con ese usuario. Entra por su dirección.'),
+      await screen.findByText('No encontramos ningún colegio con ese usuario.'),
     ).toBeInTheDocument();
     expect(screen.queryByText(/estás entrando como/i)).not.toBeInTheDocument();
   });

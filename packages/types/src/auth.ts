@@ -50,6 +50,20 @@ export const UsuarioSchema = z
   .regex(/^[a-z0-9](?:[a-z0-9._@-]*[a-z0-9])$/, 'Solo minúsculas, números, puntos, guiones y @');
 
 /**
+ * Colegio de un nombre de usuario: lo que va después de la `@`
+ * (`admin@juanaarias` → `juanaarias`). Es el `subdominio` del colegio, así que
+ * NO necesita ser un correo ni tener TLD; con esto el colegio se resuelve igual
+ * entrando por `eduplatform.co` a secas.
+ */
+export function sufijoDeUsuario(usuario: string): string | null {
+  const limpio = usuario.trim().toLowerCase();
+  const posicion = limpio.lastIndexOf('@');
+  if (posicion <= 0 || posicion === limpio.length - 1) return null;
+  const sufijo = limpio.slice(posicion + 1);
+  return /^[a-z0-9](?:[a-z0-9-]{1,30}[a-z0-9])$/.test(sufijo) ? sufijo : null;
+}
+
+/**
  * Login de usuario de colegio.
  *
  * `subdominio` es opcional: cuando la web se sirve en `colegio.<dominio>` el

@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
-import { dominioDeEmail } from '@eduplatform/types';
+import { dominioDeEmail, sufijoDeUsuario } from '@eduplatform/types';
 import { BrandHeader } from '@/components/BrandHeader';
 import { ErrorBanner } from '@/components/ErrorBanner';
 import { M3Button } from '@/components/M3Button';
@@ -132,31 +132,40 @@ export function LoginFlow() {
         return;
       }
 
-      // Vía heredada: sin subdominio, el dominio del identificador resuelve el
-      // colegio. Un usuario libre (`admin@juanaarias`) no lo resuelve.
-      const dominio = dominioDeEmail(valor);
-      if (dominio === null) {
-        setErrorUsuario(
-          'Entra por la dirección de tu colegio (por ejemplo, juanaarias.midominio.co).',
-        );
+      // Sin subdominio en la URL el colegio sale del propio usuario:
+      // `admin@juanaarias` → colegio `juanaarias` (no hace falta que sea un
+      // correo real). Si el identificador es un correo de verdad
+      // (`admin@colegio.edu.co`) se usa el dominio heredado.
+      const sufijo = sufijoDeUsuario(valor);
+      const dominio = sufijo === null ? dominioDeEmail(valor) : null;
+      if (sufijo === null && dominio === null) {
+        setErrorUsuario('Escribe tu usuario con el colegio: por ejemplo admin@juanaarias.');
         return;
       }
 
       setIdentificando(true);
       try {
-        const contexto = await queryClient.fetchQuery({
-          queryKey: claveContexto(dominio),
-          queryFn: () => getContextoPorDominio(dominio),
-          staleTime: 5 * 60_000,
-          // Un 404 (dominio sin colegio) no se reintenta: no es transitorio.
-          retry: false,
-        });
+        const contexto =
+          sufijo !== null
+            ? await queryClient.fetchQuery({
+                queryKey: claveSubdominio(sufijo),
+                queryFn: () => getContextoColegio(sufijo),
+                staleTime: 5 * 60_000,
+                retry: false,
+              })
+            : await queryClient.fetchQuery({
+                queryKey: claveContexto(dominio ?? ''),
+                queryFn: () => getContextoPorDominio(dominio ?? ''),
+                staleTime: 5 * 60_000,
+                // Un 404 (dominio sin colegio) no se reintenta: no es transitorio.
+                retry: false,
+              });
         aplicarBranding(contexto.primaryColor);
         setColegio(contexto);
         setPaso(2);
       } catch (err) {
         if (err instanceof ApiError && err.status === 404) {
-          setErrorUsuario('No encontramos tu colegio con ese usuario. Entra por su dirección.');
+          setErrorUsuario('No encontramos ningún colegio con ese usuario.');
         } else if (err instanceof ApiError) {
           setBanner(err.message);
         } else {
@@ -294,7 +303,7 @@ export function LoginFlow() {
                         if (errorUsuario !== null) setErrorUsuario(null);
                       }}
                       autoComplete="username"
-                      ayuda="Por ejemplo: admin@juanaarias"
+                      ayuda="Es tu usuario con el colegio: admin@juanaarias"
                       error={errorUsuario}
                       autoFocus
                     />

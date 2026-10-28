@@ -9,6 +9,7 @@ import {
   ErrorCodes,
   EstadoColegio,
   dominioDeEmail,
+  sufijoDeUsuario,
   type CambioPassword,
   type ContextoColegioPublico,
   type LoginRequest,
@@ -179,14 +180,15 @@ export class AuthService {
     }
 
     const dominio = dominioDeEmail(dto.usuario);
-    // El colegio se resuelve por el subdominio del host (`colegio.<dominio>`) o,
-    // si no viene, por el dominio del correo (login unificado de siempre).
+    // El colegio sale del subdominio del host (`colegio.<dominio>`), del sufijo
+    // del nombre de usuario (`admin@juanaarias` → `juanaarias`) o, como último
+    // recurso, del dominio de un correo real (`admin@colegio.edu.co`).
+    const subdominio = dto.subdominio ?? sufijoDeUsuario(dto.usuario) ?? null;
+    const porSubdominio =
+      subdominio === null ? null : await this.repo.findColegioPublico(subdominio);
     const colegioPublico =
-      dto.subdominio !== undefined
-        ? await this.repo.findColegioPublico(dto.subdominio)
-        : dominio === null
-          ? null
-          : await this.repo.findColegioPublicoPorDominio(dominio);
+      porSubdominio ??
+      (dominio === null ? null : await this.repo.findColegioPublicoPorDominio(dominio));
     if (colegioPublico === null) {
       // Mensaje genérico: no se revela si el dominio o el correo existen.
       this.attempts.registrarFallo(dto.usuario);
