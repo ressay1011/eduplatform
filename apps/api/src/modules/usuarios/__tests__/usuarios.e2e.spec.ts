@@ -42,8 +42,6 @@ describe('Usuarios (e2e)', () => {
   const sufijo = String(randomInt(0, 100_000_000)).padStart(8, '0');
   const subdominioA = `usr-a-${sufijo}`;
   const subdominioB = `usr-b-${sufijo}`;
-  const dominioA = `ua-${sufijo}.test`;
-  const dominioB = `ub-${sufijo}.test`;
 
   let colegioAId = '';
   let colegioBId = '';
@@ -78,10 +76,9 @@ describe('Usuarios (e2e)', () => {
             nombre: 'Colegio Usuarios A',
             codigoDane: `3${sufijo}000`,
             subdominio: subdominioA,
-            dominioEmail: dominioA,
             municipio: 'Plato',
             departamento: 'Magdalena',
-            email: `contacto@${dominioA}`,
+            email: `contacto@${subdominioA}`,
             calendario: 'A',
             estado: 'ACTIVO',
           },
@@ -89,10 +86,9 @@ describe('Usuarios (e2e)', () => {
             nombre: 'Colegio Usuarios B',
             codigoDane: `4${sufijo}000`,
             subdominio: subdominioB,
-            dominioEmail: dominioB,
             municipio: 'Plato',
             departamento: 'Magdalena',
-            email: `contacto@${dominioB}`,
+            email: `contacto@${subdominioB}`,
             calendario: 'A',
             estado: 'ACTIVO',
           },
@@ -103,11 +99,11 @@ describe('Usuarios (e2e)', () => {
       colegioAId = cA.id;
       colegioBId = cB.id;
 
-      adminEmail = `admin@${dominioA}`;
-      lectorEmail = `lector@${dominioA}`;
-      gestorEmail = `gestor@${dominioA}`;
-      portalEmail = `portal@${dominioA}`;
-      adminBEmail = `admin@${dominioB}`;
+      adminEmail = `admin@${subdominioA}`;
+      lectorEmail = `lector@${subdominioA}`;
+      gestorEmail = `gestor@${subdominioA}`;
+      portalEmail = `portal@${subdominioA}`;
+      adminBEmail = `admin@${subdominioB}`;
 
       const creadosUsuarios = await tx
         .insert(usuarios)
@@ -266,7 +262,7 @@ describe('Usuarios (e2e)', () => {
 
   it('admin crea usuario con contraseña temporal válida para entrar', async () => {
     const agente = await login(adminEmail, PASSWORD_ADMIN);
-    const emailNuevo = `nuevo@${dominioA}`;
+    const emailNuevo = `nuevo@${subdominioA}`;
     const res = await agente.post('/api/usuarios').send({
       nombres: 'Nuevo',
       apellidos: 'Docente',
@@ -344,7 +340,7 @@ describe('Usuarios (e2e)', () => {
     const res = await agente.post('/api/usuarios').send({
       nombres: 'Otro',
       apellidos: 'Admin',
-      usuario: `admin2@${dominioA}`,
+      usuario: `admin2@${subdominioA}`,
       tipoDocumento: 'CC',
       numeroDocumento: `83${sufijo}4`,
       esAdmin: true,

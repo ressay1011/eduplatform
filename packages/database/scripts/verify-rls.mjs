@@ -49,9 +49,13 @@ try {
   await sql.begin(async (tx) => {
     await tx`SELECT set_config('app.current_tenant', ${TENANT}, true)`;
     const [conTenant] = await tx`SELECT count(*)::int AS n FROM roles`;
-    revisar((conTenant?.n ?? 0) >= 5, `con el tenant, roles devuelve ${conTenant?.n} (esperado ≥5)`);
+    revisar(
+      (conTenant?.n ?? 0) >= 5,
+      `con el tenant, roles devuelve ${conTenant?.n} (esperado ≥5)`,
+    );
 
-    const [ajeno] = await tx`SELECT count(*)::int AS n FROM usuarios WHERE colegio_id <> ${TENANT}::uuid`;
+    const [ajeno] =
+      await tx`SELECT count(*)::int AS n FROM usuarios WHERE colegio_id <> ${TENANT}::uuid`;
     revisar(ajeno?.n === 0, `no se ven usuarios de otro colegio (${ajeno?.n})`);
   });
 
@@ -61,11 +65,16 @@ try {
     revisar(otro?.n === 0, `con un tenant ajeno, usuarios devuelve 0 (${otro?.n})`);
   });
 
-  const publico = await sql`SELECT subdominio, dominio_email FROM colegios_publico LIMIT 3`;
-  revisar(publico.length > 0, `vista pública del login visible (${publico.map((c) => c.dominio_email).join(', ')})`);
+  const publico = await sql`SELECT subdominio FROM colegios_publico LIMIT 3`;
+  revisar(
+    publico.length > 0,
+    `vista pública del login visible (${publico.map((c) => c.dominio_email).join(', ')})`,
+  );
 } finally {
   await sql.end({ timeout: 5 });
 }
 
-console.log(fallos === 0 ? '\nRLS verificada: sin fugas.' : `\n${fallos} comprobación(es) fallaron.`);
+console.log(
+  fallos === 0 ? '\nRLS verificada: sin fugas.' : `\n${fallos} comprobación(es) fallaron.`,
+);
 process.exit(fallos === 0 ? 0 : 1);

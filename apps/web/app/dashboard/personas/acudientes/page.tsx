@@ -11,6 +11,7 @@ import { ErrorBanner } from '@/components/ErrorBanner';
 import { PersonasHeader } from '@/components/personas/PersonasHeader';
 import { useAcudientes } from '@/hooks/usePersonas';
 import { iniciales } from '@/lib/personas';
+import { nombreVisible } from '@/lib/nombre';
 
 type FiltroEstado = 'todos' | 'activos' | 'inactivos';
 
@@ -135,9 +136,7 @@ export default function AcudientesPage() {
                           {iniciales(persona.nombres, persona.apellidos)}
                         </div>
                         <div className="per-persona-textos">
-                          <span className="per-persona-nombre">
-                            {persona.nombres} {persona.apellidos}
-                          </span>
+                          <span className="per-persona-nombre">{nombreVisible(persona)}</span>
                           <span className="per-persona-detalle">{persona.usuario}</span>
                         </div>
                       </div>

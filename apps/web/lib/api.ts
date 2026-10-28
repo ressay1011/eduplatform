@@ -126,19 +126,6 @@ export function getContextoColegio(subdominio: string): Promise<ContextoConSede>
   return request(`/auth/contexto-colegio?subdominio=${encodeURIComponent(subdominio)}`);
 }
 
-/** Branding público por dominio de correo (la vía del login unificado). */
-export function getContextoPorDominio(dominio: string): Promise<ContextoConSede> {
-  return request(`/auth/contexto-colegio?dominio=${encodeURIComponent(dominio)}`);
-}
-
-/**
- * Paso 1 del login sin subdominio: la API resuelve el colegio por el dominio
- * heredado del identificador (`admin@colegio.edu.co`). 404 = no hay colegio.
- */
-export function identificarColegio(usuario: string): Promise<ContextoConSede> {
-  return request('/auth/identificar-colegio', { method: 'POST', body: { usuario } });
-}
-
 /** Login de usuario de colegio (guarda la cookie httpOnly). */
 export function iniciarSesion(dto: LoginRequest): Promise<LoginResponse> {
   return request('/auth/login', { method: 'POST', body: dto });

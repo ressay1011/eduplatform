@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
-import { dominioDeEmail, sufijoDeUsuario } from '@eduplatform/types';
+import { sufijoDeUsuario } from '@eduplatform/types';
 import { BrandHeader } from '@/components/BrandHeader';
 import { ErrorBanner } from '@/components/ErrorBanner';
 import { M3Button } from '@/components/M3Button';
@@ -23,23 +23,12 @@ import { PaperBg } from '@/components/PaperBg';
 import { StepDots } from '@/components/StepDots';
 import { TextField } from '@/components/TextField';
 import { SESION_KEY } from '@/hooks/useSesion';
-import {
-  ApiError,
-  getContextoColegio,
-  getContextoPorDominio,
-  iniciarSesion,
-  type ContextoConSede,
-} from '@/lib/api';
+import { ApiError, getContextoColegio, iniciarSesion, type ContextoConSede } from '@/lib/api';
 import { aplicarBranding } from '@/lib/branding';
 import { inicialesDe, subdominioActual } from '@/lib/subdominio';
 import { esUsuarioValido } from '@/lib/validacion';
 
-/** Clave de caché del contexto: por dominio, la llave del login unificado. */
-function claveContexto(dominio: string) {
-  return ['contexto-colegio', dominio] as const;
-}
-
-/** Misma caché, separada por la vía del subdominio. */
+/** Clave de caché del contexto público por subdominio. */
 function claveSubdominio(subdominio: string) {
   return ['contexto-colegio', `sub:${subdominio}`] as const;
 }
@@ -133,39 +122,28 @@ export function LoginFlow() {
       }
 
       // Sin subdominio en la URL el colegio sale del propio usuario:
-      // `admin@juanaarias` → colegio `juanaarias` (no hace falta que sea un
-      // correo real). Si el identificador es un correo de verdad
-      // (`admin@colegio.edu.co`) se usa el dominio heredado.
+      // `admin@juanaarias` → colegio `juanaarias`.
       const sufijo = sufijoDeUsuario(valor);
-      const dominio = sufijo === null ? dominioDeEmail(valor) : null;
-      if (sufijo === null && dominio === null) {
+      if (sufijo === null) {
         setErrorUsuario('Escribe tu usuario con el colegio: por ejemplo admin@juanaarias.');
         return;
       }
 
       setIdentificando(true);
       try {
-        const contexto =
-          sufijo !== null
-            ? await queryClient.fetchQuery({
-                queryKey: claveSubdominio(sufijo),
-                queryFn: () => getContextoColegio(sufijo),
-                staleTime: 5 * 60_000,
-                retry: false,
-              })
-            : await queryClient.fetchQuery({
-                queryKey: claveContexto(dominio ?? ''),
-                queryFn: () => getContextoPorDominio(dominio ?? ''),
-                staleTime: 5 * 60_000,
-                // Un 404 (dominio sin colegio) no se reintenta: no es transitorio.
-                retry: false,
-              });
+        const contexto = await queryClient.fetchQuery({
+          queryKey: claveSubdominio(sufijo),
+          queryFn: () => getContextoColegio(sufijo),
+          staleTime: 5 * 60_000,
+          // Un 404 (subdominio sin colegio) no se reintenta: no es transitorio.
+          retry: false,
+        });
         aplicarBranding(contexto.primaryColor);
         setColegio(contexto);
         setPaso(2);
       } catch (err) {
         if (err instanceof ApiError && err.status === 404) {
-          setErrorUsuario('No encontramos ningún colegio con ese usuario.');
+          setErrorUsuario('No encontramos ningún colegio para ese usuario.');
         } else if (err instanceof ApiError) {
           setBanner(err.message);
         } else {

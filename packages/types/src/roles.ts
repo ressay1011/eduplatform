@@ -72,11 +72,11 @@ export interface SedeAsignada {
 /** Persona de la pestaña Empleados (cuenta del colegio con su rol). */
 export interface PersonaEmpleado {
   id: string;
-  nombres: string;
-  apellidos: string;
+  nombres: string | null;
+  apellidos: string | null;
   usuario: string;
-  tipoDocumento: string;
-  numeroDocumento: string;
+  tipoDocumento: string | null;
+  numeroDocumento: string | null;
   esAdmin: boolean;
   activo: boolean;
   rolId: string | null;
@@ -90,9 +90,9 @@ export interface PersonaEmpleado {
 export interface PersonaEstudiante {
   id: string;
   usuarioId: string;
-  nombres: string;
-  apellidos: string;
-  numeroDocumento: string;
+  nombres: string | null;
+  apellidos: string | null;
+  numeroDocumento: string | null;
   usuario: string;
   codigoMatricula: string;
   estado: string;
@@ -105,9 +105,9 @@ export interface PersonaEstudiante {
 /** Persona de la pestaña Acudientes, con sus estudiantes a cargo. */
 export interface PersonaAcudiente {
   id: string;
-  nombres: string;
-  apellidos: string;
-  numeroDocumento: string;
+  nombres: string | null;
+  apellidos: string | null;
+  numeroDocumento: string | null;
   usuario: string;
   /** Teléfono declarado en el vínculo con el estudiante (si lo hay). */
   telefono: string | null;

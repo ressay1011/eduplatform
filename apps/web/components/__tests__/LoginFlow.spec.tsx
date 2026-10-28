@@ -36,13 +36,12 @@ vi.mock('@/lib/api', () => {
   }
   return {
     ApiError: ApiErrorMock,
-    getContextoPorDominio: vi.fn(),
     getContextoColegio: vi.fn(),
     iniciarSesion: vi.fn(),
   };
 });
 
-import { ApiError, getContextoColegio, getContextoPorDominio, iniciarSesion } from '@/lib/api';
+import { ApiError, getContextoColegio, iniciarSesion } from '@/lib/api';
 import { subdominioActual } from '@/lib/subdominio';
 import { LoginFlow } from '../login/LoginFlow';
 import type { ContextoConSede } from '@/lib/api';
@@ -59,7 +58,7 @@ const contexto: ContextoConSede = {
 };
 
 // Usuario de prueba con dominio heredado: el paso 1 sin subdominio lo resuelve.
-const EMAIL = 'maria@colegio-norte.edu.co';
+const EMAIL = 'maria@colegio-norte';
 
 function nuevoCliente(): QueryClient {
   return new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -103,23 +102,23 @@ describe('LoginFlow', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(subdominioActual).mockReturnValue(null);
-    vi.mocked(getContextoPorDominio).mockResolvedValue(contexto);
+    vi.mocked(getContextoColegio).mockResolvedValue(contexto);
     vi.mocked(iniciarSesion).mockResolvedValue(loginOk(false));
   });
 
-  it('sin subdominio resuelve el colegio por el dominio heredado del usuario', async () => {
+  it('sin subdominio en la URL resuelve el colegio por el sufijo del usuario', async () => {
     renderFlow();
     expect(screen.getByText('EduPlatform')).toBeInTheDocument();
 
     await identificar(EMAIL);
 
-    expect(vi.mocked(getContextoPorDominio)).toHaveBeenCalledWith('colegio-norte.edu.co');
+    expect(vi.mocked(getContextoColegio)).toHaveBeenCalledWith('colegio-norte');
     expect(screen.getByText('Colegio Norte')).toBeInTheDocument();
     expect(screen.getByText('DANE 105001001234')).toBeInTheDocument();
   });
 
   it('colegio sin nombre todavía → la cabecera sigue siendo EduPlatform', async () => {
-    vi.mocked(getContextoPorDominio).mockResolvedValue({
+    vi.mocked(getContextoColegio).mockResolvedValue({
       ...contexto,
       nombre: '',
       codigoDane: '',
@@ -151,7 +150,6 @@ describe('LoginFlow', () => {
     // El usuario puede ser un correo de cualquier dominio: no se consulta el dominio.
     await userEvent.type(screen.getByLabelText(/^nombre de usuario/i), 'rector@gmail.com');
     await userEvent.click(screen.getByRole('button', { name: /continuar|buscando tu colegio/i }));
-    expect(getContextoPorDominio).not.toHaveBeenCalled();
 
     await userEvent.type(await screen.findByLabelText(/^contraseña/i), 'ClaveLarga1');
     await userEvent.click(screen.getByRole('button', { name: /ingresar/i }));
@@ -175,7 +173,6 @@ describe('LoginFlow', () => {
 
     // El sufijo `juanaarias` es el colegio: no se consulta por dominio.
     expect(getContextoColegio).toHaveBeenCalledWith('juanaarias');
-    expect(getContextoPorDominio).not.toHaveBeenCalled();
 
     await userEvent.type(screen.getByLabelText(/^contraseña/i), 'ClaveSegura123');
     await userEvent.click(screen.getByRole('button', { name: /ingresar/i }));
@@ -215,11 +212,11 @@ describe('LoginFlow', () => {
     expect(
       await screen.findByText('Solo minúsculas, números, puntos, guiones y @ (3–64 caracteres).'),
     ).toBeInTheDocument();
-    expect(vi.mocked(getContextoPorDominio)).not.toHaveBeenCalled();
+    expect(vi.mocked(getContextoColegio)).not.toHaveBeenCalled();
   });
 
-  it('sin subdominio y sin dominio de colegio (404) → error en el campo, sin avanzar', async () => {
-    vi.mocked(getContextoPorDominio).mockRejectedValue(
+  it('usuario de un colegio inexistente (404) → error en el campo, sin avanzar', async () => {
+    vi.mocked(getContextoColegio).mockRejectedValue(
       new ApiError(
         404,
         'NOT_FOUND',
@@ -227,11 +224,11 @@ describe('LoginFlow', () => {
       ),
     );
     renderFlow();
-    await userEvent.type(screen.getByLabelText(/^nombre de usuario/i), 'alguien@desconocido.test');
+    await userEvent.type(screen.getByLabelText(/^nombre de usuario/i), 'alguien@desconocido');
     await userEvent.click(screen.getByRole('button', { name: /continuar/i }));
 
     expect(
-      await screen.findByText('No encontramos ningún colegio con ese usuario.'),
+      await screen.findByText('No encontramos ningún colegio para ese usuario.'),
     ).toBeInTheDocument();
     expect(screen.queryByText(/estás entrando como/i)).not.toBeInTheDocument();
   });
@@ -334,17 +331,17 @@ describe('LoginFlow', () => {
 
     renderFlow(cliente);
     await identificar(EMAIL);
-    expect(vi.mocked(getContextoPorDominio)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(getContextoColegio)).toHaveBeenCalledTimes(1);
   });
 
   it('al invalidar el contexto se vuelve a consultar (cambio de color del colegio)', async () => {
     const cliente = nuevoCliente();
     renderFlow(cliente);
     await identificar(EMAIL);
-    expect(vi.mocked(getContextoPorDominio)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(getContextoColegio)).toHaveBeenCalledTimes(1);
 
     // El colegio cambió su color: el módulo de colegios invalida la caché…
-    vi.mocked(getContextoPorDominio).mockResolvedValue({ ...contexto, primaryColor: '#a3331a' });
+    vi.mocked(getContextoColegio).mockResolvedValue({ ...contexto, primaryColor: '#a3331a' });
     await act(async () => {
       await cliente.invalidateQueries({ queryKey: ['contexto-colegio'] });
     });
@@ -352,6 +349,6 @@ describe('LoginFlow', () => {
     // …y la siguiente identificación ya trae el valor nuevo, sin esperar TTL.
     await userEvent.click(screen.getByRole('button', { name: /cambiar usuario/i }));
     await identificar(EMAIL);
-    expect(vi.mocked(getContextoPorDominio)).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(getContextoColegio)).toHaveBeenCalledTimes(2);
   });
 });

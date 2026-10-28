@@ -10,8 +10,6 @@ import { createHash } from 'node:crypto';
 import type { Response } from 'express';
 import {
   CambioPasswordSchema,
-  DominioEmailSchema,
-  IdentificarColegioRequestSchema,
   LoginRequestSchema,
   PlataformaLoginRequestSchema,
   SubdominioSchema,
@@ -22,12 +20,7 @@ import {
   type PlataformaLoginResponse,
 } from '@eduplatform/types';
 import { env } from '../../config/env';
-import type {
-  AuthContext,
-  AuthenticatedRequest,
-  ContextoPublicoConSede,
-  RequestMeta,
-} from './auth.types';
+import type { AuthContext, AuthenticatedRequest, RequestMeta } from './auth.types';
 import { SESION_COOKIE } from './auth.constants';
 import { AuthService } from './auth.service';
 import { CurrentAuth } from './decorators/current-auth.decorator';
@@ -55,15 +48,11 @@ export class AuthController {
   @Get('contexto-colegio')
   async contextoColegio(
     @Query('subdominio') subdominio: string | undefined,
-    @Query('dominio') dominio: string | undefined,
     @Req() req: AuthenticatedRequest,
     @Res() res: Response,
   ): Promise<void> {
-    // Dos vías: `dominio` (login unificado) o `subdominio` (enlaces por colegio).
-    const data =
-      dominio !== undefined && dominio !== ''
-        ? await this.authService.contextoColegioPorDominio(DominioEmailSchema.parse(dominio))
-        : await this.authService.contextoColegio(SubdominioSchema.parse(subdominio));
+    // El subdominio es el único identificador del colegio (host, ?colegio= o sufijo del usuario).
+    const data = await this.authService.contextoColegio(SubdominioSchema.parse(subdominio));
     const etag = calcularEtag(data);
 
     res.setHeader('Cache-Control', 'no-cache');
@@ -111,21 +100,6 @@ export class AuthController {
     );
     this.setCookieSesion(res, token, expira);
     return { success: true, data: respuesta };
-  }
-
-  /**
-   * Paso 1 del login unificado: recibe SOLO el correo y resuelve el colegio
-   * por el dominio (lo que va después de la @). Devuelve el branding público.
-   * Mismo límite estricto que el login: evita enumerar dominios a fuerza bruta.
-   */
-  @Public()
-  @Throttle({ default: { limit: env.THROTTLE_LOGIN_LIMIT, ttl: THROTTLE_TTL_MS } })
-  @Post('identificar-colegio')
-  @HttpCode(200)
-  async identificarColegio(@Body() body: unknown): Promise<ApiResponse<ContextoPublicoConSede>> {
-    const dto = IdentificarColegioRequestSchema.parse(body);
-    const data = await this.authService.identificarColegio(dto.usuario);
-    return { success: true, data };
   }
 
   /** Login del nivel plataforma (equipo SaaS, sin subdominio). */

@@ -83,28 +83,6 @@ export type LoginRequest = z.input<typeof LoginRequestSchema>;
  * Dominio de correo institucional del colegio (lo que va después de la @).
  * Único por colegio: es la llave para resolver el tenant en el login.
  */
-export const DominioEmailSchema = z
-  .string()
-  .trim()
-  .toLowerCase()
-  .regex(
-    /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/,
-    'Dominio de correo inválido',
-  );
-export type DominioEmail = z.infer<typeof DominioEmailSchema>;
-
-/**
- * Extrae el dominio (después de la última @) de un correo ya normalizado.
- * Devuelve null si no hay @ o el dominio no tiene formato válido.
- * Lo usan la API (resolver el colegio) y la web (saber cuándo consultar).
- */
-export function dominioDeEmail(email: string): string | null {
-  const limpio = email.trim().toLowerCase();
-  const posicion = limpio.lastIndexOf('@');
-  if (posicion <= 0 || posicion === limpio.length - 1) return null;
-  const dominio = limpio.slice(posicion + 1);
-  return DominioEmailSchema.safeParse(dominio).success ? dominio : null;
-}
 
 /**
  * Paso 1 del login sin subdominio: solo el identificador, para resolver el
@@ -137,8 +115,8 @@ export type CambioPassword = z.infer<typeof CambioPasswordSchema>;
 export interface UsuarioSesion {
   id: string;
   usuario: string;
-  nombres: string;
-  apellidos: string;
+  nombres: string | null;
+  apellidos: string | null;
   esAdmin: boolean;
   debeCambiarPassword: boolean;
 }

@@ -102,7 +102,7 @@ CREATE POLICY permisos_write_policy ON permisos FOR ALL
 -- añadir columnas AL FINAL; los cambios de orden/medio exigen recrear.
 DROP VIEW IF EXISTS colegios_publico;
 CREATE VIEW colegios_publico AS
-  SELECT id, nombre, subdominio, dominio_email, codigo_dane, logo_url, primary_color, estado, municipio, departamento
+  SELECT id, nombre, subdominio, codigo_dane, logo_url, primary_color, estado, municipio, departamento
   FROM colegios;
 GRANT SELECT ON colegios_publico TO app_user;
 

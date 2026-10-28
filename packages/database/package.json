@@ -18,7 +18,8 @@
     "db:seed": "node scripts/seed-demo.mjs",
     "db:verify": "node scripts/verify-rls.mjs",
     "db:audit": "node scripts/audit-seguridad.mjs",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "db:colegio": "node scripts/crear-colegio.mjs"
   },
   "dependencies": {
     "@eduplatform/types": "workspace:*",

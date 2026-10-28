@@ -42,8 +42,8 @@ export interface CursoInterno {
 /** Cuenta encontrada por documento, con su ficha de estudiante si existe. */
 export interface CuentaEstudiante {
   usuarioId: string;
-  nombres: string;
-  apellidos: string;
+  nombres: string | null;
+  apellidos: string | null;
   usuario: string;
   /** null si la cuenta existe pero aún no tiene ficha en `estudiantes`. */
   estudianteId: string | null;

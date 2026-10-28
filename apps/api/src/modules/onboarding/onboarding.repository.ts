@@ -36,8 +36,6 @@ export interface DatosColegio {
    * recién creado). El dominio es la llave del login y cambiarlo por el wizard
    * dejaba a todos los usuarios fuera (ADR-006).
    */
-  /** Dominio del correo de contacto del colegio (login heredado). */
-  dominioColegio: string | null;
   municipio: string;
   departamento: string;
   direccion?: string | undefined;
@@ -72,9 +70,8 @@ export interface FotoOnboarding {
     nombre: string;
     nombreOficial: string | null;
     nit: string | null;
-    codigoDane: string;
+    codigoDane: string | null;
     subdominio: string;
-    dominioEmail: string | null;
     municipio: string;
     departamento: string;
     direccion: string | null;
@@ -110,7 +107,6 @@ const COLEGIO_COLUMNS = {
   nit: colegios.nit,
   codigoDane: colegios.codigoDane,
   subdominio: colegios.subdominio,
-  dominioEmail: colegios.dominioEmail,
   municipio: colegios.municipio,
   departamento: colegios.departamento,
   direccion: colegios.direccion,
@@ -213,12 +209,10 @@ export class OnboardingRepository extends BaseRepository {
   }
 
   /** Claves públicas de caché del colegio (subdominio y dominio de login). */
-  async contextoPublico(
-    ctx: TenantContext,
-  ): Promise<{ subdominio: string; dominioEmail: string | null } | null> {
+  async contextoPublico(ctx: TenantContext): Promise<{ subdominio: string } | null> {
     return this.withTenant(ctx, async (tx) => {
       const [fila] = await tx
-        .select({ subdominio: colegios.subdominio, dominioEmail: colegios.dominioEmail })
+        .select({ subdominio: colegios.subdominio })
         .from(colegios)
         .where(eq(colegios.id, ctx.colegioId))
         .limit(1);
@@ -254,12 +248,6 @@ export class OnboardingRepository extends BaseRepository {
       // El dominio de login NUNCA se sobrescribe desde el wizard: solo se fija
       // la primera vez (colegio sin dominio), con el dominio del correo del
       // admin, para que su propio acceso siga funcionando.
-      if (datos.dominioColegio !== null) {
-        await tx
-          .update(colegios)
-          .set({ dominioEmail: datos.dominioColegio })
-          .where(and(eq(colegios.id, ctx.colegioId), isNull(colegios.dominioEmail)));
-      }
 
       const fechas = datos.periodos.map((p) => p.fechaInicio).sort((a, b) => a.localeCompare(b));
       const inicio = fechas[0] ?? `${datos.anioLectivo}-02-01`;
