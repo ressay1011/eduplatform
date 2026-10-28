@@ -8,6 +8,12 @@ on:
   # Cualquier PR, también los apilados sobre otra rama de trabajo.
   pull_request:
 
+# El GITHUB_TOKEN de este workflow solo necesita leer el código. Declararlo
+# explícitamente quita los permisos de escritura heredados del repositorio
+# (CodeQL: actions/missing-workflow-permissions).
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
