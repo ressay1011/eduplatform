@@ -10,22 +10,33 @@ import {
   SubdominioSchema,
   CambioPasswordSchema,
   PlataformaLoginRequestSchema,
+  sufijoDeUsuario,
 } from '../index';
 
 describe('LoginRequestSchema', () => {
   it('acepta un login válido y aplica rememberMe=false por defecto', () => {
-    const r = LoginRequestSchema.safeParse({ email: 'a@b.edu.co', password: 'segura123' });
+    const r = LoginRequestSchema.safeParse({
+      usuario: 'admin@juanaarias',
+      password: 'segura123',
+      subdominio: 'juanaarias',
+    });
     expect(r.success).toBe(true);
     if (r.success) expect(r.data.rememberMe).toBe(false);
   });
 
-  it('rechaza email inválido', () => {
-    const r = LoginRequestSchema.safeParse({ email: 'no-es-email', password: 'segura123' });
+  it('rechaza un nombre de usuario inválido', () => {
+    const r = LoginRequestSchema.safeParse({ usuario: 'ab', password: 'segura123' });
     expect(r.success).toBe(false);
   });
 
+  it('normaliza el usuario a minúsculas y recorta espacios', () => {
+    const r = LoginRequestSchema.safeParse({ usuario: '  Admin@Juana  ', password: 'segura123' });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.usuario).toBe('admin@juana');
+  });
+
   it('rechaza contraseña de menos de 8 caracteres', () => {
-    const r = LoginRequestSchema.safeParse({ email: 'a@b.edu.co', password: 'corta' });
+    const r = LoginRequestSchema.safeParse({ usuario: 'admin@juana', password: 'corta' });
     expect(r.success).toBe(false);
   });
 });
@@ -85,5 +96,24 @@ describe('PlataformaLoginRequestSchema', () => {
     [{ email: 'a@b.co', password: '' }, 'password vacía'],
   ])('rechaza %j (%s)', (payload) => {
     expect(PlataformaLoginRequestSchema.safeParse(payload).success).toBe(false);
+  });
+});
+
+describe('sufijoDeUsuario', () => {
+  it('devuelve el colegio de un usuario sin TLD', () => {
+    expect(sufijoDeUsuario('admin@juanaarias')).toBe('juanaarias');
+    expect(sufijoDeUsuario('  Rector.Garcia@Colegio-Norte  ')).toBe('colegio-norte');
+  });
+
+  it('ignora correos reales (el sufijo lleva puntos)', () => {
+    expect(sufijoDeUsuario('admin@colegio.edu.co')).toBeNull();
+    expect(sufijoDeUsuario('alguien@gmail.com')).toBeNull();
+  });
+
+  it('devuelve null sin @ o con sufijo inválido', () => {
+    expect(sufijoDeUsuario('rector.garcia')).toBeNull();
+    expect(sufijoDeUsuario('@colegio')).toBeNull();
+    expect(sufijoDeUsuario('admin@')).toBeNull();
+    expect(sufijoDeUsuario('admin@-mal-')).toBeNull();
   });
 });

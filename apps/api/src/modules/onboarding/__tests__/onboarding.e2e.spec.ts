@@ -50,9 +50,9 @@ describe('Onboarding (e2e)', () => {
   let staffEmail = '';
   let sedeId = '';
 
-  async function login(email: string) {
+  async function login(usuario: string) {
     const agente = request.agent(app.getHttpServer());
-    await agente.post('/api/auth/login').send({ email, password: PASSWORD }).expect(200);
+    await agente.post('/api/auth/login').send({ usuario, password: PASSWORD }).expect(200);
     return agente;
   }
 
@@ -91,7 +91,7 @@ describe('Onboarding (e2e)', () => {
         .values([
           {
             colegioId,
-            email: adminEmail,
+            usuario: adminEmail,
             passwordHash: hash,
             nombres: 'Admin',
             apellidos: 'Onboarding',
@@ -102,7 +102,7 @@ describe('Onboarding (e2e)', () => {
           },
           {
             colegioId,
-            email: staffEmail,
+            usuario: staffEmail,
             passwordHash: hash,
             nombres: 'Staff',
             apellidos: 'Onboarding',
@@ -111,9 +111,9 @@ describe('Onboarding (e2e)', () => {
             debeCambiarPassword: false,
           },
         ])
-        .returning({ id: usuarios.id, email: usuarios.email });
+        .returning({ id: usuarios.id, usuario: usuarios.usuario });
 
-      const staff = creados.find((u) => u.email === staffEmail);
+      const staff = creados.find((u) => u.usuario === staffEmail);
       const [permiso] = await tx
         .select({ id: permisos.id })
         .from(permisos)
@@ -164,6 +164,8 @@ describe('Onboarding (e2e)', () => {
       .patch('/api/onboarding/colegio')
       .send({
         nombre: 'I.E.T.D. Onboarding',
+        // Nombre completo para certificados y actas: se guarda aparte del corto.
+        nombreOficial: 'INSTITUCIÓN EDUCATIVA TÉCNICA DEPARTAMENTAL ONBOARDING',
         nit: `9${sufijo}-1`,
         codigoDane,
         subdominio,
@@ -197,6 +199,11 @@ describe('Onboarding (e2e)', () => {
     expect(body.data.paso).toBeGreaterThanOrEqual(2);
     expect(body.data.anioLectivo?.anio).toBe(2026);
     expect(body.data.periodos).toHaveLength(2);
+    // El nombre corto y el oficial conviven: uno para la UI, otro para documentos.
+    expect(body.data.colegio.nombre).toBe('I.E.T.D. Onboarding');
+    expect(body.data.colegio.nombreOficial).toBe(
+      'INSTITUCIÓN EDUCATIVA TÉCNICA DEPARTAMENTAL ONBOARDING',
+    );
     // El dominio con el que entran los usuarios no cambia por el wizard.
     expect(body.data.colegio.dominioEmail).toBe(dominio);
   });

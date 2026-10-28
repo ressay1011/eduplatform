@@ -1,10 +1,11 @@
 name: CI
 
-# Gate obligatorio: corre en cada push a dev/main y en cada PR.
-# main está protegida: sin este workflow en verde no se puede fusionar.
+# Gate obligatorio: corre en cada PR (donde se revisa) y en cada push a main
+# (rama protegida). Los merges a dev NO lo vuelven a ejecutar: ese mismo commit
+# ya pasó el CI en su PR y repetirlo costaba una corrida completa por merge.
 on:
   push:
-    branches: [dev, main]
+    branches: [main]
   # Cualquier PR, también los apilados sobre otra rama de trabajo.
   pull_request:
 
@@ -19,10 +20,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Un solo job para todo lo que necesita Postgres, dependencias y build: así el
+  # arranque, el esquema y `pnpm build` se hacen UNA vez. Antes el humo E2E
+  # vivía en un job aparte que repetía checkout, install, Postgres, esquema y
+  # build (~150 s de cómputo por corrida) para ejecutar 9 s de tests.
   verificar:
     name: verificar
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
 
     services:
       postgres:
@@ -47,6 +52,11 @@ jobs:
       TOKEN_PEPPER: ci-pepper-0123456789abcdef0123456789abcdef
       NEXT_PUBLIC_API_URL: http://localhost:4000/api
       NODE_ENV: test
+      # El humo levanta API y web en localhost: el login necesita CORS y cookie.
+      CORS_ORIGINS: http://localhost:3000
+      COOKIE_SAMESITE: lax
+      E2E_ADMIN_USUARIO: admin@demo-dist-1
+      E2E_ADMIN_PASSWORD: Demo2026!
 
     steps:
       - name: Checkout
@@ -91,6 +101,7 @@ jobs:
         env:
           DATABASE_URL: ${{ env.MIGRATOR_URL }}
 
+      # Lo barato primero: un error de formato o de tipos no espera al build.
       - name: Formato
         run: pnpm format:check
 
@@ -113,7 +124,30 @@ jobs:
         env:
           NODE_ENV: production
 
-      - name: Guardar reportes (cobertura para Sonar)
+      # El login del humo usa la clave demo; hash barato (coste 4) porque es
+      # una base efímera de CI.
+      - name: Sembrar colegio demo
+        run: |
+          HASH=$(cd apps/api && node -e "require('bcrypt').hash(process.argv[1],4).then(h=>console.log(h))" "Demo2026!")
+          DEMO_HASH="$HASH" DATABASE_URL="$MIGRATOR_URL" node packages/database/scripts/seed-demo.mjs
+
+      # Sin caché, Chromium son ~130 MB en cada corrida.
+      - name: Caché de Chromium
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Instalar Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      # Si el humo falla, Playwright deja traza y captura en test-results.
+      - name: Humo E2E
+        run: pnpm e2e
+
+      # La cobertura alimenta a Sonar; test-results y playwright-report solo
+      # traen algo cuando el humo falla.
+      - name: Guardar reportes
         if: always()
         uses: actions/upload-artifact@v7
         with:
@@ -121,102 +155,9 @@ jobs:
           path: |
             **/coverage/**
             **/test-results/**
+            **/playwright-report/**
           if-no-files-found: warn
           retention-days: 7
-
-  # Humo E2E real: Postgres + API + web + Chromium. Todavia NO es obligatorio
-  # para fusionar: primero se comprueba que sea estable unas semanas.
-  e2e:
-    name: e2e
-    runs-on: ubuntu-latest
-    needs: verificar
-    timeout-minutes: 30
-
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: eduplatform
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres -d eduplatform"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-
-    env:
-      # Mismos roles que en local: el runtime va con app_user (sujeto a RLS) y
-      # el esquema lo crea app_migrator. Los tests e2e necesitan ambos.
-      DATABASE_URL: postgresql://app_user:app_user_dev@localhost:5432/eduplatform
-      MIGRATOR_URL: postgresql://app_migrator:app_migrator_dev@localhost:5432/eduplatform
-      TOKEN_PEPPER: ci-pepper-0123456789abcdef0123456789abcdef
-      NEXT_PUBLIC_API_URL: http://localhost:4000/api
-      NODE_ENV: test
-      CORS_ORIGINS: http://localhost:3000
-      COOKIE_SAMESITE: lax
-      E2E_ADMIN_EMAIL: admin@juanaarias.edu.co
-      E2E_ADMIN_PASSWORD: Demo2026!
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: pnpm 9.12
-        uses: pnpm/action-setup@v6
-        with:
-          version: 9.12.0
-
-      - name: Node 22
-        uses: actions/setup-node@v7
-        with:
-          node-version: '22'
-          cache: pnpm
-
-      - name: Instalar dependencias
-        run: pnpm install --frozen-lockfile --prod=false
-
-      - name: Crear roles de base de datos
-        run: PGPASSWORD=postgres psql -h localhost -U postgres -d eduplatform -v ON_ERROR_STOP=1 -f packages/database/sql/0000_roles.sql
-
-      - name: Compilar paquetes para el esquema
-        run: pnpm --filter @eduplatform/types run build
-
-      - name: Esquema (drizzle push como app_migrator)
-        run: pnpm --filter @eduplatform/database exec drizzle-kit push --force
-        env:
-          DATABASE_URL: ${{ env.MIGRATOR_URL }}
-
-      - name: Verificar que el esquema existe
-        run: |
-          TABLA=$(PGPASSWORD=postgres psql -h localhost -U postgres -d eduplatform -tAc "select to_regclass('public.sedes')")
-          echo "to_regclass(public.sedes) = $TABLA"
-          test "$TABLA" = "sedes" || { echo "::error::drizzle push no creo el esquema"; exit 1; }
-
-      - name: RLS + seed de permisos
-        run: pnpm --filter @eduplatform/database run db:rls
-        env:
-          DATABASE_URL: ${{ env.MIGRATOR_URL }}
-
-      # El login del humo usa la clave demo; hash barato (coste 4) porque es
-      # una base efimera de CI.
-      - name: Sembrar colegio demo
-        run: |
-          HASH=$(cd apps/api && node -e "require('bcrypt').hash(process.argv[1],4).then(h=>console.log(h))" "Demo2026!")
-          DEMO_HASH="$HASH" DATABASE_URL="$MIGRATOR_URL" node packages/database/scripts/seed-demo.mjs
-
-      - name: Build (API + web)
-        run: pnpm build
-        env:
-          NODE_ENV: production
-
-      - name: Instalar Chromium
-        run: pnpm exec playwright install --with-deps chromium
-
-      - name: Humo E2E
-        run: pnpm e2e
 
   # Sonar solo corre si el repositorio tiene configurado SONAR_ENABLED=true y
   # los secretos SONAR_TOKEN + SONAR_HOST_URL (requiere servidor propio o

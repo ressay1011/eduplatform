@@ -44,7 +44,7 @@ export interface CuentaEstudiante {
   usuarioId: string;
   nombres: string;
   apellidos: string;
-  email: string;
+  usuario: string;
   /** null si la cuenta existe pero aún no tiene ficha en `estudiantes`. */
   estudianteId: string | null;
   rolTipoPersona: string | null;
@@ -179,7 +179,7 @@ export class MatriculasRepository extends BaseRepository {
           usuarioId: usuarios.id,
           nombres: usuarios.nombres,
           apellidos: usuarios.apellidos,
-          email: usuarios.email,
+          usuario: usuarios.usuario,
           estudianteId: estudiantes.id,
           rolTipoPersona: roles.tipoPersona,
         })

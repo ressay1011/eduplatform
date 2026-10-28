@@ -25,6 +25,8 @@ import { BaseRepository } from '../../shared/base.repository';
 /** Datos del paso 1 ya validados. */
 export interface DatosColegio {
   nombre: string;
+  /** Nombre completo del MEN para documentos oficiales (vacío = usar `nombre`). */
+  nombreOficial?: string | undefined;
   nit?: string | undefined;
   codigoDane: string;
   subdominio: string;
@@ -34,7 +36,8 @@ export interface DatosColegio {
    * recién creado). El dominio es la llave del login y cambiarlo por el wizard
    * dejaba a todos los usuarios fuera (ADR-006).
    */
-  dominioAdmin: string | null;
+  /** Dominio del correo de contacto del colegio (login heredado). */
+  dominioColegio: string | null;
   municipio: string;
   departamento: string;
   direccion?: string | undefined;
@@ -67,6 +70,7 @@ export interface FotoOnboarding {
   colegio: {
     id: string;
     nombre: string;
+    nombreOficial: string | null;
     nit: string | null;
     codigoDane: string;
     subdominio: string;
@@ -102,6 +106,7 @@ export interface FotoOnboarding {
 const COLEGIO_COLUMNS = {
   id: colegios.id,
   nombre: colegios.nombre,
+  nombreOficial: colegios.nombreOficial,
   nit: colegios.nit,
   codigoDane: colegios.codigoDane,
   subdominio: colegios.subdominio,
@@ -228,6 +233,10 @@ export class OnboardingRepository extends BaseRepository {
         .update(colegios)
         .set({
           nombre: datos.nombre,
+          nombreOficial:
+            datos.nombreOficial === undefined || datos.nombreOficial === ''
+              ? null
+              : datos.nombreOficial,
           nit: datos.nit ?? null,
           codigoDane: datos.codigoDane,
           subdominio: datos.subdominio,
@@ -245,10 +254,10 @@ export class OnboardingRepository extends BaseRepository {
       // El dominio de login NUNCA se sobrescribe desde el wizard: solo se fija
       // la primera vez (colegio sin dominio), con el dominio del correo del
       // admin, para que su propio acceso siga funcionando.
-      if (datos.dominioAdmin !== null) {
+      if (datos.dominioColegio !== null) {
         await tx
           .update(colegios)
-          .set({ dominioEmail: datos.dominioAdmin })
+          .set({ dominioEmail: datos.dominioColegio })
           .where(and(eq(colegios.id, ctx.colegioId), isNull(colegios.dominioEmail)));
       }
 

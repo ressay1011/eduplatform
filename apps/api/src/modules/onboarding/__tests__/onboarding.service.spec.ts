@@ -18,7 +18,6 @@ import type { AuditService } from '../../../shared/audit.service';
 const ACTOR: ActorOnboarding = {
   colegioId: 'colegio-1',
   usuarioId: 'usuario-1',
-  email: 'admin@juanaarias.edu.co',
   esAdmin: true,
 };
 
@@ -43,6 +42,7 @@ function foto(subdominio: string): FotoOnboarding {
     colegio: {
       id: 'colegio-1',
       nombre: 'I.E.T.D. Juana Arias de Benavides',
+      nombreOficial: 'INSTITUCIÓN EDUCATIVA TÉCNICA DEPARTAMENTAL JUANA ARIAS DE BENAVIDES',
       nit: null,
       codigoDane: '147555000295',
       subdominio,
@@ -102,7 +102,7 @@ describe('OnboardingService · paso 1', () => {
     });
   });
 
-  it('no manda dominioEmail al repositorio y usa el del correo del admin', async () => {
+  it('no manda dominioEmail al repositorio y usa el del correo de contacto del colegio', async () => {
     const { servicio, repo } = montar();
     repo.contextoPublico.mockResolvedValue({ subdominio: 'juana-arias', dominioEmail: null });
 
@@ -110,7 +110,18 @@ describe('OnboardingService · paso 1', () => {
 
     const enviado = repo.guardarColegio.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(enviado).not.toHaveProperty('dominioEmail');
-    expect(enviado['dominioAdmin']).toBe('juanaarias.edu.co');
+    expect(enviado['dominioColegio']).toBe('juanaarias.edu.co');
+  });
+
+  it('pasa el nombre oficial al repositorio sin tocarlo', async () => {
+    const { servicio, repo } = montar();
+    repo.contextoPublico.mockResolvedValue({ subdominio: 'juana-arias', dominioEmail: null });
+    const nombreOficial = 'INSTITUCIÓN EDUCATIVA TÉCNICA DEPARTAMENTAL JUANA ARIAS DE BENAVIDES';
+
+    await servicio.guardarColegio(ACTOR, { ...DATOS, nombreOficial });
+
+    const enviado = repo.guardarColegio.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(enviado['nombreOficial']).toBe(nombreOficial);
   });
 
   it('traduce el choque de unique a 409 sin mencionar el dominio como editable', async () => {

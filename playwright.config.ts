@@ -10,7 +10,8 @@
  *   pnpm e2e
  *
  * Playwright levanta API (4000) y web (3000) si no están ya arriba
- * (`reuseExistingServer`). En CI el job `e2e` prepara Postgres y la siembra.
+ * (`reuseExistingServer`). En CI el job `verificar` prepara Postgres, la
+ * siembra y el build antes de correr el humo.
  */
 import { defineConfig, devices } from '@playwright/test';
 

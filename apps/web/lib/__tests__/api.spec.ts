@@ -53,17 +53,17 @@ describe('lib/api', () => {
         error: { code: 'INVALID_CREDENTIALS', message: 'Correo o contraseña incorrectos' },
       }),
     );
-    const fallo = await iniciarSesion({ email: 'a@b.co', password: 'x' }).catch(
+    const fallo = await iniciarSesion({ usuario: 'a@b.co', password: 'x' }).catch(
       (err: unknown) => err,
     );
     expect(fallo).toBeInstanceOf(ApiError);
     expect(fallo).toMatchObject({ code: 'INVALID_CREDENTIALS', status: 401 });
   });
 
-  it('el login unificado no envía header de subdominio (el colegio sale del correo)', async () => {
+  it('el login sin subdominio no envía header (el colegio sale del dominio heredado)', async () => {
     fetchMock.mockResolvedValue(respuesta(200, { success: true, data: { sessionToken: 't' } }));
     await iniciarSesion({
-      email: 'a@colegio-sur.edu.co',
+      usuario: 'a@colegio-sur.edu.co',
       password: 'Clave1234',
       rememberMe: false,
     });
@@ -71,7 +71,7 @@ describe('lib/api', () => {
       expect.stringContaining('/auth/login'),
       expect.objectContaining({
         body: JSON.stringify({
-          email: 'a@colegio-sur.edu.co',
+          usuario: 'a@colegio-sur.edu.co',
           password: 'Clave1234',
           rememberMe: false,
         }),

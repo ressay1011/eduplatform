@@ -3,8 +3,10 @@
 /**
  * LoginFlow — ÚNICO punto de entrada para todos los colegios.
  *
- * Paso 1: el correo. La API deduce el colegio por el dominio (lo que va
- * después de la @) y devuelve su branding. El resultado se guarda en la
+ * Paso 1: el correo. Si la URL trae el colegio en el subdominio
+ * (`juanaarias.<dominio>` o `?colegio=`), el branding ya está resuelto al
+ * cargar y el correo solo identifica al usuario; si no, la API deduce el
+ * colegio por el dominio (lo que va después de la @). El resultado se guarda en la
  * caché de TanStack Query: si el colegio cambia su color, `invalidateQueries`
  * lo refresca de inmediato (sin esperar TTL ni ventanas de 60s).
  * Paso 2: contraseña. La API emite la cookie httpOnly con la sesión.
@@ -12,7 +14,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
-import { dominioDeEmail } from '@eduplatform/types';
+import { dominioDeEmail, sufijoDeUsuario } from '@eduplatform/types';
 import { BrandHeader } from '@/components/BrandHeader';
 import { ErrorBanner } from '@/components/ErrorBanner';
 import { M3Button } from '@/components/M3Button';
@@ -21,14 +23,25 @@ import { PaperBg } from '@/components/PaperBg';
 import { StepDots } from '@/components/StepDots';
 import { TextField } from '@/components/TextField';
 import { SESION_KEY } from '@/hooks/useSesion';
-import { ApiError, getContextoPorDominio, iniciarSesion, type ContextoConSede } from '@/lib/api';
+import {
+  ApiError,
+  getContextoColegio,
+  getContextoPorDominio,
+  iniciarSesion,
+  type ContextoConSede,
+} from '@/lib/api';
 import { aplicarBranding } from '@/lib/branding';
-import { inicialesDe } from '@/lib/subdominio';
-import { esEmailValido } from '@/lib/validacion';
+import { inicialesDe, subdominioActual } from '@/lib/subdominio';
+import { esUsuarioValido } from '@/lib/validacion';
 
 /** Clave de caché del contexto: por dominio, la llave del login unificado. */
 function claveContexto(dominio: string) {
   return ['contexto-colegio', dominio] as const;
+}
+
+/** Misma caché, separada por la vía del subdominio. */
+function claveSubdominio(subdominio: string) {
+  return ['contexto-colegio', `sub:${subdominio}`] as const;
 }
 
 export function LoginFlow() {
@@ -36,13 +49,15 @@ export function LoginFlow() {
   const queryClient = useQueryClient();
 
   const [paso, setPaso] = useState<1 | 2>(1);
-  const [email, setEmail] = useState('');
+  const [usuario, setUsuario] = useState('');
   const [password, setPassword] = useState('');
   const [colegio, setColegio] = useState<ContextoConSede | null>(null);
+  /** Subdominio del host: si existe, el colegio ya está resuelto antes del correo. */
+  const [subdominio, setSubdominio] = useState<string | null>(null);
   const [recordarme, setRecordarme] = useState(false);
   const [mostrarPassword, setMostrarPassword] = useState(false);
 
-  const [errorEmail, setErrorEmail] = useState<string | null>(null);
+  const [errorUsuario, setErrorUsuario] = useState<string | null>(null);
   const [errorPassword, setErrorPassword] = useState<string | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
   /** Aviso informativo de recuperación (no es un error de login). */
@@ -56,49 +71,101 @@ export function LoginFlow() {
   // pantalla anuncian el campo). `autoFocus` de React no siempre se aplica
   // tras la hidratación; el efecto es determinista.
   useEffect(() => {
-    document.getElementById('email')?.focus();
+    document.getElementById('usuario')?.focus();
   }, []);
 
+  // Enlace por colegio (`juanaarias.<dominio>` o `?colegio=`): el tenant se
+  // resuelve por el host y el correo deja de tener que ser del dominio del
+  // colegio. Si el subdominio no existe, se sigue con el login de siempre.
+  useEffect(() => {
+    const sub = subdominioActual();
+    if (sub === null) return;
+    setSubdominio(sub);
+
+    let vigente = true;
+    void queryClient
+      .fetchQuery({
+        queryKey: claveSubdominio(sub),
+        queryFn: () => getContextoColegio(sub),
+        staleTime: 5 * 60_000,
+        retry: false,
+      })
+      .then((contexto) => {
+        if (!vigente) return;
+        aplicarBranding(contexto.primaryColor);
+        setColegio(contexto);
+      })
+      .catch(() => {
+        if (vigente) {
+          setBanner('No encontramos un colegio en esta dirección. Revisa el enlace.');
+        }
+      });
+    return () => {
+      vigente = false;
+    };
+  }, [queryClient]);
+
   /**
-   * Paso 1: valida el correo y resuelve el colegio por su dominio.
-   * `fetchQuery` deduplica y respeta la caché (5 min); al invalidarla, la
-   * próxima identificación vuelve a consultar la API.
+   * Paso 1: valida el nombre de usuario. Con el colegio ya resuelto por el
+   * subdominio solo pasa al paso 2; sin subdominio intenta la vía heredada
+   * (el colegio se deduce del dominio del identificador).
    */
   const onEnviarPaso1 = useCallback(
     async (e: FormEvent) => {
       e.preventDefault();
-      const valor = email.trim().toLowerCase();
+      const valor = usuario.trim().toLowerCase();
       if (valor === '') {
-        setErrorEmail('Ingresa tu correo institucional.');
+        setErrorUsuario('Ingresa tu nombre de usuario.');
         return;
       }
-      if (!esEmailValido(valor)) {
-        setErrorEmail('Formato de correo inválido.');
-        return;
-      }
-      const dominio = dominioDeEmail(valor);
-      if (dominio === null) {
-        setErrorEmail('Formato de correo inválido.');
+      if (!esUsuarioValido(valor)) {
+        setErrorUsuario('Solo minúsculas, números, puntos, guiones y @ (3–64 caracteres).');
         return;
       }
 
-      setErrorEmail(null);
+      setErrorUsuario(null);
       setBanner(null);
+
+      // Con el colegio resuelto por el subdominio no hay nada que buscar.
+      if (subdominio !== null && colegio !== null) {
+        setPaso(2);
+        return;
+      }
+
+      // Sin subdominio en la URL el colegio sale del propio usuario:
+      // `admin@juanaarias` → colegio `juanaarias` (no hace falta que sea un
+      // correo real). Si el identificador es un correo de verdad
+      // (`admin@colegio.edu.co`) se usa el dominio heredado.
+      const sufijo = sufijoDeUsuario(valor);
+      const dominio = sufijo === null ? dominioDeEmail(valor) : null;
+      if (sufijo === null && dominio === null) {
+        setErrorUsuario('Escribe tu usuario con el colegio: por ejemplo admin@juanaarias.');
+        return;
+      }
+
       setIdentificando(true);
       try {
-        const contexto = await queryClient.fetchQuery({
-          queryKey: claveContexto(dominio),
-          queryFn: () => getContextoPorDominio(dominio),
-          staleTime: 5 * 60_000,
-          // Un 404 (dominio sin colegio) no se reintenta: no es transitorio.
-          retry: false,
-        });
+        const contexto =
+          sufijo !== null
+            ? await queryClient.fetchQuery({
+                queryKey: claveSubdominio(sufijo),
+                queryFn: () => getContextoColegio(sufijo),
+                staleTime: 5 * 60_000,
+                retry: false,
+              })
+            : await queryClient.fetchQuery({
+                queryKey: claveContexto(dominio ?? ''),
+                queryFn: () => getContextoPorDominio(dominio ?? ''),
+                staleTime: 5 * 60_000,
+                // Un 404 (dominio sin colegio) no se reintenta: no es transitorio.
+                retry: false,
+              });
         aplicarBranding(contexto.primaryColor);
         setColegio(contexto);
         setPaso(2);
       } catch (err) {
         if (err instanceof ApiError && err.status === 404) {
-          setErrorEmail('Este correo no pertenece a ningún colegio registrado.');
+          setErrorUsuario('No encontramos ningún colegio con ese usuario.');
         } else if (err instanceof ApiError) {
           setBanner(err.message);
         } else {
@@ -108,7 +175,7 @@ export function LoginFlow() {
         setIdentificando(false);
       }
     },
-    [email, queryClient],
+    [usuario, queryClient, subdominio, colegio],
   );
 
   const onEnviarPaso2 = useCallback(
@@ -129,9 +196,10 @@ export function LoginFlow() {
       setAvisoRecuperacion(false);
       try {
         const respuesta = await iniciarSesion({
-          email: email.trim().toLowerCase(),
+          usuario: usuario.trim().toLowerCase(),
           password,
           rememberMe: recordarme,
+          ...(subdominio !== null ? { subdominio } : {}),
         });
         // La sesión cambió: /me debe leerse fresco en el dashboard.
         await queryClient.invalidateQueries({ queryKey: SESION_KEY });
@@ -153,10 +221,14 @@ export function LoginFlow() {
         setEnviando(false);
       }
     },
-    [password, email, recordarme, router, queryClient],
+    [password, usuario, recordarme, router, queryClient, subdominio],
   );
 
-  const iniciales = colegio !== null ? inicialesDe(colegio.nombre) : 'EP';
+  // Un colegio recién entregado aún no tiene nombre: hasta que lo tenga, el
+  // login se presenta como EduPlatform para no dejar la cabecera vacía.
+  const nombreColegio = colegio?.nombre.trim() ?? '';
+  const nombreVisible = nombreColegio === '' ? 'EduPlatform' : nombreColegio;
+  const iniciales = nombreColegio === '' ? 'EP' : inicialesDe(nombreColegio);
 
   return (
     <>
@@ -201,7 +273,7 @@ export function LoginFlow() {
           ) : (
             <>
               <BrandHeader
-                nombre={colegio !== null ? colegio.nombre : 'EduPlatform'}
+                nombre={nombreVisible}
                 codigoDane={colegio !== null ? colegio.codigoDane : null}
                 iniciales={iniciales}
               />
@@ -214,7 +286,7 @@ export function LoginFlow() {
                     Iniciar sesión
                   </h2>
                   <p className="m3-body-medium step-subtitulo">
-                    Ingresa con tu correo institucional.
+                    Ingresa con el nombre de usuario que te entregó tu colegio.
                   </p>
 
                   {banner !== null ? (
@@ -223,16 +295,16 @@ export function LoginFlow() {
 
                   <form onSubmit={onEnviarPaso1} className="login-form" noValidate>
                     <TextField
-                      id="email"
-                      label="Correo electrónico"
-                      tipo="email"
-                      value={email}
+                      id="usuario"
+                      label="Nombre de usuario"
+                      value={usuario}
                       onChange={(v) => {
-                        setEmail(v);
-                        if (errorEmail !== null) setErrorEmail(null);
+                        setUsuario(v);
+                        if (errorUsuario !== null) setErrorUsuario(null);
                       }}
                       autoComplete="username"
-                      error={errorEmail}
+                      ayuda="Es tu usuario con el colegio: admin@juanaarias"
+                      error={errorUsuario}
                       autoFocus
                     />
                     <M3Button
@@ -263,14 +335,14 @@ export function LoginFlow() {
                     icono="arrow_back"
                     type="button"
                   >
-                    Cambiar correo
+                    Cambiar usuario
                   </M3Button>
                   <h2 id="paso2-titulo" className="m3-headline-small step-titulo">
                     Tu contraseña
                   </h2>
                   <p className="m3-body-medium step-subtitulo">
                     Estás entrando como{' '}
-                    <strong className="strong-on-surface">{email.trim()}</strong>
+                    <strong className="strong-on-surface">{usuario.trim()}</strong>
                   </p>
 
                   {banner !== null ? (
@@ -295,10 +367,10 @@ export function LoginFlow() {
                      * lectura (el valor lo controla el paso 1).
                      */}
                     <input
-                      type="email"
+                      type="text"
                       name="username"
                       autoComplete="username"
-                      value={email.trim().toLowerCase()}
+                      value={usuario.trim().toLowerCase()}
                       readOnly
                       hidden
                       tabIndex={-1}

@@ -14,46 +14,46 @@
   --paper-trazo: 0.18;
 
   /* M3 color roles — Foundation «M3 · Roles (Claro)» (00 · Foundation) */
-  --md-sys-color-primary:                          #0856cf;
-  --md-sys-color-on-primary:                       #ffffff;
-  --md-sys-color-primary-container:                #dae2ff;
-  --md-sys-color-on-primary-container:             #001847;
-  --md-sys-color-secondary:                        #585e71;
-  --md-sys-color-on-secondary:                     #ffffff;
-  --md-sys-color-secondary-container:              #dce2f9;
-  --md-sys-color-on-secondary-container:           #151b2c;
-  --md-sys-color-tertiary:                         #735471;
-  --md-sys-color-on-tertiary:                      #ffffff;
-  --md-sys-color-tertiary-container:               #fed7f9;
-  --md-sys-color-on-tertiary-container:            #2b122b;
-  --md-sys-color-surface:                          #fefbff;
-  --md-sys-color-background:                       #fefbff;
-  --md-sys-color-on-background:                    #1b1b1f;
-  --md-sys-color-surface-container-lowest:         #ffffff;
-  --md-sys-color-surface-container-low:            #f5f3f7;
-  --md-sys-color-surface-container:                #efedf1;
-  --md-sys-color-surface-container-high:           #e9e7ec;
-  --md-sys-color-surface-container-highest:        #e4e2e6;
-  --md-sys-color-surface-bright:                   #fbf8fd;
-  --md-sys-color-surface-dim:                      #dbd9dd;
-  --md-sys-color-surface-variant:                  #e1e2ec;
-  --md-sys-color-on-surface:                       #1b1b1f;
-  --md-sys-color-on-surface-variant:               #45464f;
-  --md-sys-color-outline:                          #757780;
-  --md-sys-color-outline-variant:                  #c5c6d0;
-  --md-sys-color-error:                            #ba1a1a;
-  --md-sys-color-on-error:                         #ffffff;
-  --md-sys-color-error-container:                  #ffdad6;
-  --md-sys-color-on-error-container:               #410002;
-  --md-sys-color-success:                          #1f8739;
-  --md-sys-color-on-success:                       #ffffff;
-  --md-sys-color-success-container:                #c8e6c9;
-  --md-sys-color-on-success-container:             #002106;
-  --md-sys-color-inverse-surface:                  #303034;
-  --md-sys-color-inverse-on-surface:               #f2f0f4;
-  --md-sys-color-inverse-primary:                  #b2c5ff;
-  --md-sys-color-scrim:                            #000000;
-  --md-sys-color-shadow:                           #000000;
+  --md-sys-color-primary: #0856cf;
+  --md-sys-color-on-primary: #ffffff;
+  --md-sys-color-primary-container: #dae2ff;
+  --md-sys-color-on-primary-container: #001847;
+  --md-sys-color-secondary: #585e71;
+  --md-sys-color-on-secondary: #ffffff;
+  --md-sys-color-secondary-container: #dce2f9;
+  --md-sys-color-on-secondary-container: #151b2c;
+  --md-sys-color-tertiary: #735471;
+  --md-sys-color-on-tertiary: #ffffff;
+  --md-sys-color-tertiary-container: #fed7f9;
+  --md-sys-color-on-tertiary-container: #2b122b;
+  --md-sys-color-surface: #fefbff;
+  --md-sys-color-background: #fefbff;
+  --md-sys-color-on-background: #1b1b1f;
+  --md-sys-color-surface-container-lowest: #ffffff;
+  --md-sys-color-surface-container-low: #f5f3f7;
+  --md-sys-color-surface-container: #efedf1;
+  --md-sys-color-surface-container-high: #e9e7ec;
+  --md-sys-color-surface-container-highest: #e4e2e6;
+  --md-sys-color-surface-bright: #fbf8fd;
+  --md-sys-color-surface-dim: #dbd9dd;
+  --md-sys-color-surface-variant: #e1e2ec;
+  --md-sys-color-on-surface: #1b1b1f;
+  --md-sys-color-on-surface-variant: #45464f;
+  --md-sys-color-outline: #757780;
+  --md-sys-color-outline-variant: #c5c6d0;
+  --md-sys-color-error: #ba1a1a;
+  --md-sys-color-on-error: #ffffff;
+  --md-sys-color-error-container: #ffdad6;
+  --md-sys-color-on-error-container: #410002;
+  --md-sys-color-success: #1f8739;
+  --md-sys-color-on-success: #ffffff;
+  --md-sys-color-success-container: #c8e6c9;
+  --md-sys-color-on-success-container: #002106;
+  --md-sys-color-inverse-surface: #303034;
+  --md-sys-color-inverse-on-surface: #f2f0f4;
+  --md-sys-color-inverse-primary: #b2c5ff;
+  --md-sys-color-scrim: #000000;
+  --md-sys-color-shadow: #000000;
   /* Superficie de tarjetas y rail: en claro el Figma usa surface-container-low
      (#f5f3f7); en oscuro ese rol coincide con surface (#1b1b1f) y la tarjeta
      desaparecería, así que se sube un nivel. */
@@ -899,46 +899,46 @@ body {
     --edu-borde-control: var(--md-sys-color-outline);
     --edu-borde-tarjeta: var(--md-sys-color-outline-variant);
 
-    --md-sys-color-primary:                          #b2c5ff;
-    --md-sys-color-on-primary:                       #002b72;
-    --md-sys-color-primary-container:                #0040a1;
-    --md-sys-color-on-primary-container:             #dae2ff;
-    --md-sys-color-secondary:                        #c0c6dd;
-    --md-sys-color-on-secondary:                     #2a3042;
-    --md-sys-color-secondary-container:              #404659;
-    --md-sys-color-on-secondary-container:           #dce2f9;
-    --md-sys-color-tertiary:                         #e1bbdd;
-    --md-sys-color-on-tertiary:                      #412741;
-    --md-sys-color-tertiary-container:               #5a3d59;
-    --md-sys-color-on-tertiary-container:            #fed7f9;
-    --md-sys-color-surface:                          #1b1b1f;
-    --md-sys-color-background:                       #1b1b1f;
-    --md-sys-color-on-background:                    #e4e2e6;
-    --md-sys-color-surface-container-lowest:         #0d0e11;
-    --md-sys-color-surface-container-low:            #1b1b1f;
-    --md-sys-color-surface-container:                #1f1f23;
-    --md-sys-color-surface-container-high:           #292a2d;
-    --md-sys-color-surface-container-highest:        #343438;
-    --md-sys-color-surface-bright:                   #39393c;
-    --md-sys-color-surface-dim:                      #131316;
-    --md-sys-color-surface-variant:                  #45464f;
-    --md-sys-color-on-surface:                       #e4e2e6;
-    --md-sys-color-on-surface-variant:               #c5c6d0;
-    --md-sys-color-outline:                          #8f909a;
-    --md-sys-color-outline-variant:                  #45464f;
-    --md-sys-color-error:                            #ffb4ab;
-    --md-sys-color-on-error:                         #690005;
-    --md-sys-color-error-container:                  #93000a;
-    --md-sys-color-on-error-container:               #ffb4ab;
-    --md-sys-color-success:                          #9bd49c;
-    --md-sys-color-on-success:                       #003915;
-    --md-sys-color-success-container:                #1c5b2b;
-    --md-sys-color-on-success-container:             #003915;
-    --md-sys-color-inverse-surface:                  #e4e2e6;
-    --md-sys-color-inverse-on-surface:               #303034;
-    --md-sys-color-inverse-primary:                  #0856cf;
-    --md-sys-color-scrim:                            #000000;
-    --md-sys-color-shadow:                           #000000;
+    --md-sys-color-primary: #b2c5ff;
+    --md-sys-color-on-primary: #002b72;
+    --md-sys-color-primary-container: #0040a1;
+    --md-sys-color-on-primary-container: #dae2ff;
+    --md-sys-color-secondary: #c0c6dd;
+    --md-sys-color-on-secondary: #2a3042;
+    --md-sys-color-secondary-container: #404659;
+    --md-sys-color-on-secondary-container: #dce2f9;
+    --md-sys-color-tertiary: #e1bbdd;
+    --md-sys-color-on-tertiary: #412741;
+    --md-sys-color-tertiary-container: #5a3d59;
+    --md-sys-color-on-tertiary-container: #fed7f9;
+    --md-sys-color-surface: #1b1b1f;
+    --md-sys-color-background: #1b1b1f;
+    --md-sys-color-on-background: #e4e2e6;
+    --md-sys-color-surface-container-lowest: #0d0e11;
+    --md-sys-color-surface-container-low: #1b1b1f;
+    --md-sys-color-surface-container: #1f1f23;
+    --md-sys-color-surface-container-high: #292a2d;
+    --md-sys-color-surface-container-highest: #343438;
+    --md-sys-color-surface-bright: #39393c;
+    --md-sys-color-surface-dim: #131316;
+    --md-sys-color-surface-variant: #45464f;
+    --md-sys-color-on-surface: #e4e2e6;
+    --md-sys-color-on-surface-variant: #c5c6d0;
+    --md-sys-color-outline: #8f909a;
+    --md-sys-color-outline-variant: #45464f;
+    --md-sys-color-error: #ffb4ab;
+    --md-sys-color-on-error: #690005;
+    --md-sys-color-error-container: #93000a;
+    --md-sys-color-on-error-container: #ffb4ab;
+    --md-sys-color-success: #9bd49c;
+    --md-sys-color-on-success: #003915;
+    --md-sys-color-success-container: #1c5b2b;
+    --md-sys-color-on-success-container: #003915;
+    --md-sys-color-inverse-surface: #e4e2e6;
+    --md-sys-color-inverse-on-surface: #303034;
+    --md-sys-color-inverse-primary: #0856cf;
+    --md-sys-color-scrim: #000000;
+    --md-sys-color-shadow: #000000;
   }
 }
 /* === Páginas de gestión (Usuarios) === */
@@ -1587,8 +1587,8 @@ body {
     transform: translateX(-105%);
     transition: transform 180ms ease;
     box-shadow:
-    0 0 32px rgba(0, 0, 0, 0.22),
-    0 0 0 1px var(--edu-borde-tarjeta);
+      0 0 32px rgba(0, 0, 0, 0.22),
+      0 0 0 1px var(--edu-borde-tarjeta);
   }
   .dash-sidebar.abierta {
     transform: translateX(0);
@@ -2722,26 +2722,66 @@ body {
 .onb-grid--angosto {
   grid-template-columns: 160px;
 }
-/* Paso 1: código DANE con el botón «Buscar» a la derecha del campo. */
-.onb-dane {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: start;
+/* Campos de nombre largo: ocupan las dos columnas del formulario. */
+.onb-campo-ancho {
+  grid-column: 1 / -1;
 }
-.onb-dane .m3-btn {
-  /* El input arranca 8 px dentro de su contenedor: 16 px centra el botón de
-     40 px sobre el campo de 56 px (medido en el navegador). */
-  margin-top: 16px;
+/* Paso 1: el formulario aparece cuando el código DANE se resuelve. */
+.onb-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
 }
-@media (max-width: 640px) {
-  .onb-dane {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .onb-dane .m3-btn {
-    margin-top: 0;
-    width: 100%;
-  }
+/* Calendario y año lectivo en la misma fila: chips a la izquierda, año a la
+   derecha; los dos bloques miden 56 px de alto y quedan alineados por abajo. */
+.onb-fila-calendario {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+}
+.onb-fila-calendario .onb-anio {
+  width: 160px;
+}
+.onb-etiqueta {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--md-sys-color-on-surface-variant);
+  font: 500 12px/16px var(--md-ref-typeface-plain);
+}
+/* Error de un grupo de campos (calendario, períodos) que no es un TextField. */
+.onb-error {
+  margin: 6px 0 0;
+  color: var(--md-sys-color-error);
+  font: 400 12px/16px var(--md-ref-typeface-plain);
+}
+/* Select con la piel del TextField M3 (mismo alto, borde y label flotante). */
+.m3-textfield .m3-tf--select {
+  padding: 0 44px 0 16px;
+  appearance: none;
+  cursor: pointer;
+}
+.m3-textfield .m3-tf-label--flotante {
+  top: 8px;
+  transform: translateY(-50%);
+  font: 500 12px/16px var(--md-ref-typeface-plain);
+}
+.m3-textfield .m3-tf--select:focus + .m3-tf-label {
+  color: var(--md-sys-color-primary);
+}
+.m3-tf-caret {
+  position: absolute;
+  top: 36px;
+  right: 8px;
+  transform: translateY(-50%);
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 24px;
+  pointer-events: none;
+}
+.m3-textfield.error .m3-tf-caret {
+  color: var(--md-sys-color-error);
 }
 .onb-opciones {
   display: flex;
@@ -2931,7 +2971,8 @@ body {
 }
 .onb-tabla th {
   padding: 10px 12px;
-  border-bottom: 1px solid var(--md-sys-color-outline-variant, var(--md-sys-color-surface-container-highest));
+  border-bottom: 1px solid
+    var(--md-sys-color-outline-variant, var(--md-sys-color-surface-container-highest));
   color: var(--md-sys-color-on-surface-variant);
   text-align: left;
   font: 600 11px/16px var(--md-ref-typeface-plain);

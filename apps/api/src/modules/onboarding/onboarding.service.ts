@@ -25,8 +25,6 @@ import { OnboardingRepository, type FotoOnboarding } from './onboarding.reposito
 export interface ActorOnboarding {
   colegioId: string;
   usuarioId: string;
-  /** Correo del admin: su dominio fija el del colegio si aún no tiene. */
-  email: string;
   esAdmin: boolean;
 }
 
@@ -73,6 +71,7 @@ export class OnboardingService {
       colegio: {
         id: colegio.id,
         nombre: colegio.nombre,
+        nombreOficial: colegio.nombreOficial,
         nit: colegio.nit,
         codigoDane: colegio.codigoDane,
         subdominio: colegio.subdominio,
@@ -146,7 +145,7 @@ export class OnboardingService {
       await this.repo.guardarColegio(contexto, {
         ...datos,
         periodos: datos.periodos,
-        dominioAdmin: dominioDeEmail(actor.email),
+        dominioColegio: dominioDeEmail(datos.email),
       });
     } catch (error) {
       if (this.esUnico(error)) {

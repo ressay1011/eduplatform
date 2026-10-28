@@ -28,3 +28,36 @@ export function esEmailValido(valor: string): boolean {
       !etiqueta.endsWith('-'),
   );
 }
+
+/**
+ * NIT colombiano. La DIAN documenta el formato XXX.XXX.XXX-Y, pero el registro
+ * admite NIT de 8 e incluso 15 dígitos antes del verificador, y los colegios
+ * públicos usan a veces el NIT del municipio o del fondo de servicios
+ * educativos: una regla estricta de «9 + 1» rechazaría casos reales, así que se
+ * acepta de 8 a 15 dígitos con un verificador opcional.
+ */
+/**
+ * Nombre de usuario del colegio (no es un correo): 3–64 caracteres, solo
+ * minúsculas, números, punto, guion, guion bajo y `@`, sin espacios.
+ * Espejo de `UsuarioSchema` de @eduplatform/types.
+ */
+export function esUsuarioValido(valor: string): boolean {
+  return (
+    /^[a-z0-9](?:[a-z0-9._@-]*[a-z0-9])$/.test(valor) && valor.length >= 3 && valor.length <= 64
+  );
+}
+
+export function normalizarNit(valor: string): string {
+  return valor.replace(/[.\s]/g, '');
+}
+
+export function esNitValido(valor: string): boolean {
+  return /^\d{8,15}(-\d)?$/.test(normalizarNit(valor));
+}
+
+/** Teléfono: de 7 a 12 dígitos (con +57 deja 12), con espacios, paréntesis y guiones. */
+export function esTelefonoValido(valor: string): boolean {
+  if (!/^[\d\s()+-]+$/.test(valor)) return false;
+  const digitos = valor.replace(/\D/g, '');
+  return digitos.length >= 7 && digitos.length <= 12;
+}

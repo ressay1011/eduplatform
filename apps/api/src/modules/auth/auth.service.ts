@@ -9,6 +9,7 @@ import {
   ErrorCodes,
   EstadoColegio,
   dominioDeEmail,
+  sufijoDeUsuario,
   type CambioPassword,
   type ContextoColegioPublico,
   type LoginRequest,
@@ -115,8 +116,10 @@ export class AuthService {
    * Paso 1 del login: solo el correo. El dominio (después de la @) identifica
    * el colegio y devuelve su branding. No revela si el usuario existe.
    */
-  async identificarColegio(email: string): Promise<ContextoPublicoConSede> {
-    const dominio = dominioDeEmail(email);
+  async identificarColegio(identificador: string): Promise<ContextoPublicoConSede> {
+    // Solo la vía heredada: sin subdominio, el identificador trae el dominio
+    // del colegio (`admin@colegio.edu.co`). Con usuario libre no hay colegio.
+    const dominio = dominioDeEmail(identificador);
     if (dominio === null) {
       throw apiError(
         ErrorCodes.NOT_FOUND,
@@ -161,13 +164,14 @@ export class AuthService {
   }
 
   /**
-   * Login de usuario de colegio. El tenant se resuelve por el DOMINIO del
-   * correo (login unificado): todos los colegios entran por la misma pantalla.
+   * Login de usuario de colegio. El tenant se resuelve por el subdominio del
+   * host (`colegio.<dominio>`) o, si no viene, por el dominio heredado del
+   * identificador (login unificado de siempre).
    */
   async login(dto: LoginRequest, meta: RequestMeta): Promise<ResultadoLogin<LoginResponse>> {
     // Bloqueo por identificador (correo): aplica exista o NO la cuenta, para
     // que un ataque de diccionario contra correos inventados también se frene.
-    if (this.attempts.estaBloqueado(dto.email)) {
+    if (this.attempts.estaBloqueado(dto.usuario)) {
       throw apiError(
         ErrorCodes.ACCOUNT_LOCKED,
         423,
@@ -175,13 +179,20 @@ export class AuthService {
       );
     }
 
-    const dominio = dominioDeEmail(dto.email);
+    const dominio = dominioDeEmail(dto.usuario);
+    // El colegio sale del subdominio del host (`colegio.<dominio>`), del sufijo
+    // del nombre de usuario (`admin@juanaarias` → `juanaarias`) o, como último
+    // recurso, del dominio de un correo real (`admin@colegio.edu.co`).
+    const subdominio = dto.subdominio ?? sufijoDeUsuario(dto.usuario) ?? null;
+    const porSubdominio =
+      subdominio === null ? null : await this.repo.findColegioPublico(subdominio);
     const colegioPublico =
-      dominio === null ? null : await this.repo.findColegioPublicoPorDominio(dominio);
+      porSubdominio ??
+      (dominio === null ? null : await this.repo.findColegioPublicoPorDominio(dominio));
     if (colegioPublico === null) {
       // Mensaje genérico: no se revela si el dominio o el correo existen.
-      this.attempts.registrarFallo(dto.email);
-      throw apiError(ErrorCodes.INVALID_CREDENTIALS, 401, 'Correo o contraseña incorrectos');
+      this.attempts.registrarFallo(dto.usuario);
+      throw apiError(ErrorCodes.INVALID_CREDENTIALS, 401, 'Usuario o contraseña incorrectos');
     }
     if (colegioPublico.estado === EstadoColegio.SUSPENDIDO) {
       throw apiError(
@@ -192,7 +203,7 @@ export class AuthService {
     }
 
     const ctx: TenantContext = { colegioId: colegioPublico.id, isPlatformAdmin: false };
-    const usuario = await this.repo.findUsuarioPorEmail(ctx, dto.email);
+    const usuario = await this.repo.findUsuarioPorUsuario(ctx, dto.usuario);
     if (usuario === null) {
       // Comparación contra un hash señuelo: mismo coste que una cuenta real.
       await this.passwords.verify(dto.password, hashSenuelo());
@@ -202,8 +213,8 @@ export class AuthService {
         colegioId: ctx.colegioId,
         metadata: { ...meta, motivo: 'usuario inexistente' },
       });
-      this.attempts.registrarFallo(dto.email);
-      throw apiError(ErrorCodes.INVALID_CREDENTIALS, 401, 'Correo o contraseña incorrectos');
+      this.attempts.registrarFallo(dto.usuario);
+      throw apiError(ErrorCodes.INVALID_CREDENTIALS, 401, 'Usuario o contraseña incorrectos');
     }
     if (!usuario.activo) {
       // Misma respuesta que una clave errada: no revela que la cuenta existe.
@@ -215,8 +226,8 @@ export class AuthService {
         usuarioId: usuario.id,
         metadata: { ...meta, motivo: 'usuario desactivado' },
       });
-      this.attempts.registrarFallo(dto.email);
-      throw apiError(ErrorCodes.INVALID_CREDENTIALS, 401, 'Correo o contraseña incorrectos');
+      this.attempts.registrarFallo(dto.usuario);
+      throw apiError(ErrorCodes.INVALID_CREDENTIALS, 401, 'Usuario o contraseña incorrectos');
     }
     if (usuario.bloqueadoHasta !== null && usuario.bloqueadoHasta.getTime() > Date.now()) {
       await this.audit.registrar({
@@ -226,8 +237,8 @@ export class AuthService {
         usuarioId: usuario.id,
         metadata: { ...meta, motivo: 'cuenta bloqueada en BD' },
       });
-      this.attempts.registrarFallo(dto.email);
-      throw apiError(ErrorCodes.INVALID_CREDENTIALS, 401, 'Correo o contraseña incorrectos');
+      this.attempts.registrarFallo(dto.usuario);
+      throw apiError(ErrorCodes.INVALID_CREDENTIALS, 401, 'Usuario o contraseña incorrectos');
     }
 
     const passwordOk = await this.passwords.verify(dto.password, usuario.passwordHash);
@@ -236,7 +247,7 @@ export class AuthService {
       const bloqueadoHasta =
         intentos >= MAX_INTENTOS_FALLIDOS ? new Date(Date.now() + BLOQUEO_MINUTOS * 60_000) : null;
       await this.repo.registrarLoginFallido(ctx, usuario.id, intentos, bloqueadoHasta);
-      this.attempts.registrarFallo(dto.email);
+      this.attempts.registrarFallo(dto.usuario);
       await this.audit.registrar({
         accion: 'LOGIN_FAILED',
         entidad: 'auth',
@@ -244,16 +255,16 @@ export class AuthService {
         usuarioId: usuario.id,
         metadata: { ...meta, motivo: 'contraseña incorrecta' },
       });
-      throw apiError(ErrorCodes.INVALID_CREDENTIALS, 401, 'Correo o contraseña incorrectos');
+      throw apiError(ErrorCodes.INVALID_CREDENTIALS, 401, 'Usuario o contraseña incorrectos');
     }
 
     const colegio = await this.repo.findColegioPorId(ctx);
     if (colegio === null) {
-      throw apiError(ErrorCodes.INVALID_CREDENTIALS, 401, 'Correo o contraseña incorrectos');
+      throw apiError(ErrorCodes.INVALID_CREDENTIALS, 401, 'Usuario o contraseña incorrectos');
     }
 
     await this.repo.registrarLoginExitoso(ctx, usuario.id);
-    this.attempts.limpiar(dto.email);
+    this.attempts.limpiar(dto.usuario);
     const token = this.tokens.generar();
     const expira = new Date(Date.now() + (dto.rememberMe ? SESION_TTL_RECORDAR_MS : SESION_TTL_MS));
     await this.repo.crearSesionUsuario(ctx, {
@@ -298,7 +309,7 @@ export class AuthService {
         metadata: { ...meta, motivo: 'usuario de plataforma inexistente o inactivo' },
       });
       this.attempts.registrarFallo(dto.email);
-      throw apiError(ErrorCodes.INVALID_CREDENTIALS, 401, 'Correo o contraseña incorrectos');
+      throw apiError(ErrorCodes.INVALID_CREDENTIALS, 401, 'Usuario o contraseña incorrectos');
     }
 
     const passwordOk = await this.passwords.verify(dto.password, usuario.passwordHash);
@@ -310,7 +321,7 @@ export class AuthService {
         metadata: { ...meta, motivo: 'contraseña incorrecta' },
       });
       this.attempts.registrarFallo(dto.email);
-      throw apiError(ErrorCodes.INVALID_CREDENTIALS, 401, 'Correo o contraseña incorrectos');
+      throw apiError(ErrorCodes.INVALID_CREDENTIALS, 401, 'Usuario o contraseña incorrectos');
     }
 
     this.attempts.limpiar(dto.email);

@@ -5,10 +5,12 @@
  * (decisión del proyecto) — sin class-validator/ValidationPipe.
  */
 import type { INestApplication } from '@nestjs/common';
+import type { CorsOptions } from '@nestjs/common/interfaces/external/cors-options.interface';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { env } from './config/env';
 import { ApiExceptionFilter } from './shared/api-exception.filter';
+import { origenPermitido, origenesPermitidos } from './shared/cors';
 
 export function configureApp(app: INestApplication): void {
   // Todas las rutas de la API viven bajo /api
@@ -30,8 +32,17 @@ export function configureApp(app: INestApplication): void {
   const expressApp: ExpressApp = app.getHttpAdapter().getInstance();
   expressApp.set('trust proxy', 1);
 
-  // CORS con credenciales — necesario para las cookies del auth en el navegador
-  app.enableCors({ origin: env.CORS_ORIGINS.split(','), credentials: true });
+  // CORS con credenciales — necesario para las cookies del auth en el navegador.
+  // Acepta orígenes exactos o con comodín de una etiqueta (previews de Vercel).
+  const permitidos = origenesPermitidos(env.CORS_ORIGINS);
+  const cors: CorsOptions = {
+    origin: (origen, callback) => {
+      // Sin cabecera Origin (curl, mismo origen) no es una petición CORS.
+      callback(null, origen === undefined || origenPermitido(origen, permitidos));
+    },
+    credentials: true,
+  };
+  app.enableCors(cors);
 
   // Toda respuesta autenticada es dato personal: que no la guarde ningún
   // proxy/CDN ni el caché del navegador (Ley 1581; S6 del informe).
