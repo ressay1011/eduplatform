@@ -17,7 +17,6 @@
     "test": "turbo run test",
     "preflight": "node scripts/preflight.mjs",
     "preflight:fast": "node scripts/preflight.mjs --fast",
-    "sonar": "node scripts/sonar.mjs",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml}\"",
     "clean": "turbo run clean",
@@ -41,14 +40,16 @@
   },
   "pnpm": {
     "overrides": {
-      "postcss": "^8.5.23"
+      "postcss": "^8.5.23",
+      "multer": "2.5.0",
+      "body-parser": "^2.4.0",
+      "fast-uri": "^3.1.9"
     }
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
     "@next/eslint-plugin-next": "^16.4.3",
     "@playwright/test": "^1.56.0",
-    "@sonar/scan": "^5.0.2",
     "@types/node": "^22",
     "eslint": "^9",
     "eslint-config-prettier": "^10.1.8",

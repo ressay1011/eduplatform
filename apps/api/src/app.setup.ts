@@ -16,8 +16,10 @@ export function configureApp(app: INestApplication): void {
   // Todas las rutas de la API viven bajo /api
   app.setGlobalPrefix('api');
 
-  // Headers de seguridad (CSP desactivada: el frontend vive en otro dominio)
-  app.use(helmet({ contentSecurityPolicy: false }));
+  // Headers de seguridad. Se deja la CSP por defecto: esta API solo responde
+  // JSON bajo /api, así que la política no limita al frontend (que es otro
+  // origen) y sí protege si alguna respuesta se abre como documento.
+  app.use(helmet());
 
   // Cookies httpOnly con la sesión (auth propia) — req.cookies en los guards
   app.use(cookieParser());
