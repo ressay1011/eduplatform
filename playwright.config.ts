@@ -10,7 +10,8 @@
  *   pnpm e2e
  *
  * Playwright levanta API (4000) y web (3000) si no están ya arriba
- * (`reuseExistingServer`). En CI el job `e2e` prepara Postgres y la siembra.
+ * (`reuseExistingServer`). En CI el job `verificar` prepara Postgres, la
+ * siembra y el build antes de correr el humo.
  */
 import { defineConfig, devices } from '@playwright/test';
 
@@ -31,9 +32,10 @@ export default defineConfig({
   use: {
     baseURL: WEB,
     locale: 'es-CO',
-    // Prueba en video de CADA test, también cuando pasa. El reporter lo copia
-    // con nombre estable a `pruebas-video/` y sobrescribe en cada corrida.
-    video: 'on',
+    // Un video por test se graba SOLO en local: el reporter los copia a
+    // `pruebas-video/` con nombre estable para revisarlos a mano. En CI nadie
+    // abre ese artefacto, así que se ahorra la grabación (y su subida).
+    video: process.env['CI'] === 'true' ? 'off' : 'on',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
