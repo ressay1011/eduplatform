@@ -200,6 +200,7 @@ export default function OnboardingPage() {
   const [codigoBuscado, setCodigoBuscado] = useState<string | null>(null);
   const busquedaRef = useRef(0);
   const inicializadoRef = useRef(false);
+  const sedeInicializadaRef = useRef(false);
 
   // Paso 2
   const [sede, setSede] = useState({
@@ -263,6 +264,16 @@ export default function OnboardingPage() {
     if (data.sedes[0] !== undefined) {
       setSedeId(data.sedes[0].id);
       setJornada(data.sedes[0].jornadas[0] ?? Jornada.MANANA);
+      // El paso 2 edita UNA sede: se carga la existente una sola vez, para que
+      // el formulario no aparezca vacío ni se pise lo que el admin escriba.
+      if (!sedeInicializadaRef.current) {
+        sedeInicializadaRef.current = true;
+        setSede({
+          nombre: data.sedes[0].nombre,
+          direccion: data.sedes[0].direccion ?? '',
+          jornadas: [...data.sedes[0].jornadas],
+        });
+      }
     }
     // Solo la primera carga decide el estado del formulario: si el colegio ya
     // tiene un código completo se habilita SIN repetir la búsqueda, para no

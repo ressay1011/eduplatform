@@ -63,6 +63,7 @@ import {
   getOnboarding,
   guardarColegioOnboarding,
   guardarPasoOnboarding,
+  guardarSedeOnboarding,
   importarMatriculas,
   listarCursosMatricula,
   listarEmpleados,
@@ -413,6 +414,165 @@ describe('Onboarding · paso 1 (identidad)', () => {
     expect(await screen.findByText(/Correo inválido/i)).toBeInTheDocument();
     expect(await screen.findByText(/no se guardó nada/i)).toBeInTheDocument();
     expect(guardarColegioOnboarding).not.toHaveBeenCalled();
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it('valida NIT, teléfono y año antes de continuar', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(1));
+    renderPagina();
+
+    fireEvent.change(await screen.findByLabelText('NIT (opcional)'), { target: { value: '123' } });
+    fireEvent.change(screen.getByLabelText('Teléfono'), { target: { value: '12' } });
+    fireEvent.change(screen.getByLabelText('Año lectivo'), { target: { value: '2019' } });
+    await userEvent.click(screen.getByRole('button', { name: /continuar a sedes/i }));
+
+    expect(await screen.findByText(/NIT inválido/i)).toBeInTheDocument();
+    expect(screen.getByText(/Teléfono inválido/i)).toBeInTheDocument();
+    expect(screen.getByText(/entre 2020 y 2100/i)).toBeInTheDocument();
+    expect(guardarColegioOnboarding).not.toHaveBeenCalled();
+  });
+
+  it('rechaza períodos que se cruzan o terminan antes de empezar', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(1));
+    renderPagina();
+
+    await screen.findByLabelText('Nombre');
+    // El período 2 empieza antes de que termine el 1.
+    fireEvent.change(screen.getAllByLabelText('Inicio')[1]!, { target: { value: '2026-03-01' } });
+    await userEvent.click(screen.getByRole('button', { name: /continuar a sedes/i }));
+
+    expect(await screen.findByText(/se cruza con el período anterior/i)).toBeInTheDocument();
+    expect(guardarColegioOnboarding).not.toHaveBeenCalled();
+  });
+
+  it('regenera las fechas de los períodos al cambiar el año lectivo', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(1));
+    renderPagina();
+
+    const anio = await screen.findByLabelText('Año lectivo');
+    fireEvent.change(anio, { target: { value: '2027' } });
+
+    const inicios = screen.getAllByLabelText('Inicio') as HTMLInputElement[];
+    expect(inicios[0]!.value.startsWith('2027')).toBe(true);
+  });
+
+  it('«Guardar y salir» en el paso 2 guarda la sede', async () => {
+    const datos = estado(2);
+    datos.sedes[0]!.jornadas = ['MANANA'];
+    vi.mocked(getOnboarding).mockResolvedValue(datos);
+    vi.mocked(guardarSedeOnboarding).mockResolvedValue(estado(2));
+    vi.mocked(guardarPasoOnboarding).mockResolvedValue(estado(2));
+    renderPagina();
+
+    await screen.findByRole('heading', { name: 'Sedes y jornadas', level: 1 });
+    await userEvent.click(screen.getByRole('button', { name: /guardar y salir/i }));
+
+    await waitFor(() => expect(guardarSedeOnboarding).toHaveBeenCalledTimes(1));
+    expect(mockPush).toHaveBeenCalledWith('/dashboard');
+  });
+
+  it('rechaza nombre corto, departamento vacío y subdominio inválido', async () => {
+    const datos = estado(1);
+    datos.colegio.departamento = '';
+    vi.mocked(getOnboarding).mockResolvedValue(datos);
+    renderPagina();
+
+    fireEvent.change(await screen.findByLabelText('Nombre'), { target: { value: 'AB' } });
+    fireEvent.change(screen.getByLabelText('Subdominio'), { target: { value: 'ab' } });
+    await userEvent.click(screen.getByRole('button', { name: /continuar a sedes/i }));
+
+    expect(await screen.findByText('Escribe el nombre del colegio.')).toBeInTheDocument();
+    expect(screen.getByText('Elige el departamento.')).toBeInTheDocument();
+    expect(screen.getByText('Elige el municipio del departamento.')).toBeInTheDocument();
+    expect(screen.getByText(/Entre 3 y 32 caracteres/)).toBeInTheDocument();
+    expect(guardarColegioOnboarding).not.toHaveBeenCalled();
+  });
+
+  it('borra el error del campo en cuanto se corrige', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(1));
+    renderPagina();
+
+    const correo = await screen.findByLabelText('Correo del colegio');
+    fireEvent.change(correo, { target: { value: 'malo' } });
+    await userEvent.click(screen.getByRole('button', { name: /continuar a sedes/i }));
+    expect(await screen.findByText(/Correo inválido/i)).toBeInTheDocument();
+
+    fireEvent.change(correo, { target: { value: 'rectoria@demo.edu.co' } });
+    expect(screen.queryByText(/Correo inválido/i)).toBeNull();
+  });
+
+  it('exige las dos fechas de cada período y el orden correcto', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(1));
+    renderPagina();
+
+    await screen.findByLabelText('Nombre');
+    fireEvent.change(screen.getAllByLabelText('Fin')[0]!, { target: { value: '' } });
+    await userEvent.click(screen.getByRole('button', { name: /continuar a sedes/i }));
+    expect(await screen.findByText(/completa las dos fechas/i)).toBeInTheDocument();
+
+    fireEvent.change(screen.getAllByLabelText('Fin')[0]!, { target: { value: '2026-01-05' } });
+    await userEvent.click(screen.getByRole('button', { name: /continuar a sedes/i }));
+    expect(await screen.findByText(/el inicio debe ser anterior al fin/i)).toBeInTheDocument();
+    expect(guardarColegioOnboarding).not.toHaveBeenCalled();
+  });
+
+  it('permite elegir el municipio después del departamento', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(1));
+    renderPagina();
+
+    await userEvent.selectOptions(await screen.findByLabelText('Departamento'), 'Caldas');
+    await userEvent.selectOptions(screen.getByLabelText('Municipio'), 'Manizales');
+
+    expect(screen.getByLabelText('Municipio')).toHaveValue('Manizales');
+  });
+
+  it('deja escribir dirección, subdominio y fecha de fin', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(1));
+    renderPagina();
+
+    fireEvent.change(await screen.findByLabelText('Dirección'), {
+      target: { value: 'Calle 10 # 5-20' },
+    });
+    fireEvent.change(screen.getByLabelText('Subdominio'), { target: { value: 'juana-arias' } });
+    fireEvent.change(screen.getAllByLabelText('Fin')[0]!, { target: { value: '2026-04-30' } });
+
+    expect(screen.getByLabelText('Dirección')).toHaveValue('Calle 10 # 5-20');
+    expect(screen.getByLabelText('Subdominio')).toHaveValue('juana-arias');
+    expect((screen.getAllByLabelText('Fin')[0] as HTMLInputElement).value).toBe('2026-04-30');
+  });
+
+  it('no vuelve a buscar si se reescribe el mismo código verificado', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(1));
+    renderPagina();
+
+    const dane = await screen.findByLabelText('Código DANE');
+    fireEvent.change(dane, { target: { value: '105001001234' } });
+
+    expect(buscarColegioDane).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Nombre')).toBeInTheDocument();
+  });
+
+  it('«Guardar y salir» sin código DANE sale sin guardar nada', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estadoSinCodigo());
+    renderPagina();
+
+    await screen.findByLabelText('Código DANE');
+    await userEvent.click(screen.getByRole('button', { name: /guardar y salir/i }));
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/dashboard'));
+    expect(guardarColegioOnboarding).not.toHaveBeenCalled();
+  });
+
+  it('«Guardar y salir» pide la jornada si la sede no tiene', async () => {
+    const datos = estado(2);
+    datos.sedes[0]!.jornadas = [];
+    vi.mocked(getOnboarding).mockResolvedValue(datos);
+    renderPagina();
+
+    await screen.findByRole('heading', { name: 'Sedes y jornadas', level: 1 });
+    await userEvent.click(screen.getByRole('button', { name: /guardar y salir/i }));
+
+    expect(await screen.findByText(/Elige al menos una jornada/i)).toBeInTheDocument();
     expect(mockPush).not.toHaveBeenCalled();
   });
 
