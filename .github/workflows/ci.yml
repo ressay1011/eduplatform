@@ -135,8 +135,7 @@ jobs:
       - name: Instalar Chromium
         run: pnpm exec playwright install --with-deps chromium
 
-      # El humo corre sin grabar video de todo: si falla, Playwright deja
-      # traza, captura y video en test-results (retain-on-failure).
+      # Si el humo falla, Playwright deja traza y captura en test-results.
       - name: Humo E2E
         run: pnpm e2e
 

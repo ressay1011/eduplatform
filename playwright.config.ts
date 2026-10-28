@@ -32,9 +32,6 @@ export default defineConfig({
   use: {
     baseURL: WEB,
     locale: 'es-CO',
-    // Video solo si el test falla: se revisa desde `test-results/`, junto a la
-    // traza y la captura. Ya no se graba todo ni se copia a `pruebas-video/`.
-    video: 'retain-on-failure',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
