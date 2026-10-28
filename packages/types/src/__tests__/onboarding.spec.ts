@@ -45,6 +45,12 @@ describe('subdominioDeNombre', () => {
     expect(SubdominioSchema.safeParse(largo).success).toBe(true);
   });
 
+  it('no deja guion final cuando el nombre termina en separadores', () => {
+    expect(subdominioDeNombre('Colegio Demo ---')).toBe('colegio-demo');
+    expect(subdominioDeNombre('Colegio Demo ...')).toBe('colegio-demo');
+    expect(subdominioDeNombre('Colegio Demo / ')).toBe('colegio-demo');
+  });
+
   it.each([
     'I.E. Demo',
     'Colegio Campestre La Sabana',
