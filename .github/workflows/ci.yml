@@ -124,9 +124,8 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-  # Humo E2E real: Postgres + API + web + Chromium. Deja un video por test
-  # (artefacto videos-e2e). Todavia NO es obligatorio para fusionar: primero
-  # se comprueba que sea estable unas semanas.
+  # Humo E2E real: Postgres + API + web + Chromium. Todavia NO es obligatorio
+  # para fusionar: primero se comprueba que sea estable unas semanas.
   e2e:
     name: e2e
     runs-on: ubuntu-latest
@@ -216,17 +215,8 @@ jobs:
       - name: Instalar Chromium
         run: pnpm exec playwright install --with-deps chromium
 
-      - name: Humo E2E (un video por test)
+      - name: Humo E2E
         run: pnpm e2e
-
-      - name: Guardar videos
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: videos-e2e
-          path: pruebas-video/**
-          if-no-files-found: warn
-          retention-days: 14
 
   # Sonar solo corre si el repositorio tiene configurado SONAR_ENABLED=true y
   # los secretos SONAR_TOKEN + SONAR_HOST_URL (requiere servidor propio o

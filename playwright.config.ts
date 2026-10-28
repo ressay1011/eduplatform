@@ -24,16 +24,10 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   retries: process.env['CI'] === 'true' ? 1 : 0,
-  reporter:
-    process.env['CI'] === 'true'
-      ? [['list'], ['./e2e/reporter-video.mjs'], ['html', { open: 'never' }]]
-      : [['list'], ['./e2e/reporter-video.mjs']],
+  reporter: process.env['CI'] === 'true' ? [['list'], ['html', { open: 'never' }]] : [['list']],
   use: {
     baseURL: WEB,
     locale: 'es-CO',
-    // Prueba en video de CADA test, también cuando pasa. El reporter lo copia
-    // con nombre estable a `pruebas-video/` y sobrescribe en cada corrida.
-    video: 'on',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
