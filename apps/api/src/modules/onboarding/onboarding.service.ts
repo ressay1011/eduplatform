@@ -73,6 +73,7 @@ export class OnboardingService {
       colegio: {
         id: colegio.id,
         nombre: colegio.nombre,
+        nombreOficial: colegio.nombreOficial,
         nit: colegio.nit,
         codigoDane: colegio.codigoDane,
         subdominio: colegio.subdominio,

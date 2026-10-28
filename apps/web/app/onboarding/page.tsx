@@ -10,11 +10,17 @@
  * personal (reutiliza POST /usuarios) y 5 importa matrículas con un CSV que se
  * valida contra los cursos reales (POST /matriculas/importar).
  */
-import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  esDepartamento,
+  esMunicipio,
   Jornada,
+  municipiosDe,
+  NOMBRES_DEPARTAMENTOS,
+  nombreOficialMen,
+  nombreSaneado,
   SubdominioSchema,
   subdominioDeNombre,
   TIPOS_DOCUMENTO,
@@ -25,7 +31,9 @@ import {
   type TipoDocumento,
 } from '@eduplatform/types';
 import { M3Button } from '@/components/M3Button';
+import { SelectField } from '@/components/SelectField';
 import { TextField } from '@/components/TextField';
+import { esEmailValido, esNitValido, esTelefonoValido } from '@/lib/validacion';
 import { useEmpleados, useRoles, useSedes } from '@/hooks/usePersonas';
 import {
   ApiError,
@@ -164,6 +172,8 @@ export default function OnboardingPage() {
   // Paso 1
   const [colegio, setColegio] = useState({
     nombre: '',
+    /** Nombre completo del MEN: va en certificados y actas. */
+    nombreOficial: '',
     nit: '',
     codigoDane: '',
     subdominio: '',
@@ -172,15 +182,25 @@ export default function OnboardingPage() {
     direccion: '',
     telefono: '',
     email: '',
-    calendario: 'A' as 'A' | 'B',
+    // '' = todavía no elige: sin calendario no se muestran los períodos.
+    calendario: '' as 'A' | 'B' | '',
     anioLectivo: new Date().getFullYear(),
   });
+  /** Errores de validación por campo; se pintan bajo cada campo y se limpian al escribir. */
+  const [errores, setErrores] = useState<Record<string, string>>({});
   const [periodos, setPeriodos] = useState<PeriodoForm[]>([]);
 
   // Paso 1 · consulta del código DANE en los datos abiertos del MEN.
   const [buscandoDane, setBuscandoDane] = useState(false);
   const [daneInfo, setDaneInfo] = useState<ColegioDane | null>(null);
   const [daneError, setDaneError] = useState<string | null>(null);
+  // El formulario nace bloqueado: solo el código DANE manda hasta que el MEN
+  // responda (o falle). Es una decisión de producto, no un estado de carga.
+  const [formHabilitado, setFormHabilitado] = useState(false);
+  const [codigoBuscado, setCodigoBuscado] = useState<string | null>(null);
+  const busquedaRef = useRef(0);
+  const inicializadoRef = useRef(false);
+  const sedeInicializadaRef = useRef(false);
 
   // Paso 2
   const [sede, setSede] = useState({
@@ -223,6 +243,7 @@ export default function OnboardingPage() {
     if (data === undefined) return;
     setColegio({
       nombre: data.colegio.nombre,
+      nombreOficial: data.colegio.nombreOficial ?? '',
       nit: data.colegio.nit ?? '',
       codigoDane: data.colegio.codigoDane,
       subdominio: data.colegio.subdominio,
@@ -243,6 +264,26 @@ export default function OnboardingPage() {
     if (data.sedes[0] !== undefined) {
       setSedeId(data.sedes[0].id);
       setJornada(data.sedes[0].jornadas[0] ?? Jornada.MANANA);
+      // El paso 2 edita UNA sede: se carga la existente una sola vez, para que
+      // el formulario no aparezca vacío ni se pise lo que el admin escriba.
+      if (!sedeInicializadaRef.current) {
+        sedeInicializadaRef.current = true;
+        setSede({
+          nombre: data.sedes[0].nombre,
+          direccion: data.sedes[0].direccion ?? '',
+          jornadas: [...data.sedes[0].jornadas],
+        });
+      }
+    }
+    // Solo la primera carga decide el estado del formulario: si el colegio ya
+    // tiene un código completo se habilita SIN repetir la búsqueda, para no
+    // pisar con datos del MEN lo que el admin corrigió a mano.
+    if (!inicializadoRef.current) {
+      inicializadoRef.current = true;
+      const codigo = data.colegio.codigoDane.trim();
+      const completo = /^\d{12}$/.test(codigo);
+      setFormHabilitado(completo);
+      setCodigoBuscado(completo ? codigo : null);
     }
   }, [data]);
 
@@ -289,12 +330,117 @@ export default function OnboardingPage() {
     mutationFn: () =>
       guardarColegioOnboarding({
         ...colegio,
+        calendario: calendarioValido(),
         nit: colegio.nit === '' ? undefined : colegio.nit,
+        nombreOficial: colegio.nombreOficial === '' ? undefined : colegio.nombreOficial,
         direccion: colegio.direccion === '' ? undefined : colegio.direccion,
         telefono: colegio.telefono === '' ? undefined : colegio.telefono,
         periodos,
       }),
   });
+
+  /** Calendario elegido: la validación garantiza que no esté vacío al guardar. */
+  function calendarioValido(): 'A' | 'B' {
+    return colegio.calendario === 'B' ? 'B' : 'A';
+  }
+
+  /** Borra el error de un campo en cuanto se corrige. */
+  function limpiarError(campo: string): void {
+    setErrores((actual) => {
+      if (actual[campo] === undefined) return actual;
+      const copia = { ...actual };
+      delete copia[campo];
+      return copia;
+    });
+  }
+
+  /** El municipio pertenece al departamento anterior: al cambiarlo se limpia. */
+  function conDepartamento(valor: string): void {
+    setColegio((actual) => ({ ...actual, departamento: valor, municipio: '' }));
+    limpiarError('departamento');
+    limpiarError('municipio');
+  }
+
+  function conMunicipio(valor: string): void {
+    setColegio((actual) => ({ ...actual, municipio: valor }));
+    limpiarError('municipio');
+  }
+
+  /** Sin calendario no hay fechas base que precargar, y sin él no hay períodos. */
+  function conCalendario(c: 'A' | 'B'): void {
+    setColegio((actual) => ({ ...actual, calendario: c }));
+    setPeriodos(periodosBase(c, colegio.anioLectivo));
+    limpiarError('calendario');
+  }
+
+  function conAnio(valor: string): void {
+    const anio = Number(valor.replace(/\D/g, '').slice(0, 4)) || colegio.anioLectivo;
+    setColegio((actual) => ({ ...actual, anioLectivo: anio }));
+    if (colegio.calendario !== '') setPeriodos(periodosBase(colegio.calendario, anio));
+    limpiarError('anio');
+  }
+
+  /**
+   * Fechas de los períodos: completas, en orden y sin solapes. Devuelve el
+   * primer problema o null.
+   */
+  function revisarPeriodos(): string | null {
+    if (colegio.calendario === '') return null;
+    if (periodos.length < 2) return 'Necesitas al menos dos períodos académicos.';
+    let finAnterior: string | null = null;
+    for (const p of periodos) {
+      if (p.fechaInicio === '' || p.fechaFin === '') {
+        return `${p.nombre}: completa las dos fechas.`;
+      }
+      if (p.fechaInicio >= p.fechaFin) {
+        return `${p.nombre}: el inicio debe ser anterior al fin.`;
+      }
+      if (finAnterior !== null && p.fechaInicio <= finAnterior) {
+        return `${p.nombre}: se cruza con el período anterior.`;
+      }
+      finAnterior = p.fechaFin;
+    }
+    return null;
+  }
+
+  /**
+   * Reglas del paso 1. Se ejecutan al continuar y al «Guardar y salir»: los
+   * botones no envían un formulario HTML, así que la validación nativa del
+   * navegador nunca corre.
+   */
+  function validarPaso1(): Record<string, string> {
+    const e: Record<string, string> = {};
+    if (colegio.nombre.trim().length < 3) {
+      e['nombre'] = 'Escribe el nombre del colegio.';
+    }
+    if (colegio.nit.trim() !== '' && !esNitValido(colegio.nit)) {
+      e['nit'] = 'NIT inválido: 9 dígitos y el de verificación, p. ej. 900123456-7.';
+    }
+    if (colegio.telefono.trim() !== '' && !esTelefonoValido(colegio.telefono)) {
+      e['telefono'] = 'Teléfono inválido: entre 7 y 10 dígitos.';
+    }
+    if (!esEmailValido(colegio.email.trim())) {
+      e['email'] = 'Correo inválido: debe tener la forma nombre@dominio.';
+    }
+    if (!esDepartamento(colegio.departamento)) {
+      e['departamento'] = 'Elige el departamento.';
+    }
+    if (!esMunicipio(colegio.departamento, colegio.municipio)) {
+      e['municipio'] = 'Elige el municipio del departamento.';
+    }
+    if (!SubdominioSchema.safeParse(colegio.subdominio).success) {
+      e['subdominio'] = 'Entre 3 y 32 caracteres: minúsculas, números y guiones.';
+    }
+    if (colegio.calendario === '') {
+      e['calendario'] = 'Elige el calendario escolar.';
+    }
+    if (colegio.anioLectivo < 2020 || colegio.anioLectivo > 2100) {
+      e['anio'] = 'El año debe estar entre 2020 y 2100.';
+    }
+    const problemas = revisarPeriodos();
+    if (problemas !== null) e['periodos'] = problemas;
+    return e;
+  }
 
   /**
    * El subdominio se sugiere desde el nombre mientras el admin no lo toque: si
@@ -329,36 +475,40 @@ export default function OnboardingPage() {
   }
 
   /**
-   * Paso 1: trae del MEN los datos del establecimiento con el código DANE.
-   * Es una propuesta: rellena el formulario y el admin corrige lo que haga falta.
+   * Paso 1: busca el establecimiento en el MEN y, pase lo que pase, habilita el
+   * formulario. Un código inexistente o el portal caído no pueden dejar al
+   * admin bloqueado. Las respuestas que llegan tarde (siguió editando) se
+   * descartan con el contador de búsquedas.
    */
-  async function buscarDane(): Promise<void> {
-    const codigo = colegio.codigoDane.trim();
-    if (!/^\d{12}$/.test(codigo)) {
-      setDaneError('El código DANE tiene 12 dígitos.');
-      setDaneInfo(null);
-      return;
-    }
-
+  async function buscarDane(codigo: string): Promise<void> {
+    const id = busquedaRef.current + 1;
+    busquedaRef.current = id;
     setBuscandoDane(true);
     setDaneError(null);
     setAviso(null);
     try {
       const datos = await buscarColegioDane(codigo);
+      if (id !== busquedaRef.current) return;
       setDaneInfo(datos);
+      setCodigoBuscado(codigo);
+      // El MEN manda «INSTITUCION EDUCATIVA TECNICA DEPARTAMENTAL …»: lo
+      // dejamos en «I.E.T.D. …» antes de prellenar, y el admin ajusta si quiere.
+      const nombre = nombreSaneado(datos.nombre);
       setColegio((actual) => {
         const derivado = subdominioDeNombre(actual.nombre);
         const seguiaAlNombre = actual.subdominio === '' || actual.subdominio === derivado;
         return {
           ...actual,
-          nombre: datos.nombre,
+          nombre,
+          // El nombre completo se guarda aparte: es el que va en los documentos.
+          nombreOficial: nombreOficialMen(datos.nombre),
           municipio: datos.municipio,
           departamento: datos.departamento,
           direccion: datos.direccion ?? '',
           telefono: datos.telefono ?? '',
           email: datos.email ?? actual.email,
           calendario: datos.calendario,
-          subdominio: seguiaAlNombre ? subdominioDeNombre(datos.nombre) : actual.subdominio,
+          subdominio: seguiaAlNombre ? subdominioDeNombre(nombre) : actual.subdominio,
         };
       });
       if (datos.calendario !== colegio.calendario) {
@@ -366,22 +516,41 @@ export default function OnboardingPage() {
       }
       setExito(`Datos del MEN de ${datos.anio} cargados. Revísalos y ajusta lo que haga falta.`);
     } catch (e) {
+      if (id !== busquedaRef.current) return;
       setDaneInfo(null);
-      setDaneError(mensajeDeError(e, 'No pudimos consultar ese código DANE.'));
+      setDaneError(mensajeDeError(e, 'No pudimos consultar los datos del MEN.'));
     } finally {
-      setBuscandoDane(false);
+      if (id === busquedaRef.current) {
+        setBuscandoDane(false);
+        setFormHabilitado(true);
+      }
     }
   }
 
-  async function guardarPaso1(siguiente: number): Promise<void> {
-    if (!/^\d{12}$/.test(colegio.codigoDane.trim())) {
-      setAviso('El código DANE debe tener 12 dígitos.');
+  /**
+   * El código es la única puerta del paso 1: mientras no coincida con el que se
+   * verificó, el formulario queda bloqueado, y a los 12 dígitos se busca solo.
+   */
+  function conCodigo(valor: string): void {
+    const limpio = valor.replace(/\D/g, '').slice(0, 12);
+    setColegio((actual) => ({ ...actual, codigoDane: limpio }));
+    setDaneError(null);
+    // El aviso y la ficha del MEN hablan del código anterior: si cambia, se van.
+    setExito(null);
+    if (limpio.length === 12 && limpio === codigoBuscado) {
+      setFormHabilitado(true);
       return;
     }
-    if (!SubdominioSchema.safeParse(colegio.subdominio).success) {
-      setAviso(
-        'El subdominio debe tener entre 3 y 32 caracteres: minúsculas, números y guiones, sin empezar ni terminar en guion.',
-      );
+    setDaneInfo(null);
+    setFormHabilitado(false);
+    if (limpio.length === 12) void buscarDane(limpio);
+  }
+
+  async function guardarPaso1(siguiente: number): Promise<void> {
+    const problemas = validarPaso1();
+    setErrores(problemas);
+    if (Object.keys(problemas).length > 0) {
+      setAviso('Revisa los campos marcados antes de continuar.');
       return;
     }
     setGuardando(true);
@@ -423,12 +592,45 @@ export default function OnboardingPage() {
     );
   }
 
+  /**
+   * «Guardar y salir»: guarda de verdad el paso actual. Antes solo llamaba a
+   * `guardarPasoOnboarding(paso)`, que marca el paso en el colegio y no escribe
+   * los datos, así que en el paso 1 se perdía todo lo escrito.
+   */
   async function salir(): Promise<void> {
+    setAviso(null);
+    setGuardando(true);
     try {
-      const estado = await guardarPasoOnboarding(paso);
-      qc.setQueryData(['onboarding'], estado);
-    } finally {
+      if (paso === 1) {
+        if (!formHabilitado) {
+          router.push('/dashboard');
+          return;
+        }
+        const problemas = validarPaso1();
+        setErrores(problemas);
+        if (Object.keys(problemas).length > 0) {
+          setAviso('Revisa los campos marcados: no se guardó nada.');
+          return;
+        }
+        aplicar(await mutColegio.mutateAsync(), 1);
+      } else if (paso === 2) {
+        if (sede.jornadas.length === 0) {
+          setAviso('Elige al menos una jornada para la sede.');
+          return;
+        }
+        await guardarSedeOnboarding({
+          id: sedeActual?.id,
+          nombre: sede.nombre,
+          direccion: sede.direccion === '' ? undefined : sede.direccion,
+          jornadas: sede.jornadas,
+        });
+      }
+      qc.setQueryData(['onboarding'], await guardarPasoOnboarding(paso));
       router.push('/dashboard');
+    } catch (e) {
+      setAviso(e instanceof ApiError ? e.message : 'No se pudo guardar. Intenta de nuevo.');
+    } finally {
+      setGuardando(false);
     }
   }
 
@@ -582,6 +784,22 @@ export default function OnboardingPage() {
     }
   }
 
+  // Selects de departamento y municipio. Si el colegio trae un valor que no está
+  // en el catálogo del MEN (datos viejos), se antepone para no mostrarlo vacío.
+  const opcionesDepartamento = useMemo(() => {
+    const base = NOMBRES_DEPARTAMENTOS;
+    return colegio.departamento !== '' && !base.includes(colegio.departamento)
+      ? [colegio.departamento, ...base]
+      : base;
+  }, [colegio.departamento]);
+
+  const opcionesMunicipio = useMemo(() => {
+    const base = municipiosDe(colegio.departamento);
+    return colegio.municipio !== '' && !base.includes(colegio.municipio)
+      ? [colegio.municipio, ...base]
+      : base;
+  }, [colegio.departamento, colegio.municipio]);
+
   if (isLoading) {
     return (
       <main className="onb-cargando" aria-live="polite">
@@ -641,30 +859,23 @@ export default function OnboardingPage() {
         )}
 
         {paso === 1 && (
-          <section className="onb-card">
+          <section className="onb-card" aria-busy={buscandoDane}>
             <h2 className="onb-card-titulo">Identidad del colegio</h2>
-            <div className="onb-dane">
-              <TextField
-                id="onb-dane"
-                label="Código DANE"
-                value={colegio.codigoDane}
-                onChange={(v) => {
-                  setColegio({ ...colegio, codigoDane: v.replace(/\D/g, '').slice(0, 12) });
-                  setDaneError(null);
-                }}
-                error={daneError}
-                ayuda="12 dígitos: con él se traen los datos del colegio desde el MEN."
-              />
-              <M3Button
-                type="button"
-                variante="tonal"
-                icono="search"
-                onClick={() => void buscarDane()}
-                disabled={buscandoDane}
-              >
-                {buscandoDane ? 'Buscando…' : 'Buscar'}
-              </M3Button>
-            </div>
+            <TextField
+              id="onb-dane"
+              label="Código DANE"
+              value={colegio.codigoDane}
+              onChange={conCodigo}
+              error={daneError}
+              autoFocus
+              ayuda={
+                buscandoDane
+                  ? 'Buscando los datos del colegio en el MEN…'
+                  : formHabilitado
+                    ? '12 dígitos. Los datos del colegio se completan solos.'
+                    : 'Escribe los 12 dígitos del código DANE para ver el resto del formulario.'
+              }
+            />
 
             {daneInfo !== null && (
               <p className="onb-nota">
@@ -674,135 +885,205 @@ export default function OnboardingPage() {
               </p>
             )}
 
-            <div className="onb-grid">
-              <TextField
-                id="onb-nombre"
-                label="Nombre"
-                value={colegio.nombre}
-                onChange={conNombre}
-              />
-              <TextField
-                id="onb-nit"
-                label="NIT (opcional)"
-                value={colegio.nit}
-                onChange={(v) => setColegio({ ...colegio, nit: v })}
-              />
-              <TextField
-                id="onb-sub"
-                label="Subdominio"
-                value={colegio.subdominio}
-                onChange={conSubdominio}
-                ayuda="Se sugiere del nombre; puedes cambiarlo."
-              />
-              <TextField
-                id="onb-municipio"
-                label="Municipio"
-                value={colegio.municipio}
-                onChange={(v) => setColegio({ ...colegio, municipio: v })}
-              />
-              <TextField
-                id="onb-departamento"
-                label="Departamento"
-                value={colegio.departamento}
-                onChange={(v) => setColegio({ ...colegio, departamento: v })}
-              />
-              <TextField
-                id="onb-direccion"
-                label="Dirección"
-                value={colegio.direccion}
-                onChange={(v) => setColegio({ ...colegio, direccion: v })}
-              />
-              <TextField
-                id="onb-telefono"
-                label="Teléfono"
-                value={colegio.telefono}
-                onChange={(v) => setColegio({ ...colegio, telefono: v })}
-              />
-              <TextField
-                id="onb-email"
-                label="Correo del colegio"
-                tipo="email"
-                value={colegio.email}
-                onChange={(v) => setColegio({ ...colegio, email: v })}
-              />
-            </div>
+            {!formHabilitado && !buscandoDane && (
+              <p className="onb-nota">
+                Con el código DANE se traen el nombre, el municipio y la dirección del
+                establecimiento. Si el código no aparece en el MEN también podrás escribir los datos
+                a mano.
+              </p>
+            )}
 
-            <p className="onb-nota">
-              Los usuarios entran con su correo institucional: el dominio{' '}
-              <strong>{data.colegio.dominioEmail ?? 'del administrador'}</strong> identifica al
-              colegio en el login. No se edita aquí para que nadie pierda el acceso.
-            </p>
-
-            <h2 className="onb-card-titulo">Calendario escolar</h2>
-            <div className="onb-opciones">
-              {(['A', 'B'] as const).map((c) => (
-                <label
-                  key={c}
-                  className={`onb-chip${colegio.calendario === c ? ' onb-chip--on' : ''}`}
-                >
-                  <input
-                    type="radio"
-                    name="calendario"
-                    checked={colegio.calendario === c}
-                    onChange={() => {
-                      setColegio({ ...colegio, calendario: c });
-                      setPeriodos(periodosBase(c, colegio.anioLectivo));
-                    }}
+            {formHabilitado && (
+              <div className="onb-form">
+                <div className="onb-grid">
+                  <TextField
+                    id="onb-nombre"
+                    label="Nombre"
+                    value={colegio.nombre}
+                    onChange={conNombre}
+                    error={errores['nombre']}
                   />
-                  Calendario {c}
-                </label>
-              ))}
-            </div>
-
-            <h2 className="onb-card-titulo">Año lectivo</h2>
-            <div className="onb-grid onb-grid--angosto">
-              <TextField
-                id="onb-anio"
-                label="Año"
-                value={String(colegio.anioLectivo)}
-                onChange={(v) => {
-                  const anio = Number(v.replace(/\D/g, '').slice(0, 4)) || colegio.anioLectivo;
-                  setColegio({ ...colegio, anioLectivo: anio });
-                  setPeriodos(periodosBase(colegio.calendario, anio));
-                }}
-              />
-            </div>
-
-            <p className="onb-nota">
-              Períodos académicos precargados según el calendario {colegio.calendario}. Puedes
-              ajustar las fechas.
-            </p>
-            <div className="onb-periodos">
-              {periodos.map((p, i) => (
-                <div key={p.numero} className="onb-periodo">
-                  <strong>{p.nombre}</strong>
-                  <label>
-                    Inicio
-                    <input
-                      type="date"
-                      value={p.fechaInicio}
-                      onChange={(e) => {
-                        const copia = [...periodos];
-                        copia[i] = { ...p, fechaInicio: e.target.value };
-                        setPeriodos(copia);
-                      }}
+                  <TextField
+                    id="onb-nit"
+                    label="NIT (opcional)"
+                    value={colegio.nit}
+                    onChange={(v) => {
+                      setColegio({ ...colegio, nit: v });
+                      limpiarError('nit');
+                    }}
+                    error={errores['nit']}
+                    ayuda="Con dígito de verificación, p. ej. 900123456-7."
+                  />
+                  {/* El nombre completo es largo: ocupa las dos columnas. */}
+                  <div className="onb-campo-ancho">
+                    <TextField
+                      id="onb-nombre-oficial"
+                      label="Nombre oficial (documentos)"
+                      value={colegio.nombreOficial}
+                      onChange={(v) => setColegio({ ...colegio, nombreOficial: v })}
+                      ayuda="Como lo registra el MEN; se imprime en certificados y actas."
                     />
-                  </label>
-                  <label>
-                    Fin
-                    <input
-                      type="date"
-                      value={p.fechaFin}
-                      onChange={(e) => {
-                        const copia = [...periodos];
-                        copia[i] = { ...p, fechaFin: e.target.value };
-                        setPeriodos(copia);
-                      }}
-                    />
-                  </label>
+                  </div>
+                  <SelectField
+                    id="onb-departamento"
+                    label="Departamento"
+                    value={colegio.departamento}
+                    onChange={conDepartamento}
+                    opciones={opcionesDepartamento.map((d) => ({ valor: d, texto: d }))}
+                    placeholder="Elige…"
+                    error={errores['departamento']}
+                  />
+                  <SelectField
+                    id="onb-municipio"
+                    label="Municipio"
+                    value={colegio.municipio}
+                    onChange={conMunicipio}
+                    opciones={opcionesMunicipio.map((m) => ({ valor: m, texto: m }))}
+                    placeholder={colegio.departamento === '' ? 'Primero el departamento' : 'Elige…'}
+                    error={errores['municipio']}
+                    disabled={colegio.departamento === ''}
+                    ayuda={
+                      colegio.departamento === ''
+                        ? 'Se habilita al elegir el departamento.'
+                        : undefined
+                    }
+                  />
+                  <TextField
+                    id="onb-direccion"
+                    label="Dirección"
+                    value={colegio.direccion}
+                    onChange={(v) => setColegio({ ...colegio, direccion: v })}
+                  />
+                  <TextField
+                    id="onb-telefono"
+                    label="Teléfono"
+                    value={colegio.telefono}
+                    onChange={(v) => {
+                      setColegio({ ...colegio, telefono: v });
+                      limpiarError('telefono');
+                    }}
+                    error={errores['telefono']}
+                  />
+                  <TextField
+                    id="onb-email"
+                    label="Correo del colegio"
+                    tipo="email"
+                    value={colegio.email}
+                    onChange={(v) => {
+                      setColegio({ ...colegio, email: v });
+                      limpiarError('email');
+                    }}
+                    error={errores['email']}
+                  />
+                  <TextField
+                    id="onb-sub"
+                    label="Subdominio"
+                    value={colegio.subdominio}
+                    onChange={(v) => {
+                      conSubdominio(v);
+                      limpiarError('subdominio');
+                    }}
+                    ayuda="Se sugiere del nombre; puedes cambiarlo."
+                    error={errores['subdominio']}
+                  />
                 </div>
-              ))}
-            </div>
+
+                <p className="onb-nota">
+                  Los usuarios entran con su correo institucional: el dominio{' '}
+                  <strong>{data.colegio.dominioEmail ?? 'del administrador'}</strong> identifica al
+                  colegio en el login. No se edita aquí para que nadie pierda el acceso.
+                </p>
+
+                <div className="onb-fila-calendario">
+                  <div>
+                    <span className="onb-etiqueta" id="onb-calendario-etiqueta">
+                      Calendario escolar
+                    </span>
+                    <div
+                      className="onb-opciones"
+                      role="radiogroup"
+                      aria-labelledby="onb-calendario-etiqueta"
+                    >
+                      {(['A', 'B'] as const).map((c) => (
+                        <label
+                          key={c}
+                          className={`onb-chip${colegio.calendario === c ? ' onb-chip--on' : ''}`}
+                        >
+                          <input
+                            type="radio"
+                            name="calendario"
+                            checked={colegio.calendario === c}
+                            onChange={() => conCalendario(c)}
+                          />
+                          Calendario {c}
+                        </label>
+                      ))}
+                    </div>
+                    {errores['calendario'] !== undefined && (
+                      <p className="onb-error m3-body-small" role="alert">
+                        {errores['calendario']}
+                      </p>
+                    )}
+                  </div>
+                  <div className="onb-anio">
+                    <TextField
+                      id="onb-anio"
+                      label="Año lectivo"
+                      value={String(colegio.anioLectivo)}
+                      onChange={conAnio}
+                      error={errores['anio']}
+                    />
+                  </div>
+                </div>
+
+                {colegio.calendario !== '' && (
+                  <>
+                    <p className="onb-nota">
+                      Períodos académicos precargados según el calendario {colegio.calendario}.
+                      Puedes ajustar las fechas.
+                    </p>
+                    <div className="onb-periodos">
+                      {periodos.map((p, i) => (
+                        <div key={p.numero} className="onb-periodo">
+                          <strong>{p.nombre}</strong>
+                          <label>
+                            Inicio
+                            <input
+                              type="date"
+                              value={p.fechaInicio}
+                              onChange={(e) => {
+                                const copia = [...periodos];
+                                copia[i] = { ...p, fechaInicio: e.target.value };
+                                setPeriodos(copia);
+                                limpiarError('periodos');
+                              }}
+                            />
+                          </label>
+                          <label>
+                            Fin
+                            <input
+                              type="date"
+                              value={p.fechaFin}
+                              onChange={(e) => {
+                                const copia = [...periodos];
+                                copia[i] = { ...p, fechaFin: e.target.value };
+                                setPeriodos(copia);
+                                limpiarError('periodos');
+                              }}
+                            />
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                    {errores['periodos'] !== undefined && (
+                      <p className="onb-error m3-body-small" role="alert">
+                        {errores['periodos']}
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
           </section>
         )}
 
@@ -1303,7 +1584,7 @@ export default function OnboardingPage() {
             <span />
           )}
           <div className="onb-acciones">
-            {paso === 1 && (
+            {paso === 1 && formHabilitado && (
               <M3Button onClick={() => void guardarPaso1(2)} disabled={guardando}>
                 Continuar a sedes
               </M3Button>

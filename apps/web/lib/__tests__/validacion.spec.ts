@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { esEmailValido } from '../validacion';
+import { esEmailValido, esNitValido, esTelefonoValido, normalizarNit } from '../validacion';
 
 describe('esEmailValido', () => {
   it('acepta correos institucionales normales', () => {
@@ -22,5 +22,45 @@ describe('esEmailValido', () => {
     expect(esEmailValido('usuario@-colegio.co')).toBe(false);
     expect(esEmailValido('usuario@colegio-.co')).toBe(false);
     expect(esEmailValido('usuario@colegio..co')).toBe(false);
+  });
+});
+
+describe('normalizarNit y esNitValido', () => {
+  it('quita puntos y espacios y deja el guion del verificador', () => {
+    expect(normalizarNit('900.123.456-7')).toBe('900123456-7');
+    expect(normalizarNit(' 900 123 456 ')).toBe('900123456');
+  });
+
+  it('acepta el formato de la DIAN y los NIT de 8 dígitos', () => {
+    expect(esNitValido('900123456-7')).toBe(true);
+    expect(esNitValido('900.123.456-7')).toBe(true);
+    expect(esNitValido('900123456')).toBe(true);
+    // La DIAN admite NIT de 8 dígitos antes del verificador en entidades viejas.
+    expect(esNitValido('80012345-3')).toBe(true);
+  });
+
+  it('rechaza lo que no es un NIT', () => {
+    expect(esNitValido('')).toBe(false);
+    expect(esNitValido('123')).toBe(false);
+    expect(esNitValido('NIT-900123456')).toBe(false);
+    expect(esNitValido('900123456-7-8')).toBe(false);
+    // Dos dígitos de verificación no son válidos.
+    expect(esNitValido('900123456-77')).toBe(false);
+  });
+});
+
+describe('esTelefonoValido', () => {
+  it('acepta fijos y celulares con separadores', () => {
+    expect(esTelefonoValido('3001234567')).toBe(true);
+    expect(esTelefonoValido('300 123 4567')).toBe(true);
+    expect(esTelefonoValido('(5) 385 1234')).toBe(true);
+    expect(esTelefonoValido('+57 300 123 4567')).toBe(true);
+  });
+
+  it('rechaza longitudes y caracteres raros', () => {
+    expect(esTelefonoValido('')).toBe(false);
+    expect(esTelefonoValido('12345')).toBe(false);
+    expect(esTelefonoValido('300-123-4567 ext 2')).toBe(false);
+    expect(esTelefonoValido('telefono')).toBe(false);
   });
 });

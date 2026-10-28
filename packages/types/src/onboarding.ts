@@ -37,6 +37,12 @@ export type PeriodoOnboardingRequest = z.input<typeof PeriodoOnboardingSchema>;
  */
 export const ColegioOnboardingSchema = z.object({
   nombre: z.string().trim().min(3).max(160),
+  /**
+   * Nombre completo del establecimiento para documentos oficiales (certificados,
+   * actas). Se prellena con el del MEN en mayúsculas y tildes; el admin puede
+   * corregirlo. Sin él, los documentos usan `nombre`.
+   */
+  nombreOficial: z.string().trim().max(200).optional(),
   nit: z.string().trim().max(20).optional(),
   codigoDane: CodigoDaneSchema,
   subdominio: SubdominioSchema,
@@ -144,6 +150,8 @@ export interface PeriodoOnboarding {
 export interface ColegioOnboarding {
   id: string;
   nombre: string;
+  /** Nombre completo del MEN para certificados y actas (NULL en colegios viejos). */
+  nombreOficial: string | null;
   nit: string | null;
   codigoDane: string;
   subdominio: string;

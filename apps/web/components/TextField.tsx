@@ -9,13 +9,13 @@ interface TextFieldProps {
   tipo?: 'text' | 'email' | 'password';
   autoComplete?: string;
   /** Mensaje de error (activa el estado de error y role=alert). */
-  error?: string | null;
+  error?: string | null | undefined;
   /** Texto de ayuda permanente (se ignora si hay error). */
-  ayuda?: string;
+  ayuda?: string | undefined;
   /** Contenido flotante a la derecha (p. ej. botón mostrar/ocultar). */
   trailing?: ReactNode;
   autoFocus?: boolean;
-  disabled?: boolean;
+  disabled?: boolean | undefined;
   /** Se dispara al perder el foco (p. ej. detección del dominio del correo). */
   onBlur?: () => void;
 }

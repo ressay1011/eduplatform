@@ -25,6 +25,8 @@ import { BaseRepository } from '../../shared/base.repository';
 /** Datos del paso 1 ya validados. */
 export interface DatosColegio {
   nombre: string;
+  /** Nombre completo del MEN para documentos oficiales (vacío = usar `nombre`). */
+  nombreOficial?: string | undefined;
   nit?: string | undefined;
   codigoDane: string;
   subdominio: string;
@@ -67,6 +69,7 @@ export interface FotoOnboarding {
   colegio: {
     id: string;
     nombre: string;
+    nombreOficial: string | null;
     nit: string | null;
     codigoDane: string;
     subdominio: string;
@@ -102,6 +105,7 @@ export interface FotoOnboarding {
 const COLEGIO_COLUMNS = {
   id: colegios.id,
   nombre: colegios.nombre,
+  nombreOficial: colegios.nombreOficial,
   nit: colegios.nit,
   codigoDane: colegios.codigoDane,
   subdominio: colegios.subdominio,
@@ -228,6 +232,10 @@ export class OnboardingRepository extends BaseRepository {
         .update(colegios)
         .set({
           nombre: datos.nombre,
+          nombreOficial:
+            datos.nombreOficial === undefined || datos.nombreOficial === ''
+              ? null
+              : datos.nombreOficial,
           nit: datos.nit ?? null,
           codigoDane: datos.codigoDane,
           subdominio: datos.subdominio,
