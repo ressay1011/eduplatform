@@ -158,7 +158,6 @@ export interface ColegioOnboarding {
   codigoDane: string;
   subdominio: string;
   /** Dominio del correo institucional: solo lectura en el wizard. */
-  dominioEmail: string | null;
   municipio: string;
   departamento: string;
   direccion: string | null;

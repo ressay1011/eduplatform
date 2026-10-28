@@ -44,7 +44,6 @@ const platformCtx: TenantContext = { colegioId: SIN_COLEGIO_ID, isPlatformAdmin:
 interface Tenant {
   colegioId: string;
   subdominio: string;
-  dominio: string;
   adminEmail: string;
   staffEmail: string;
   sedeId: string;
@@ -81,9 +80,8 @@ describe('Matrículas (e2e)', () => {
   /** Arma un colegio completo: admin, staff, sede, año, grado, curso y estudiantes. */
   async function crearTenant(nombre: string, indice: number, hash: string): Promise<Tenant> {
     const subdominio = `mat-${sufijo}-${indice}`;
-    const dominio = `${subdominio}.test`;
-    const adminEmail = `admin@${dominio}`;
-    const staffEmail = `staff@${dominio}`;
+    const adminEmail = `admin@${subdominio}`;
+    const staffEmail = `staff@${subdominio}`;
 
     return withTenant(db, platformCtx, async (tx) => {
       const [colegio] = await tx
@@ -92,10 +90,9 @@ describe('Matrículas (e2e)', () => {
           nombre,
           codigoDane: `2${sufijo}${indice}`,
           subdominio,
-          dominioEmail: dominio,
           municipio: 'Plato',
           departamento: 'Magdalena',
-          email: `contacto@${dominio}`,
+          email: `contacto@${subdominio}`,
           calendario: 'A',
           estado: 'ACTIVO',
           onboardingCompletadoEn: new Date(),
@@ -182,7 +179,7 @@ describe('Matrículas (e2e)', () => {
           },
           {
             colegioId,
-            usuario: `estudiante.${indice}@${dominio}`,
+            usuario: `estudiante.${indice}@${subdominio}`,
             passwordHash: hash,
             nombres: 'Estudiante',
             apellidos: `Ficha ${indice}`,
@@ -192,7 +189,7 @@ describe('Matrículas (e2e)', () => {
           },
           {
             colegioId,
-            usuario: `cuenta.${indice}@${dominio}`,
+            usuario: `cuenta.${indice}@${subdominio}`,
             passwordHash: hash,
             nombres: 'Cuenta',
             apellidos: `Sin Ficha ${indice}`,
@@ -206,8 +203,8 @@ describe('Matrículas (e2e)', () => {
 
       const admin = creados.find((u) => u.usuario === adminEmail);
       const staff = creados.find((u) => u.usuario === staffEmail);
-      const estudiante = creados.find((u) => u.usuario === `estudiante.${indice}@${dominio}`);
-      const cuenta = creados.find((u) => u.usuario === `cuenta.${indice}@${dominio}`);
+      const estudiante = creados.find((u) => u.usuario === `estudiante.${indice}@${subdominio}`);
+      const cuenta = creados.find((u) => u.usuario === `cuenta.${indice}@${subdominio}`);
       if (
         admin === undefined ||
         staff === undefined ||
@@ -238,7 +235,6 @@ describe('Matrículas (e2e)', () => {
       return {
         colegioId,
         subdominio,
-        dominio,
         adminEmail,
         staffEmail,
         sedeId: sede.id,
@@ -298,6 +294,21 @@ describe('Matrículas (e2e)', () => {
       });
     }
     await app.close();
+  });
+
+  it('las pestañas de personas devuelven los datos personales normalizados', async () => {
+    const agente = await login(tenantA.adminEmail);
+
+    // Estudiantes y acudientes usan `coalesce(..., '')`: nunca null en la API.
+    const estudiantes = await agente.get('/api/personas/estudiantes?q=a').expect(200);
+    expect(estudiantes.body.data.total).toBeGreaterThan(0);
+    expect(typeof estudiantes.body.data.items[0].nombres).toBe('string');
+
+    const acudientes = await agente.get('/api/personas/acudientes?q=a').expect(200);
+    expect(Array.isArray(acudientes.body.data.items)).toBe(true);
+
+    const empleados = await agente.get('/api/personas/empleados?q=a').expect(200);
+    expect(empleados.body.data.total).toBeGreaterThan(0);
   });
 
   it('lista los cursos del año vigente', async () => {
@@ -409,7 +420,7 @@ describe('Matrículas (e2e)', () => {
             documento: tenantA.cuentaSinFichaDocumento,
             nombres: 'Cuenta',
             apellidos: 'Sin Ficha',
-            correo: `cuenta.1@${tenantA.dominio}`,
+            correo: `cuenta.1@${tenantA.subdominio}`,
             sede: 'sede principal',
             grado: '6°',
             letra: 'a',

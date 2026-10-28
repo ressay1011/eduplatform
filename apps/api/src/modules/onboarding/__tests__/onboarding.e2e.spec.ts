@@ -42,7 +42,6 @@ describe('Onboarding (e2e)', () => {
   // entre archivos y chocaba con `colegios_codigo_dane_unique`.
   const sufijo = String(randomInt(0, 100_000_000)).padStart(8, '0');
   const subdominio = `onb-${sufijo}`;
-  const dominio = `onb-${sufijo}.test`;
   const codigoDane = `1${sufijo}000`;
 
   let colegioId = '';
@@ -72,10 +71,9 @@ describe('Onboarding (e2e)', () => {
           nombre: 'Colegio Onboarding',
           codigoDane,
           subdominio,
-          dominioEmail: dominio,
           municipio: 'Plato',
           departamento: 'Magdalena',
-          email: `contacto@${dominio}`,
+          email: `contacto@${subdominio}`,
           calendario: 'A',
           estado: 'ACTIVO',
         })
@@ -83,8 +81,8 @@ describe('Onboarding (e2e)', () => {
       if (colegio === undefined) throw new Error('Fixtures: colegio');
       colegioId = colegio.id;
 
-      adminEmail = `admin@${dominio}`;
-      staffEmail = `staff@${dominio}`;
+      adminEmail = `admin@${subdominio}`;
+      staffEmail = `staff@${subdominio}`;
 
       const creados = await tx
         .insert(usuarios)
@@ -171,12 +169,11 @@ describe('Onboarding (e2e)', () => {
         subdominio,
         // El dominio de login NO se edita en el wizard: se envía a propósito
         // para comprobar que la API lo ignora y el colegio conserva el suyo.
-        dominioEmail: 'intento-de-cambio.test',
         municipio: 'Plato',
         departamento: 'Magdalena',
         direccion: 'Calle 1 # 2-3',
         telefono: '3001234567',
-        email: `rectoria@${dominio}`,
+        email: `rectoria@${subdominio}.test`,
         calendario: 'A',
         anioLectivo: 2026,
         periodos: [
@@ -204,8 +201,8 @@ describe('Onboarding (e2e)', () => {
     expect(body.data.colegio.nombreOficial).toBe(
       'INSTITUCIÓN EDUCATIVA TÉCNICA DEPARTAMENTAL ONBOARDING',
     );
-    // El dominio con el que entran los usuarios no cambia por el wizard.
-    expect(body.data.colegio.dominioEmail).toBe(dominio);
+    // El subdominio es el único identificador y el wizard no lo cambia.
+    expect(body.data.colegio.subdominio).toBe(subdominio);
   });
 
   it('la consulta por código DANE es exclusiva del admin y valida el formato', async () => {

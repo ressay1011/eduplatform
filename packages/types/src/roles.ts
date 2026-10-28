@@ -75,7 +75,7 @@ export interface PersonaEmpleado {
   nombres: string;
   apellidos: string;
   usuario: string;
-  tipoDocumento: string;
+  tipoDocumento: string | null;
   numeroDocumento: string;
   esAdmin: boolean;
   activo: boolean;

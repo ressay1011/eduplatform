@@ -5,6 +5,7 @@
 
 import { sql } from 'drizzle-orm';
 import {
+  check,
   boolean,
   index,
   integer,
@@ -36,7 +37,7 @@ export const colegios = pgTable(
     id: uuid('id')
       .primaryKey()
       .default(sql`gen_random_uuid()`),
-    nombre: text('nombre').notNull(),
+    nombre: text('nombre').notNull().default(''),
     /**
      * Nombre completo del establecimiento tal como lo registra el MEN
      * («INSTITUCIÓN EDUCATIVA TÉCNICA DEPARTAMENTAL …»). Es el que se imprime en
@@ -46,22 +47,24 @@ export const colegios = pgTable(
     /** NIT — nullable: algunos colegios públicos no lo reportan. */
     nit: text('nit').unique(),
     /** Código DANE oficial de la IE (12 dígitos, único a nivel nacional). */
-    codigoDane: text('codigo_dane').notNull().unique(),
+    // Sin DANE el colegio se crea igual; el wizard lo exige en el paso 1.
+    codigoDane: text('codigo_dane').unique(),
     /** Subdominio del colegio: `subdominio.eduplatform.co` (ADR-003). */
     subdominio: text('subdominio').notNull().unique(),
     /**
      * Dominio de correo institucional (p. ej. `juanaarias.edu.co`).
      * Único: el login unificado lo usa para saber a qué colegio entra el usuario.
      */
-    dominioEmail: text('dominio_email').unique(),
-    municipio: text('municipio').notNull(),
-    departamento: text('departamento').notNull(),
+    municipio: text('municipio').notNull().default(''),
+    departamento: text('departamento').notNull().default(''),
     direccion: text('direccion'),
     telefono: text('telefono'),
-    email: text('email').notNull(),
+    email: text('email').notNull().default(''),
     logoUrl: text('logo_url'),
     /** Calendario A (feb–nov) o B (sep–jun). */
-    calendario: text('calendario', { enum: [Calendario.A, Calendario.B] }).notNull(),
+    calendario: text('calendario', { enum: [Calendario.A, Calendario.B] })
+      .notNull()
+      .default(Calendario.A),
     estado: text('estado', {
       enum: [EstadoColegio.ACTIVO, EstadoColegio.SUSPENDIDO, EstadoColegio.PRUEBA],
     })
@@ -88,6 +91,8 @@ export const colegios = pgTable(
   (t) => [
     index('colegios_estado_idx').on(t.estado),
     index('colegios_subdominio_idx').on(t.subdominio),
+    // El subdominio es el único identificador del colegio: nunca vacío.
+    check('colegios_subdominio_no_vacio', sql`${t.subdominio} <> ''`),
   ],
 );
 

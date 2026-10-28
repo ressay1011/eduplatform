@@ -7,7 +7,6 @@ import { Injectable } from '@nestjs/common';
 import type { TenantContext } from '@eduplatform/database';
 import { and, asc, count, eq, ilike, inArray, isNull, ne, or } from 'drizzle-orm';
 import {
-  colegios,
   permisos,
   roles,
   sesiones,
@@ -23,11 +22,11 @@ import { BaseRepository } from '../../shared/base.repository';
 export interface UsuarioRow {
   id: string;
   colegioId: string;
-  nombres: string;
-  apellidos: string;
+  nombres: string | null;
+  apellidos: string | null;
   usuario: string;
-  tipoDocumento: TipoDocumento;
-  numeroDocumento: string;
+  tipoDocumento: TipoDocumento | null;
+  numeroDocumento: string | null;
   esAdmin: boolean;
   rolId: string | null;
   alcance: 'TODAS' | 'ESPECIFICAS';
@@ -209,22 +208,6 @@ export class UsuariosRepository extends BaseRepository {
           ),
         );
       return Number(filas[0]?.total ?? 0);
-    });
-  }
-
-  /** Dominio institucional del colegio (para validar correos). */
-  async dominioDelColegio(
-    ctx: TenantContext,
-  ): Promise<{ nombre: string; dominioEmail: string | null }> {
-    return this.withTenant(ctx, async (tx) => {
-      const filas = await tx
-        .select({ nombre: colegios.nombre, dominioEmail: colegios.dominioEmail })
-        .from(colegios)
-        .where(eq(colegios.id, ctx.colegioId))
-        .limit(1);
-      const fila = filas[0];
-      if (fila === undefined) return { nombre: '', dominioEmail: null };
-      return { nombre: fila.nombre, dominioEmail: fila.dominioEmail };
     });
   }
 

@@ -70,7 +70,6 @@ function onboarding(completado: boolean): EstadoOnboarding {
       nit: null,
       codigoDane: '',
       subdominio: 'juanaarias',
-      dominioEmail: 'juanaarias.edu.co',
       municipio: '',
       departamento: '',
       direccion: null,

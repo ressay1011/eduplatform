@@ -58,11 +58,9 @@ describe('Auth (e2e)', () => {
   const subdominioA = `e2e-a-${sufijo}`;
   const subdominioB = `e2e-b-${sufijo}`;
   // Dominios de correo: son la llave del login unificado (únicos por colegio).
-  const dominioA = `e2e-a-${sufijo}.test`;
-  const dominioB = `e2e-b-${sufijo}.test`;
-  const emailAdminA = `admin-a@${dominioA}`;
-  const emailStaffA = `staff-a@${dominioA}`;
-  const emailAdminB = `user-b@${dominioB}`;
+  const emailAdminA = `admin-a@${subdominioA}`;
+  const emailStaffA = `staff-a@${subdominioA}`;
+  const emailAdminB = `user-b@${subdominioB}`;
   // Correo de un proveedor libre: con el subdominio debe poder entrar igual.
   const emailGmailA = `rector.juanaarias.${sufijo}@gmail.com`;
   // Usuario cuyo sufijo ES el subdominio: resuelve el colegio sin URL de colegio.
@@ -93,7 +91,6 @@ describe('Auth (e2e)', () => {
             nombre: 'Colegio E2E A',
             codigoDane: `1${sufijo}000`,
             subdominio: subdominioA,
-            dominioEmail: dominioA,
             municipio: 'Plato',
             departamento: 'Magdalena',
             email: 'a@e2e.co',
@@ -103,7 +100,6 @@ describe('Auth (e2e)', () => {
             nombre: 'Colegio E2E B',
             codigoDane: `2${sufijo}000`,
             subdominio: subdominioB,
-            dominioEmail: dominioB,
             municipio: 'Plato',
             departamento: 'Magdalena',
             email: 'b@e2e.co',
@@ -223,36 +219,6 @@ describe('Auth (e2e)', () => {
     expect(res.body).toMatchObject({ success: false, error: { code: 'NOT_FOUND' } });
   });
 
-  it('contexto-colegio por dominio de correo (vía del login unificado)', async () => {
-    const res = await request(app.getHttpServer()).get(
-      `/api/auth/contexto-colegio?dominio=${dominioA}`,
-    );
-    expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({
-      success: true,
-      data: { nombre: 'Colegio E2E A', subdominio: subdominioA },
-    });
-  });
-
-  it('identificar-colegio: el paso 1 resuelve el colegio por el dominio', async () => {
-    const res = await request(app.getHttpServer())
-      .post('/api/auth/identificar-colegio')
-      .send({ usuario: `cualquiera@${dominioB}` });
-    expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({
-      success: true,
-      data: { nombre: 'Colegio E2E B', subdominio: subdominioB },
-    });
-  });
-
-  it('identificar-colegio con dominio desconocido → 404', async () => {
-    const res = await request(app.getHttpServer())
-      .post('/api/auth/identificar-colegio')
-      .send({ usuario: 'alguien@dominio-inexistente.test' });
-    expect(res.status).toBe(404);
-    expect(res.body).toMatchObject({ success: false, error: { code: 'NOT_FOUND' } });
-  });
-
   it('login por subdominio: el correo puede ser de cualquier dominio', async () => {
     const { body } = await request(app.getHttpServer())
       .post('/api/auth/login')
@@ -298,7 +264,7 @@ describe('Auth (e2e)', () => {
   it('anti-diccionario: 5 fallos con un correo INEXISTENTE bloquean el identificador (423)', async () => {
     // Correo con dominio válido pero usuario que no existe en la BD: antes
     // solo lo frenaba el rate limit por IP; ahora se bloquea el identificador.
-    const correoFantasma = `fantasma-${sufijo}@${dominioA}`;
+    const correoFantasma = `fantasma-${sufijo}@${subdominioA}`;
 
     for (let i = 0; i < 5; i += 1) {
       const intento = await request(app.getHttpServer())
@@ -581,9 +547,7 @@ describe('Auth (e2e)', () => {
     // 4) …y al invalidar (lo hará el módulo de colegios al editar), el nuevo
     //    valor sale YA — sin esperar ventanas de 60s ni TTL.
     //    Se invalida por la MISMA vía que usará el módulo de colegios.
-    app
-      .get(AuthService)
-      .invalidarContextoColegio({ subdominio: subdominioA, dominioEmail: dominioA });
+    app.get(AuthService).invalidarContextoColegio({ subdominio: subdominioA });
     const despues = await request(app.getHttpServer()).get(
       `/api/auth/contexto-colegio?subdominio=${subdominioA}`,
     );

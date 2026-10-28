@@ -20,7 +20,6 @@ if (!URL || !HASH) {
 }
 
 const SUBDOMINIO = process.env.DEMO_SUBDOMINIO ?? 'demo-dist-1';
-const DOMINIO_EMAIL = process.env.DEMO_DOMINIO ?? 'juanaarias.edu.co';
 // El acceso es con nombre de usuario, no un correo: admin@<subdominio>.
 const USUARIO_ADMIN = process.env.DEMO_ADMIN ?? `admin@${SUBDOMINIO}`;
 const NOMBRE_COLEGIO = process.env.DEMO_COLEGIO ?? 'I.E.T.D. Juana Arias de Benavides';
@@ -32,9 +31,9 @@ try {
   let colegioId = existente[0]?.id;
   if (colegioId === undefined) {
     const [creado] = await sql`
-      INSERT INTO colegios (nombre, codigo_dane, subdominio, dominio_email, municipio, departamento, email, calendario, estado, primary_color)
-      VALUES (${NOMBRE_COLEGIO}, '105001000123', ${SUBDOMINIO}, ${DOMINIO_EMAIL}, 'Plato', 'Magdalena',
-              ${`rectoria@${DOMINIO_EMAIL}`}, 'A', 'ACTIVO', '#0b57d0')
+      INSERT INTO colegios (nombre, codigo_dane, subdominio, municipio, departamento, email, calendario, estado, primary_color)
+      VALUES (${NOMBRE_COLEGIO}, '105001000123', ${SUBDOMINIO}, 'Plato', 'Magdalena',
+              'rectoria@eduplatform.co', 'A', 'ACTIVO', '#0b57d0')
       RETURNING id
     `;
     colegioId = creado?.id;

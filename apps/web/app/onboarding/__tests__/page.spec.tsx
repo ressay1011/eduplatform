@@ -95,7 +95,6 @@ function estado(paso: number): EstadoOnboarding {
       nit: null,
       codigoDane: '105001001234',
       subdominio: 'demo',
-      dominioEmail: 'demo.edu.co',
       municipio: 'Plato',
       departamento: 'Magdalena',
       direccion: null,

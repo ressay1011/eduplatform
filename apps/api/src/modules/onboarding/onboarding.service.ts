@@ -8,7 +8,6 @@
 import { Injectable } from '@nestjs/common';
 import type { TenantContext } from '@eduplatform/database';
 import {
-  dominioDeEmail,
   ErrorCodes,
   type ColegioDane,
   type ColegioOnboardingRequest,
@@ -73,9 +72,8 @@ export class OnboardingService {
         nombre: colegio.nombre,
         nombreOficial: colegio.nombreOficial,
         nit: colegio.nit,
-        codigoDane: colegio.codigoDane,
+        codigoDane: colegio.codigoDane ?? '',
         subdominio: colegio.subdominio,
-        dominioEmail: colegio.dominioEmail,
         municipio: colegio.municipio,
         departamento: colegio.departamento,
         direccion: colegio.direccion,
@@ -145,7 +143,6 @@ export class OnboardingService {
       await this.repo.guardarColegio(contexto, {
         ...datos,
         periodos: datos.periodos,
-        dominioColegio: dominioDeEmail(datos.email),
       });
     } catch (error) {
       if (this.esUnico(error)) {

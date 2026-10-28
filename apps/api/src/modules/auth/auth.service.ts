@@ -8,7 +8,6 @@ import type { TenantContext } from '@eduplatform/database';
 import {
   ErrorCodes,
   EstadoColegio,
-  dominioDeEmail,
   sufijoDeUsuario,
   type CambioPassword,
   type ContextoColegioPublico,
@@ -34,12 +33,7 @@ import { ContextoCacheService } from './contexto-cache.service';
 import { LoginAttemptsService } from './login-attempts.service';
 import { PasswordService } from './password.service';
 import { SessionTokenService } from './session-token.service';
-import type {
-  AuthContext,
-  ColegioAuthContext,
-  ContextoPublicoConSede,
-  RequestMeta,
-} from './auth.types';
+import type { AuthContext, ColegioAuthContext, RequestMeta } from './auth.types';
 
 /** Contexto tenant del usuario de colegio autenticado. */
 function contextoDe(auth: ColegioAuthContext): TenantContext {
@@ -88,53 +82,11 @@ export class AuthService {
     return contexto;
   }
 
-  /**
-   * Branding público por dominio de correo — la vía del login unificado.
-   * Al guardar en caché se registran ambas llaves (dominio y subdominio) para
-   * que la invalidación del módulo de colegios limpie todo de una vez.
-   */
-  async contextoColegioPorDominio(dominio: string): Promise<ContextoPublicoConSede> {
-    const clave = this.claveDominio(dominio);
-    const enCache = this.contextoCache.obtener(clave);
-    if (enCache !== null) return enCache;
-
-    const colegio = await this.repo.findColegioPublicoPorDominio(dominio);
-    if (colegio === null) {
-      throw apiError(
-        ErrorCodes.NOT_FOUND,
-        404,
-        'No encontramos un colegio registrado con ese dominio de correo',
-      );
-    }
-    const contexto = { ...this.aContextoPublico(colegio), subdominio: colegio.subdominio };
-    this.contextoCache.guardar(clave, contexto);
-    this.contextoCache.guardar(this.claveSubdominio(colegio.subdominio), contexto);
-    return contexto;
-  }
-
-  /**
-   * Paso 1 del login: solo el correo. El dominio (después de la @) identifica
-   * el colegio y devuelve su branding. No revela si el usuario existe.
-   */
-  async identificarColegio(identificador: string): Promise<ContextoPublicoConSede> {
-    // Solo la vía heredada: sin subdominio, el identificador trae el dominio
-    // del colegio (`admin@colegio.edu.co`). Con usuario libre no hay colegio.
-    const dominio = dominioDeEmail(identificador);
-    if (dominio === null) {
-      throw apiError(
-        ErrorCodes.NOT_FOUND,
-        404,
-        'No encontramos un colegio registrado con ese dominio de correo',
-      );
-    }
-    return this.contextoColegioPorDominio(dominio);
-  }
-
   /** Convierte la fila de BD al contrato público (sin datos internos). */
   private aContextoPublico(colegio: ColegioPublicoRow): ContextoColegioPublico {
     return {
       nombre: colegio.nombre,
-      codigoDane: colegio.codigoDane,
+      codigoDane: colegio.codigoDane ?? '',
       logoUrl: colegio.logoUrl,
       primaryColor: colegio.primaryColor,
       municipio: colegio.municipio,
@@ -147,20 +99,13 @@ export class AuthService {
     return `subdominio:${subdominio}`;
   }
 
-  private claveDominio(dominio: string): string {
-    return `dominio:${dominio}`;
-  }
-
   /**
    * Invalida la caché del contexto público de un colegio. Lo llamará el
    * módulo de colegios al editar (nombre, color, logo, dominio, estado): el
    * cambio se refleja en la siguiente carga, SIN esperar al TTL del caché.
    */
-  invalidarContextoColegio(colegio: { subdominio: string; dominioEmail: string | null }): void {
+  invalidarContextoColegio(colegio: { subdominio: string }): void {
     this.contextoCache.invalidar(this.claveSubdominio(colegio.subdominio));
-    if (colegio.dominioEmail !== null) {
-      this.contextoCache.invalidar(this.claveDominio(colegio.dominioEmail));
-    }
   }
 
   /**
@@ -179,16 +124,11 @@ export class AuthService {
       );
     }
 
-    const dominio = dominioDeEmail(dto.usuario);
-    // El colegio sale del subdominio del host (`colegio.<dominio>`), del sufijo
-    // del nombre de usuario (`admin@juanaarias` → `juanaarias`) o, como último
-    // recurso, del dominio de un correo real (`admin@colegio.edu.co`).
+    // El colegio sale del subdominio del host (`colegio.<dominio>`) o del sufijo
+    // del nombre de usuario (`admin@juanaarias` → `juanaarias`).
     const subdominio = dto.subdominio ?? sufijoDeUsuario(dto.usuario) ?? null;
-    const porSubdominio =
-      subdominio === null ? null : await this.repo.findColegioPublico(subdominio);
     const colegioPublico =
-      porSubdominio ??
-      (dominio === null ? null : await this.repo.findColegioPublicoPorDominio(dominio));
+      subdominio === null ? null : await this.repo.findColegioPublico(subdominio);
     if (colegioPublico === null) {
       // Mensaje genérico: no se revela si el dominio o el correo existen.
       this.attempts.registrarFallo(dto.usuario);

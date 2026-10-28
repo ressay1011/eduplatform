@@ -21,6 +21,7 @@ import { OnboardingChecklist } from '@/components/OnboardingChecklist';
 import { SESION_KEY, useSesion } from '@/hooks/useSesion';
 import { cerrarSesion } from '@/lib/api';
 import { inicialesDe } from '@/lib/subdominio';
+import { inicialesVisible, nombreCorto } from '@/lib/nombre';
 
 /** Saludo según la hora local (el diseño dice «Buenos días»). */
 function saludoDe(hora: number): string {
@@ -158,9 +159,7 @@ export default function DashboardPage() {
   }
 
   const { usuario, colegio } = sesion;
-  const primerNombre = usuario.nombres.split(' ')[0] ?? usuario.nombres;
-  const apellidoInicial = usuario.apellidos.trim().charAt(0).toUpperCase();
-  const nombreCorto = `${primerNombre} ${apellidoInicial}.`;
+  const saludo = nombreCorto(usuario);
   const rolVisible = sesion.esAdmin ? 'Rector' : 'Personal del colegio';
   const anio = new Date().getFullYear();
 
@@ -216,10 +215,10 @@ export default function DashboardPage() {
 
         <div className="dash-usuario">
           <div className="dash-avatar" aria-hidden="true">
-            {inicialesDe(`${usuario.nombres} ${usuario.apellidos}`)}
+            {inicialesVisible(usuario)}
           </div>
           <div className="dash-usuario-textos">
-            <p>{nombreCorto}</p>
+            <p>{saludo}</p>
             <p>{rolVisible}</p>
           </div>
           <button
@@ -276,7 +275,7 @@ export default function DashboardPage() {
         <main className="dash-content" id="contenido-principal">
           <section className="dash-saludo">
             <h1>
-              {saludoDe(new Date().getHours())}, {primerNombre}
+              {saludoDe(new Date().getHours())}, {saludo}
             </h1>
             <p>Resumen institucional · Período 1 (en curso) · cierre el 30 de abril</p>
           </section>
