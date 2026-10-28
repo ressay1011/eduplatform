@@ -296,6 +296,21 @@ describe('Matrículas (e2e)', () => {
     await app.close();
   });
 
+  it('las pestañas de personas devuelven los datos personales normalizados', async () => {
+    const agente = await login(tenantA.adminEmail);
+
+    // Estudiantes y acudientes usan `coalesce(..., '')`: nunca null en la API.
+    const estudiantes = await agente.get('/api/personas/estudiantes').expect(200);
+    expect(estudiantes.body.data.total).toBeGreaterThan(0);
+    expect(typeof estudiantes.body.data.items[0].nombres).toBe('string');
+
+    const acudientes = await agente.get('/api/personas/acudientes').expect(200);
+    expect(Array.isArray(acudientes.body.data.items)).toBe(true);
+
+    const empleados = await agente.get('/api/personas/empleados').expect(200);
+    expect(empleados.body.data.total).toBeGreaterThan(0);
+  });
+
   it('lista los cursos del año vigente', async () => {
     const agente = await login(tenantA.adminEmail);
     const { body } = await agente.get('/api/matriculas/cursos').expect(200);
