@@ -15,7 +15,7 @@ import { PaperBg } from '@/components/PaperBg';
 import { TextField } from '@/components/TextField';
 import { SESION_KEY, useSesion } from '@/hooks/useSesion';
 import { ApiError, cambiarPassword } from '@/lib/api';
-import { inicialesDe } from '@/lib/subdominio';
+import { inicialesVisible, nombreVisible } from '@/lib/nombre';
 
 interface Regla {
   id: string;
@@ -106,19 +106,20 @@ export default function CambiarPasswordPage() {
 
               <div className="dashboard-header">
                 <div className="avatar-circle" aria-hidden="true">
-                  {inicialesDe(
-                    `${sesionColegio.usuario.nombres} ${sesionColegio.usuario.apellidos}`,
-                  )}
+                  {inicialesVisible(sesionColegio.usuario)}
                 </div>
                 <div>
                   <p className="m3-title-medium" style={{ margin: 0 }}>
-                    {sesionColegio.usuario.nombres} {sesionColegio.usuario.apellidos}
+                    {nombreVisible(sesionColegio.usuario)}
                   </p>
                   <p
                     className="m3-body-small"
                     style={{ color: 'var(--md-sys-color-on-surface-variant)', margin: 0 }}
                   >
-                    {sesionColegio.colegio.nombre}
+                    {/* El colegio puede estar sin nombre (alta manual): se cae al genérico. */}
+                    {sesionColegio.colegio.nombre.trim() === ''
+                      ? 'EduPlatform'
+                      : sesionColegio.colegio.nombre}
                   </p>
                 </div>
               </div>

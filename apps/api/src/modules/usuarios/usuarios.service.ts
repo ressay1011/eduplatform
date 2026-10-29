@@ -246,7 +246,11 @@ export class UsuariosService {
     if (dto.tipoDocumento !== undefined || dto.numeroDocumento !== undefined) {
       const tipo = dto.tipoDocumento ?? actual.tipoDocumento;
       const numero = dto.numeroDocumento ?? actual.numeroDocumento;
-      const existente = await this.repo.findPorDocumento(contexto, tipo, numero);
+      // Un usuario puede estar sin documento (se completa después): nada que comparar.
+      const existente =
+        tipo === null || numero === null
+          ? null
+          : await this.repo.findPorDocumento(contexto, tipo, numero);
       if (existente !== null && existente.id !== id) {
         throw apiError(ErrorCodes.ALREADY_EXISTS, 409, 'Ya existe un usuario con ese documento');
       }
@@ -503,11 +507,11 @@ export class UsuariosService {
   ): UsuarioListado {
     return {
       id: fila.id,
-      nombres: fila.nombres,
-      apellidos: fila.apellidos,
+      nombres: fila.nombres ?? '',
+      apellidos: fila.apellidos ?? '',
       usuario: fila.usuario,
       tipoDocumento: fila.tipoDocumento as TipoDocumento,
-      numeroDocumento: fila.numeroDocumento,
+      numeroDocumento: fila.numeroDocumento ?? '',
       esAdmin: fila.esAdmin,
       activo: fila.activo,
       debeCambiarPassword: fila.debeCambiarPassword,

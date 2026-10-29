@@ -31,7 +31,7 @@ export interface UsuarioColegioAuth {
 export interface ColegioAuth {
   readonly id: string;
   readonly nombre: string;
-  readonly codigoDane: string;
+  readonly codigoDane: string | null;
   readonly subdominio: string;
   readonly primaryColor: string | null;
 }

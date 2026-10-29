@@ -24,10 +24,8 @@ import { BaseRepository } from '../../shared/base.repository';
 export interface ColegioPublicoRow {
   id: string;
   nombre: string;
-  codigoDane: string;
+  codigoDane: string | null;
   subdominio: string;
-  /** Dominio de correo institucional (resuelve el colegio en el login). */
-  dominioEmail: string | null;
   logoUrl: string | null;
   primaryColor: string | null;
   estado: string;
@@ -52,8 +50,8 @@ export interface UsuarioAuthRow {
   colegioId: string;
   usuario: string;
   passwordHash: string;
-  nombres: string;
-  apellidos: string;
+  nombres: string | null;
+  apellidos: string | null;
   esAdmin: boolean;
   activo: boolean;
   debeCambiarPassword: boolean;
@@ -65,7 +63,7 @@ export interface UsuarioAuthRow {
 export interface ColegioAuthRow {
   id: string;
   nombre: string;
-  codigoDane: string;
+  codigoDane: string | null;
   subdominio: string;
   primaryColor: string | null;
   estado: string;
@@ -122,20 +120,8 @@ export class AuthRepository extends BaseRepository {
   /** Colegio por subdominio, con solo los datos públicos del login. */
   async findColegioPublico(subdominio: string): Promise<ColegioPublicoRow | null> {
     const filas = await this.db.execute(
-      sql`SELECT id, nombre, subdominio, dominio_email, codigo_dane, logo_url, primary_color, estado, municipio, departamento
+      sql`SELECT id, nombre, subdominio, codigo_dane, logo_url, primary_color, estado, municipio, departamento
           FROM colegios_publico WHERE subdominio = ${subdominio} LIMIT 1`,
-    );
-    return this.mapearColegioPublico(filas[0]);
-  }
-
-  /**
-   * Colegio por dominio de correo institucional (login unificado).
-   * El dominio es único, así que hay como máximo un colegio por dominio.
-   */
-  async findColegioPublicoPorDominio(dominio: string): Promise<ColegioPublicoRow | null> {
-    const filas = await this.db.execute(
-      sql`SELECT id, nombre, subdominio, dominio_email, codigo_dane, logo_url, primary_color, estado, municipio, departamento
-          FROM colegios_publico WHERE dominio_email = ${dominio} LIMIT 1`,
     );
     return this.mapearColegioPublico(filas[0]);
   }
@@ -147,13 +133,13 @@ export class AuthRepository extends BaseRepository {
     if (fila === undefined) return null;
     const logo = fila['logo_url'];
     const color = fila['primary_color'];
-    const dominio = fila['dominio_email'];
+    const dane = fila['codigo_dane'];
     return {
       id: String(fila['id']),
       nombre: String(fila['nombre']),
-      codigoDane: String(fila['codigo_dane']),
+      // Sin DANE (alta manual) viaja como '' — nunca la cadena «null».
+      codigoDane: dane === null || dane === undefined ? '' : String(dane),
       subdominio: String(fila['subdominio']),
-      dominioEmail: dominio === null || dominio === undefined ? null : String(dominio),
       logoUrl: logo === null || logo === undefined ? null : String(logo),
       primaryColor: color === null || color === undefined ? null : String(color),
       estado: String(fila['estado']),

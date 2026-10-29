@@ -5,8 +5,29 @@
  */
 import { SubdominioSchema } from '@eduplatform/types';
 
-/** Labels que nunca son subdominio de colegio. */
-const RESERVADOS = new Set(['www', 'app', 'admin', 'api']);
+/**
+ * Etiquetas que NUNCA son subdominio de un colegio: hosts de la plataforma
+ * (`dev`, `www`, `api`…) y entornos de despliegue. Sin esto, entrar por
+ * `dev.eduplatform.co` se interpretaba como el colegio «dev» y el login
+ * mostraba «No encontramos un colegio en esta dirección».
+ */
+const RESERVADOS = new Set([
+  'www',
+  'app',
+  'admin',
+  'api',
+  'dev',
+  'staging',
+  'preview',
+  'qa',
+  'test',
+  'demo',
+]);
+
+/** ¿La etiqueta es de la plataforma (`dev`, `www`, `api-dev`, `dev-2`…)? */
+function esHostDePlataforma(etiqueta: string): boolean {
+  return RESERVADOS.has(etiqueta) || etiqueta.startsWith('api-') || etiqueta.startsWith('dev-');
+}
 
 export function resolverSubdominio(hostname: string, colegioParam: string | null): string | null {
   // 1) Override de desarrollo (?colegio=<subdominio>) — solo si es válido.
@@ -20,7 +41,8 @@ export function resolverSubdominio(hostname: string, colegioParam: string | null
   // 2) Dev: colegio-x.localhost
   if (host.endsWith('.localhost')) {
     const candidato = host.slice(0, -'.localhost'.length);
-    return candidato === '' ? null : candidato;
+    if (candidato === '' || esHostDePlataforma(candidato)) return null;
+    return candidato;
   }
 
   const partes = host.split('.');
@@ -32,7 +54,7 @@ export function resolverSubdominio(hostname: string, colegioParam: string | null
   if (/^\d+$/.test(primero)) return null;
 
   // 4) Prod: colegio-x.app.dominio.com → primer label no reservado.
-  if (RESERVADOS.has(primero)) return null;
+  if (esHostDePlataforma(primero)) return null;
   return primero;
 }
 

@@ -53,7 +53,7 @@ export default function EditarUsuarioPage() {
     setNombres(usuario.nombres);
     setApellidos(usuario.apellidos);
     setNombreUsuario(usuario.usuario);
-    setTipoDocumento(usuario.tipoDocumento);
+    setTipoDocumento(usuario.tipoDocumento ?? 'CC');
     setNumeroDocumento(usuario.numeroDocumento);
     setActivo(usuario.activo);
     setPermisos(usuario.permisos);

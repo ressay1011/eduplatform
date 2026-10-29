@@ -76,11 +76,11 @@ export class PersonasRepository extends BaseRepository {
       return {
         items: filas.map((fila) => ({
           id: fila.id,
-          nombres: fila.nombres,
-          apellidos: fila.apellidos,
+          nombres: fila.nombres ?? '',
+          apellidos: fila.apellidos ?? '',
           usuario: fila.usuario,
           tipoDocumento: fila.tipoDocumento,
-          numeroDocumento: fila.numeroDocumento,
+          numeroDocumento: fila.numeroDocumento ?? '',
           esAdmin: fila.esAdmin,
           activo: fila.activo,
           rolId: fila.rolId,
@@ -118,9 +118,9 @@ export class PersonasRepository extends BaseRepository {
         .select({
           id: estudiantes.id,
           usuarioId: estudiantes.usuarioId,
-          nombres: usuarios.nombres,
-          apellidos: usuarios.apellidos,
-          numeroDocumento: usuarios.numeroDocumento,
+          nombres: sql<string>`coalesce(${usuarios.nombres}, '')`,
+          apellidos: sql<string>`coalesce(${usuarios.apellidos}, '')`,
+          numeroDocumento: sql<string>`coalesce(${usuarios.numeroDocumento}, '')`,
           usuario: usuarios.usuario,
           codigoMatricula: estudiantes.codigoMatricula,
           estado: estudiantes.estado,
@@ -213,9 +213,9 @@ export class PersonasRepository extends BaseRepository {
       return {
         items: filas.map((fila) => ({
           id: fila.id,
-          nombres: fila.nombres,
-          apellidos: fila.apellidos,
-          numeroDocumento: fila.numeroDocumento,
+          nombres: fila.nombres ?? '',
+          apellidos: fila.apellidos ?? '',
+          numeroDocumento: fila.numeroDocumento ?? '',
           usuario: fila.usuario,
           telefono: fila.telefono,
           activo: fila.activo,

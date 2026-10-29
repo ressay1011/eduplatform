@@ -96,7 +96,7 @@ export interface UsuarioListado {
   nombres: string;
   apellidos: string;
   usuario: string;
-  tipoDocumento: TipoDocumento;
+  tipoDocumento: TipoDocumento | null;
   numeroDocumento: string;
   esAdmin: boolean;
   activo: boolean;

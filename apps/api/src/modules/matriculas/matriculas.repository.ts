@@ -42,8 +42,8 @@ export interface CursoInterno {
 /** Cuenta encontrada por documento, con su ficha de estudiante si existe. */
 export interface CuentaEstudiante {
   usuarioId: string;
-  nombres: string;
-  apellidos: string;
+  nombres: string | null;
+  apellidos: string | null;
   usuario: string;
   /** null si la cuenta existe pero aún no tiene ficha en `estudiantes`. */
   estudianteId: string | null;
@@ -337,9 +337,9 @@ export class MatriculasRepository extends BaseRepository {
         items: filas.map((fila) => ({
           id: fila.id,
           estudianteId: fila.estudianteId,
-          nombres: fila.nombres,
-          apellidos: fila.apellidos,
-          numeroDocumento: fila.numeroDocumento,
+          nombres: fila.nombres ?? '',
+          apellidos: fila.apellidos ?? '',
+          numeroDocumento: fila.numeroDocumento ?? '',
           cursoId: fila.cursoId,
           curso: `${fila.gradoNombre} ${fila.letra}`.trim(),
           sede: fila.sede,

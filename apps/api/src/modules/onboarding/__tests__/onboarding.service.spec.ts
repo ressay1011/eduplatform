@@ -46,7 +46,6 @@ function foto(subdominio: string): FotoOnboarding {
       nit: null,
       codigoDane: '147555000295',
       subdominio,
-      dominioEmail: 'juanaarias.edu.co',
       municipio: 'Plato',
       departamento: 'Magdalena',
       direccion: null,
@@ -102,7 +101,7 @@ describe('OnboardingService · paso 1', () => {
     });
   });
 
-  it('no manda dominioEmail al repositorio y usa el del correo de contacto del colegio', async () => {
+  it('no manda ningún dominio al repositorio: el subdominio es el único identificador', async () => {
     const { servicio, repo } = montar();
     repo.contextoPublico.mockResolvedValue({ subdominio: 'juana-arias', dominioEmail: null });
 
@@ -110,7 +109,7 @@ describe('OnboardingService · paso 1', () => {
 
     const enviado = repo.guardarColegio.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(enviado).not.toHaveProperty('dominioEmail');
-    expect(enviado['dominioColegio']).toBe('juanaarias.edu.co');
+    expect(enviado).not.toHaveProperty('dominioColegio');
   });
 
   it('pasa el nombre oficial al repositorio sin tocarlo', async () => {

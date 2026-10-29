@@ -13,6 +13,7 @@
 import { sql } from 'drizzle-orm';
 import {
   boolean,
+  check,
   index,
   integer,
   pgTable,
@@ -38,8 +39,10 @@ export const usuarios = pgTable(
       .references(() => colegios.id, { onDelete: 'restrict' }),
     usuario: text('usuario').notNull(),
     passwordHash: text('password_hash').notNull(),
-    nombres: text('nombres').notNull(),
-    apellidos: text('apellidos').notNull(),
+    // Los datos personales se pueden completar después: solo la credencial es
+    // obligatoria (`usuario` y `password_hash` no vacíos, ver checks).
+    nombres: text('nombres'),
+    apellidos: text('apellidos'),
     tipoDocumento: text('tipo_documento', {
       enum: [
         TipoDocumento.CC,
@@ -49,8 +52,8 @@ export const usuarios = pgTable(
         TipoDocumento.PEP,
         TipoDocumento.PPT,
       ],
-    }).notNull(),
-    numeroDocumento: text('numero_documento').notNull(),
+    }),
+    numeroDocumento: text('numero_documento'),
     /** Único "rol" fijo: admin del colegio (todos los permisos implícitos). */
     esAdmin: boolean('es_admin').notNull().default(false),
     /**
@@ -75,6 +78,8 @@ export const usuarios = pgTable(
   (t) => [
     // El mismo usuario puede existir en colegios distintos; dentro del colegio es único.
     unique('usuarios_colegio_usuario_unique').on(t.colegioId, t.usuario),
+    check('usuarios_usuario_no_vacio', sql`${t.usuario} <> ''`),
+    check('usuarios_password_no_vacio', sql`${t.passwordHash} <> ''`),
     unique('usuarios_colegio_documento_unique').on(t.colegioId, t.tipoDocumento, t.numeroDocumento),
     index('usuarios_colegio_usuario_idx').on(t.colegioId, t.usuario),
     index('usuarios_colegio_activo_idx').on(t.colegioId, t.activo),

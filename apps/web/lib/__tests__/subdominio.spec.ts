@@ -31,6 +31,14 @@ describe('resolverSubdominio', () => {
   });
 });
 
+it('los hosts de la plataforma no son colegios', () => {
+  expect(resolverSubdominio('dev.eduplatform.co', null)).toBeNull();
+  expect(resolverSubdominio('www.eduplatform.co', null)).toBeNull();
+  expect(resolverSubdominio('api-dev.eduplatform.co', null)).toBeNull();
+  expect(resolverSubdominio('dev.localhost', null)).toBeNull();
+  expect(resolverSubdominio('juanaarias.eduplatform.co', null)).toBe('juanaarias');
+});
+
 describe('inicialesDe', () => {
   it.each([
     ['Colegio Norte', 'CN'],

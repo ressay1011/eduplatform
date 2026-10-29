@@ -11,8 +11,8 @@ import type { ColegioAuthRow, UsuarioAuthRow } from './auth.repository';
 export interface UsuarioSesionFuente {
   readonly id: string;
   readonly usuario: string;
-  readonly nombres: string;
-  readonly apellidos: string;
+  readonly nombres: string | null;
+  readonly apellidos: string | null;
   readonly esAdmin: boolean;
   readonly debeCambiarPassword: boolean;
 }
@@ -21,7 +21,7 @@ export interface UsuarioSesionFuente {
 export interface ColegioSesionFuente {
   readonly id: string;
   readonly nombre: string;
-  readonly codigoDane: string;
+  readonly codigoDane: string | null;
   readonly primaryColor: string | null;
 }
 
@@ -29,8 +29,8 @@ export function toUsuarioSesion(usuario: UsuarioSesionFuente): UsuarioSesion {
   return {
     id: usuario.id,
     usuario: usuario.usuario,
-    nombres: usuario.nombres,
-    apellidos: usuario.apellidos,
+    nombres: usuario.nombres ?? '',
+    apellidos: usuario.apellidos ?? '',
     esAdmin: usuario.esAdmin,
     debeCambiarPassword: usuario.debeCambiarPassword,
   };
@@ -40,7 +40,7 @@ export function toColegioSesion(colegio: ColegioSesionFuente): ColegioSesion {
   return {
     id: colegio.id,
     nombre: colegio.nombre,
-    codigoDane: colegio.codigoDane,
+    codigoDane: colegio.codigoDane ?? '',
     primaryColor: colegio.primaryColor,
   };
 }
