@@ -18,6 +18,7 @@ import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 import {
+  acudientesEstudiantes,
   aniosLectivos,
   colegios,
   estudiantes,
@@ -198,6 +199,16 @@ describe('Matrículas (e2e)', () => {
             rolId: rolEstudiante?.id ?? null,
             debeCambiarPassword: false,
           },
+          {
+            colegioId,
+            usuario: `acudiente.${indice}@${subdominio}`,
+            passwordHash: hash,
+            nombres: 'Acudiente',
+            apellidos: `Familia ${indice}`,
+            tipoDocumento: 'CC',
+            numeroDocumento: `8${sufijo}${indice}1`,
+            debeCambiarPassword: false,
+          },
         ])
         .returning({ id: usuarios.id, usuario: usuarios.usuario });
 
@@ -205,11 +216,13 @@ describe('Matrículas (e2e)', () => {
       const staff = creados.find((u) => u.usuario === staffEmail);
       const estudiante = creados.find((u) => u.usuario === `estudiante.${indice}@${subdominio}`);
       const cuenta = creados.find((u) => u.usuario === `cuenta.${indice}@${subdominio}`);
+      const acudiente = creados.find((u) => u.usuario === `acudiente.${indice}@${subdominio}`);
       if (
         admin === undefined ||
         staff === undefined ||
         estudiante === undefined ||
-        cuenta === undefined
+        cuenta === undefined ||
+        acudiente === undefined
       ) {
         throw new Error('Fixtures: usuarios');
       }
@@ -225,11 +238,25 @@ describe('Matrículas (e2e)', () => {
         .insert(usuariosPermisos)
         .values({ colegioId, usuarioId: staff.id, permisoId: permiso.id });
 
-      await tx.insert(estudiantes).values({
+      const [ficha] = await tx
+        .insert(estudiantes)
+        .values({
+          colegioId,
+          usuarioId: estudiante.id,
+          codigoMatricula: documentoEstudiante,
+          fechaNacimiento: '2013-04-18',
+        })
+        .returning({ id: estudiantes.id });
+      if (ficha === undefined) throw new Error('Fixtures: ficha del estudiante');
+
+      // Acudiente a cargo: alimenta la pestaña «Acudientes» de Personas, que
+      // normaliza nombres/apellidos/documento a '' cuando llegan nulos.
+      await tx.insert(acudientesEstudiantes).values({
         colegioId,
-        usuarioId: estudiante.id,
-        codigoMatricula: documentoEstudiante,
-        fechaNacimiento: '2013-04-18',
+        acudienteId: acudiente.id,
+        estudianteId: ficha.id,
+        parentesco: 'Madre',
+        telefono: '3001234567',
       });
 
       return {
@@ -282,6 +309,9 @@ describe('Matrículas (e2e)', () => {
     if (fixturesListas) {
       await withTenant(db, platformCtx, async (tx) => {
         for (const colegioId of [tenantA.colegioId, tenantB.colegioId]) {
+          await tx
+            .delete(acudientesEstudiantes)
+            .where(eq(acudientesEstudiantes.colegioId, colegioId));
           await tx.delete(matriculas).where(eq(matriculas.colegioId, colegioId));
           await tx.delete(estudiantes).where(eq(estudiantes.colegioId, colegioId));
           await tx.delete(aniosLectivos).where(eq(aniosLectivos.colegioId, colegioId));
@@ -305,7 +335,11 @@ describe('Matrículas (e2e)', () => {
     expect(typeof estudiantes.body.data.items[0].nombres).toBe('string');
 
     const acudientes = await agente.get('/api/personas/acudientes?q=a').expect(200);
-    expect(Array.isArray(acudientes.body.data.items)).toBe(true);
+    // El fixture liga un acudiente a la ficha: aquí se ejercita el mapa que
+    // normaliza a '' los campos personales opcionales.
+    expect(acudientes.body.data.total).toBeGreaterThan(0);
+    expect(typeof acudientes.body.data.items[0].nombres).toBe('string');
+    expect(acudientes.body.data.items[0].estudiantes.length).toBeGreaterThan(0);
 
     const empleados = await agente.get('/api/personas/empleados?q=a').expect(200);
     expect(empleados.body.data.total).toBeGreaterThan(0);
