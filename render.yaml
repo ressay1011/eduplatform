@@ -1,18 +1,34 @@
 # Blueprint de Render para la API de EduPlatform.
 #
-# Uso: Render → New → Blueprint → conectar el repo. Render lee este archivo y
-# pide los valores marcados con `sync: false` (secretos) al crear el servicio.
+# Ya está conectado: «Eduplatform» (exs-dbdanuvb9u1s7391jp60), repo
+# github.com/ressay1011/eduplatform, path render.yaml, rama main y autoSync
+# activo. Cada push a main lo sincroniza; lo que viva solo en dev no se aplica.
+#
+# Las variables con `sync: false` se piden ÚNICAMENTE al crear el Blueprint la
+# primera vez. En las sincronizaciones posteriores Render las ignora: un secreto
+# nuevo se carga a mano en el dashboard (o por API), no por este archivo.
 #
 # Build desde el monorepo: los paquetes workspace se compilan ANTES que la API
-# porque las apps los consumen desde dist/ (CommonJS).
+# porque las apps los consumen desde dist/ (CommonJS). `--prod=false` es
+# obligatorio: Render inyecta NODE_ENV=production en el build y pnpm omitiría
+# las devDependencies (typescript, nest-cli) → build_failed.
+#
+# Fuera del Blueprint, a propósito: el servicio de pruebas `eduplatform-api-dev`
+# (rama dev, https://api-dev.eduplatform.co) se administra desde el dashboard.
+# Si algún día se declara aquí, Render lo adopta por nombre y no lo duplica.
 services:
   - type: web
     name: eduplatform-api
     runtime: node
-    plan: free
+    plan: free # se suspende a los 15 min sin tráfico: el primer request tarda ~30-60 s
     region: virginia # us-east-1, misma región que el proyecto de Neon
     branch: main
     healthCheckPath: /api/health
+    # Dominio propio con TLS de Render. El DNS no vive aquí: es un CNAME
+    # `api` → <servicio>.onrender.com creado en Vercel (la web y la API cuelgan
+    # del mismo dominio registrable, eduplatform.co).
+    domains:
+      - api.eduplatform.co
     buildCommand: >-
       export COREPACK_ENABLE_DOWNLOAD_PROMPT=0 &&
       corepack enable &&
@@ -26,15 +42,20 @@ services:
         value: '22'
       - key: NODE_ENV
         value: production
-      # Web y API no comparten dominio registrable (Vercel + onrender.com):
-      # sin SameSite=None el navegador no envía la cookie de sesión.
+      # La web se sirve en eduplatform.co y la API en api.eduplatform.co: para el
+      # navegador es el mismo sitio, así que `lax` basta y la cookie no pasa por
+      # el trato de «tercero». `none` solo vuelve a hacer falta si la web queda
+      # en otro dominio registrable (p. ej. *.vercel.app contra *.onrender.com).
       - key: COOKIE_SAMESITE
-        value: none
+        value: lax
       # Secretos: se completan en el dashboard, nunca en el repo.
       - key: DATABASE_URL
         sync: false
       - key: TOKEN_PEPPER
         sync: false
+      # Orígenes exactos, sin barra final. Producción:
+      # https://eduplatform.co,https://www.eduplatform.co
+      # (dev: http://localhost:3000,https://dev.eduplatform.co,https://www.dev.eduplatform.co)
       - key: CORS_ORIGINS
         sync: false
       # App token de datos.gov.co (consulta por código DANE del onboarding).
