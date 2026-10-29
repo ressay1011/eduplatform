@@ -5,15 +5,17 @@
  *   pnpm db:colegio <subdominio> [--nombre "I.E.T.D. Juana Arias"]
  *
  * Crea el colegio con lo mínimo (solo `subdominio`; el resto por defaults) y su
- * admin `admin@<subdominio>` con una contraseña temporal aleatoria que se
- * imprime UNA vez y obliga a cambiarla al entrar. Siembra los roles base.
+ * admin `admin@<subdominio>` con una contraseña temporal aleatoria que se deja
+ * en `~/.eduplatform/admin-<subdominio>.txt` (permisos 600) y obliga a cambiarla
+ * al entrar: la contraseña nunca se escribe en la salida del comando, que puede
+ * acabar en logs. Siembra los roles base.
  *
  * No crea sedes: el wizard de onboarding empieza en el paso 1.
  * Idempotente en el sentido contrario: si el subdominio ya existe, falla sin
  * tocar nada (para no pisar un colegio en producción).
  */
 import { randomInt } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -105,13 +107,19 @@ try {
     return { colegioId: colegio.id, roles: count };
   });
 
+  // La contraseña temporal NO se imprime: la salida de un comando acaba en logs,
+  // en el historial y en capturas. Se deja en un archivo fuera del repo, 600.
+  const destino = join(homedir(), '.eduplatform', `admin-${subdominio}.txt`);
+  mkdirSync(dirname(destino), { recursive: true });
+  writeFileSync(destino, `usuario: ${usuario}\ncontraseña: ${password}\n`, { mode: 0o600 });
+
   console.log('\n✔ Colegio creado');
   console.log(`  id          ${resultado.colegioId}`);
   console.log(`  subdominio  ${subdominio}`);
   console.log(`  roles base  ${resultado.roles}`);
   console.log(`  usuario     ${usuario}`);
-  console.log(`  contraseña  ${password}`);
-  console.log('\nGuárdala ahora: no se vuelve a mostrar. Al entrar pedirá cambiarla.');
+  console.log(`  contraseña  en ${destino} (permisos 600)`);
+  console.log('\nGuárdala ahora: al entrar pedirá cambiarla.');
   console.log('El wizard de onboarding empieza en el paso 1 (no hay sede todavía).\n');
 } finally {
   await sql.end({ timeout: 5 });
