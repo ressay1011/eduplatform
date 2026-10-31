@@ -209,9 +209,7 @@ describe('LoginFlow', () => {
     // 'ab' no llega a 3 caracteres: es el mínimo del identificador.
     await userEvent.type(screen.getByLabelText(/^nombre de usuario/i), 'ab');
     await userEvent.click(screen.getByRole('button', { name: /continuar/i }));
-    expect(
-      await screen.findByText('Solo minúsculas, números, puntos, guiones y @ (3–64 caracteres).'),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('Usuario inválido.')).toBeInTheDocument();
     expect(vi.mocked(getContextoColegio)).not.toHaveBeenCalled();
   });
 
@@ -280,7 +278,7 @@ describe('LoginFlow', () => {
     await userEvent.type(screen.getByLabelText(/^contraseña/i), 'MalaClave999');
     await userEvent.click(screen.getByRole('button', { name: /ingresar/i }));
 
-    expect(await screen.findByText('Correo o contraseña incorrectos.')).toBeInTheDocument();
+    expect(await screen.findByText('Usuario o contraseña incorrectos.')).toBeInTheDocument();
     expect(mockPush).not.toHaveBeenCalled();
   });
 

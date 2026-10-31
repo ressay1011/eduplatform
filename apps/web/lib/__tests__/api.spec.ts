@@ -50,7 +50,7 @@ describe('lib/api', () => {
     fetchMock.mockResolvedValue(
       respuesta(401, {
         success: false,
-        error: { code: 'INVALID_CREDENTIALS', message: 'Correo o contraseña incorrectos' },
+        error: { code: 'INVALID_CREDENTIALS', message: 'Usuario o contraseña incorrectos' },
       }),
     );
     const fallo = await iniciarSesion({ usuario: 'a@b.co', password: 'x' }).catch(

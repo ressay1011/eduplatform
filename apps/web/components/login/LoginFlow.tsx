@@ -108,7 +108,7 @@ export function LoginFlow() {
         return;
       }
       if (!esUsuarioValido(valor)) {
-        setErrorUsuario('Solo minúsculas, números, puntos, guiones y @ (3–64 caracteres).');
+        setErrorUsuario('Usuario inválido.');
         return;
       }
 
@@ -186,7 +186,7 @@ export function LoginFlow() {
         if (err instanceof ApiError && err.code === 'ACCOUNT_LOCKED') {
           setBloqueada(true);
         } else if (err instanceof ApiError && err.code === 'INVALID_CREDENTIALS') {
-          setErrorPassword('Correo o contraseña incorrectos.');
+          setErrorPassword('Usuario o contraseña incorrectos.');
         } else if (err instanceof ApiError && err.code === 'VALIDATION_ERROR') {
           // Defensa extra: si el contrato cambia, se muestra en el campo.
           setErrorPassword('Revisa la contraseña e intenta de nuevo.');
@@ -264,7 +264,7 @@ export function LoginFlow() {
                     Iniciar sesión
                   </h2>
                   <p className="m3-body-medium step-subtitulo">
-                    Ingresa con el nombre de usuario que te entregó tu colegio.
+                    Escribe el usuario que te dio tu colegio.
                   </p>
 
                   {banner !== null ? (
@@ -281,7 +281,7 @@ export function LoginFlow() {
                         if (errorUsuario !== null) setErrorUsuario(null);
                       }}
                       autoComplete="username"
-                      ayuda="Es tu usuario con el colegio: admin@juanaarias"
+                      ayuda="Ejemplo: admin@juanaarias"
                       error={errorUsuario}
                       autoFocus
                     />
