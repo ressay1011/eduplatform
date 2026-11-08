@@ -23,6 +23,7 @@ function fecha(mes: number, dia: number): string {
 
 const COLEGIO = {
   nombre: 'I.E.T.D. Juana Arias de Benavides',
+  nombreOficial: 'INSTITUCIÓN EDUCATIVA TÉCNICA DEPARTAMENTAL JUANA ARIAS DE BENAVIDES',
   codigoDane: '147555000295',
   municipio: 'Plato',
   departamento: 'Magdalena',
@@ -36,6 +37,15 @@ const COLEGIO = {
 };
 
 describe('ColegioOnboardingSchema', () => {
+  it('exige el nombre oficial: es el que va en certificados y actas', () => {
+    const sinOficial: Record<string, unknown> = { ...COLEGIO };
+    delete sinOficial['nombreOficial'];
+    expect(ColegioOnboardingSchema.safeParse(sinOficial).success).toBe(false);
+    expect(ColegioOnboardingSchema.safeParse({ ...COLEGIO, nombreOficial: '  ' }).success).toBe(
+      false,
+    );
+  });
+
   it('acepta el paso 1 sin subdominio ni dominio de correo', () => {
     const r = ColegioOnboardingSchema.safeParse(COLEGIO);
     expect(r.success).toBe(true);

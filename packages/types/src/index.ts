@@ -15,3 +15,4 @@ export * from './nombre-institucion';
 export * from './nit';
 export * from './onboarding';
 export * from './branding';
+export * from './paleta';

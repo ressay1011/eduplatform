@@ -31,8 +31,8 @@ const require = createRequire(
 const bcrypt = require('bcrypt');
 
 const here = dirname(fileURLToPath(import.meta.url));
-/** Código: letras en cualquier caja, números y guiones. */
-const CODIGO_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]{1,30}[A-Za-z0-9])$/;
+/** Código: letras en cualquier caja (con ñ), números y guiones. */
+const CODIGO_RE = /^[A-Za-z0-9Ññ](?:[A-Za-z0-9Ññ-]{1,30}[A-Za-z0-9Ññ])$/;
 
 /** Contraseña temporal: 12 caracteres con mayúscula, minúscula, dígito y símbolo. */
 function passwordTemporal() {

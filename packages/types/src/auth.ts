@@ -5,6 +5,7 @@
 
 import { z } from 'zod';
 import type { EstadoColegio, RolPlataforma } from './entities/enums';
+import type { PaletaColegio } from './branding';
 
 /**
  * Correo electrónico (normalizado a minúsculas y sin espacios).
@@ -35,7 +36,7 @@ export const CodigoColegioSchema = z
   .string()
   .trim()
   .regex(
-    /^[A-Za-z0-9](?:[A-Za-z0-9-]{1,30}[A-Za-z0-9])$/,
+    /^[A-Za-z0-9Ññ](?:[A-Za-z0-9Ññ-]{1,30}[A-Za-z0-9Ññ])$/,
     'Usa letras, números y guiones (3–32 caracteres, sin empezar/terminar en guion)',
   );
 export type CodigoColegio = z.infer<typeof CodigoColegioSchema>;
@@ -57,7 +58,7 @@ export const UsuarioSchema = z
   .min(3, 'Mínimo 3 caracteres')
   .max(64, 'Máximo 64 caracteres')
   .regex(
-    /^[A-Za-z0-9](?:[A-Za-z0-9._@-]*[A-Za-z0-9])$/,
+    /^[A-Za-z0-9Ññ](?:[A-Za-z0-9Ññ._@-]*[A-Za-z0-9Ññ])$/,
     'Solo letras, números, puntos, guiones y @',
   );
 
@@ -132,6 +133,15 @@ export interface ColegioSesion {
   nombre: string;
   codigoDane: string;
   primaryColor: string | null;
+  /** Colores propios que el colegio haya definido (pueden faltar). */
+  secondaryColor: string | null;
+  tertiaryColor: string | null;
+  /**
+   * Paleta resuelta con los tres colores (los que falten salen de
+   * EduPlatform). `null` = el colegio no ha elegido ninguno: mandan los
+   * tokens CSS por defecto.
+   */
+  palette: PaletaColegio | null;
 }
 
 /** Respuesta del login exitoso (shape que devuelve la API). */
@@ -160,6 +170,10 @@ export interface ContextoColegioPublico {
   codigoDane: string;
   logoUrl: string | null;
   primaryColor: string | null;
+  secondaryColor: string | null;
+  tertiaryColor: string | null;
+  /** Paleta resuelta; `null` cuando el colegio no ha elegido ningún color. */
+  palette: PaletaColegio | null;
   municipio: string;
   departamento: string;
   estado: EstadoColegio;

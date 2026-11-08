@@ -63,6 +63,11 @@ export const colegios = pgTable(
     direccion: text('direccion'),
     telefono: text('telefono'),
     email: text('email').notNull().default(''),
+    /**
+     * Jornadas que el MEN publica para el establecimiento. El wizard las usa
+     * como sugerencia del paso de sedes; no son la configuración del colegio.
+     */
+    jornadasMen: text('jornadas_men').array(),
     logoUrl: text('logo_url'),
     /** Calendario A (feb–nov) o B (sep–jun). */
     calendario: text('calendario', { enum: [Calendario.A, Calendario.B] })
@@ -166,6 +171,12 @@ export const sedes = pgTable(
     nombre: text('nombre').notNull(),
     codigoDaneSede: text('codigo_dane_sede'),
     direccion: text('direccion'),
+    /**
+     * Ubicación de la sede. Una IE puede tener sedes en otro municipio; vacío
+     * significa «la del colegio».
+     */
+    municipio: text('municipio').notNull().default(''),
+    departamento: text('departamento').notNull().default(''),
     activa: boolean('activa').notNull().default(true),
     /**
      * Jornadas que ofrece la sede (Mañana/Tarde/Noche/Única/Sabatina).

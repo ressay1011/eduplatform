@@ -127,7 +127,14 @@ export const grupos = pgTable(
       .references(() => grados.id, { onDelete: 'restrict' }),
     letra: text('letra').notNull(),
     jornada: text('jornada', {
-      enum: [Jornada.MANANA, Jornada.TARDE, Jornada.UNICA, Jornada.NOCTURNA, Jornada.FIN_SEMANA],
+      enum: [
+        Jornada.MANANA,
+        Jornada.TARDE,
+        Jornada.COMPLETA,
+        Jornada.UNICA,
+        Jornada.NOCTURNA,
+        Jornada.FIN_SEMANA,
+      ],
     }).notNull(),
     /** Docente director de grupo (nullable). */
     directorGrupoId: uuid('director_grupo_id').references(() => usuarios.id, {

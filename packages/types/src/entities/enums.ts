@@ -65,6 +65,7 @@ export type EstadoPeriodo = (typeof EstadoPeriodo)[keyof typeof EstadoPeriodo];
 export const Jornada = {
   MANANA: 'MANANA',
   TARDE: 'TARDE',
+  COMPLETA: 'COMPLETA',
   UNICA: 'UNICA',
   NOCTURNA: 'NOCTURNA',
   FIN_SEMANA: 'FIN_SEMANA',

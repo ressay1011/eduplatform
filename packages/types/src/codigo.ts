@@ -20,5 +20,5 @@ export function sufijoDeUsuario(usuario: string): string | null {
   const posicion = limpio.lastIndexOf('@');
   if (posicion <= 0 || posicion === limpio.length - 1) return null;
   const sufijo = limpio.slice(posicion + 1);
-  return /^[a-z0-9](?:[a-z0-9-]{1,30}[a-z0-9])$/.test(sufijo) ? sufijo : null;
+  return /^[a-z0-9ñ](?:[a-z0-9ñ-]{1,30}[a-z0-9ñ])$/.test(sufijo) ? sufijo : null;
 }

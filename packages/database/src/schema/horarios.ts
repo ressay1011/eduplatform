@@ -51,7 +51,7 @@ export const bloquesHorarios = pgTable(
       .notNull()
       .references(() => aniosLectivos.id, { onDelete: 'cascade' }),
     jornada: text('jornada', {
-      enum: [Jornada.MANANA, Jornada.TARDE, Jornada.UNICA, Jornada.NOCTURNA],
+      enum: [Jornada.MANANA, Jornada.TARDE, Jornada.COMPLETA, Jornada.UNICA, Jornada.NOCTURNA],
     }).notNull(),
     /** 1 = lunes … 6 = sábado. */
     diaSemana: smallint('dia_semana').notNull(),

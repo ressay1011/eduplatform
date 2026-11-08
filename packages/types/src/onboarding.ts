@@ -40,11 +40,16 @@ export const ColegioOnboardingSchema = z
   .object({
     nombre: z.string().trim().min(3).max(160),
     /**
-     * Nombre completo del establecimiento para documentos oficiales (certificados,
-     * actas). Se prellena con el del MEN en mayúsculas y tildes; el admin puede
-     * corregirlo. Sin él, los documentos usan `nombre`.
+     * Nombre completo del establecimiento para documentos oficiales
+     * (certificados, actas). Se prellena con el del MEN en mayúsculas y tildes
+     * y el admin puede corregirlo, pero no puede quedar vacío: es la identidad
+     * que se imprime, y el nombre corto se repite entre sedes y colegios.
      */
-    nombreOficial: z.string().trim().max(200).optional(),
+    nombreOficial: z
+      .string()
+      .trim()
+      .min(3, 'Escribe el nombre oficial: es el que va en certificados y actas')
+      .max(200),
     /**
      * NIT del colegio (opcional). La forma se valida aquí y no solo en el wizard:
      * un POST directo con «abc» responde 400. El dígito de verificación NO se
@@ -67,6 +72,11 @@ export const ColegioOnboardingSchema = z
     telefono: z.string().trim().max(30).optional(),
     email: z.string().trim().pipe(z.email().max(160)),
     calendario: z.enum([Calendario.A, Calendario.B]),
+    /**
+     * Jornadas que el MEN publica para el colegio. Se guardan al buscar el código
+     * DANE y el wizard las propone en el paso de sedes (también tras recargar).
+     */
+    jornadasMen: z.array(z.enum(JORNADAS)).max(6).optional(),
     /**
      * Año lectivo del colegio. La ventana (anterior, actual y próximo) se valida
      * abajo, junto con las fechas de los períodos, porque depende del año en curso.
@@ -140,7 +150,10 @@ export const SedeOnboardingSchema = z.object({
   nombre: z.string().trim().min(2).max(120),
   codigoDaneSede: z.string().trim().max(20).optional(),
   direccion: z.string().trim().max(160).optional(),
-  jornadas: z.array(z.enum(JORNADAS)).min(1, 'Elige al menos una jornada').max(5),
+  /** Municipio de la sede: puede no ser el del colegio. */
+  municipio: z.string().trim().max(80).optional(),
+  departamento: z.string().trim().max(80).optional(),
+  jornadas: z.array(z.enum(JORNADAS)).min(1, 'Elige al menos una jornada').max(6),
 });
 export type SedeOnboardingRequest = z.input<typeof SedeOnboardingSchema>;
 
@@ -184,6 +197,11 @@ export interface ColegioDane {
   rector: string | null;
   matricula: number;
   sedes: number;
+  /**
+   * Jornadas que el MEN publica para el establecimiento. Llegan vacías cuando
+   * el dataset no lo tiene: son una sugerencia para el paso 2, no un requisito.
+   */
+  jornadas: Jornada[];
 }
 
 /** Sede tal como la devuelve la API. */
@@ -192,6 +210,9 @@ export interface SedeOnboarding {
   nombre: string;
   codigoDaneSede: string | null;
   direccion: string | null;
+  /** Municipio y departamento de la sede (pueden diferir de los del colegio). */
+  municipio: string;
+  departamento: string;
   jornadas: Jornada[];
 }
 
@@ -215,6 +236,8 @@ export interface ColegioOnboarding {
   telefono: string | null;
   email: string;
   calendario: Calendario;
+  /** Jornadas que el MEN publica para el colegio (sugerencia del paso de sedes). */
+  jornadasMen: Jornada[];
 }
 
 export interface AnioLectivoOnboarding {
