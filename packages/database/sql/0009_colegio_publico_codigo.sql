@@ -4,12 +4,27 @@
 -- el código como identificador (y el subdominio de salida) la vista necesita
 -- `codigo`; de paso expone las semillas y la paleta, que son datos públicos.
 --
--- `subdominio` se mantiene hasta la etapa D, cuando se elimine del todo.
--- Idempotente: DROP + CREATE (CREATE OR REPLACE no permite reordenar columnas).
+-- `subdominio` se mantiene hasta la etapa D: la vista lo incluye SOLO si la
+-- columna sigue existiendo, porque esta migración también corre en bases nuevas
+-- creadas después de 0011 (donde ya no está). Idempotente: DROP + CREATE
+-- (CREATE OR REPLACE no permite reordenar columnas).
 
 DROP VIEW IF EXISTS colegios_publico;
-CREATE VIEW colegios_publico AS
-  SELECT id, codigo, nombre, codigo_dane, logo_url, primary_color, secondary_color, tertiary_color,
-         palette, estado, municipio, departamento, subdominio
-  FROM colegios;
-GRANT SELECT ON colegios_publico TO app_user;
+DO $$
+DECLARE
+  con_subdominio boolean;
+  columnas text;
+BEGIN
+  SELECT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'colegios' AND column_name = 'subdominio'
+  ) INTO con_subdominio;
+
+  columnas := 'id, codigo, nombre, codigo_dane, logo_url, primary_color, secondary_color, tertiary_color, palette, estado, municipio, departamento';
+  IF con_subdominio THEN
+    columnas := columnas || ', subdominio';
+  END IF;
+
+  EXECUTE 'CREATE VIEW colegios_publico AS SELECT ' || columnas || ' FROM colegios';
+  EXECUTE 'GRANT SELECT ON colegios_publico TO app_user';
+END $$;

@@ -14,10 +14,19 @@
 -- Los índices van aquí y no en el esquema de Drizzle a propósito: son
 -- funcionales (`lower(...)`) y drizzle-kit los compararía mal en cada push.
 
--- 1. El código: se rellena con el subdominio actual, así los usuarios que ya
---    existen (`admin@juanaarias`) siguen funcionando sin tocar nada.
+-- 1. El código: se rellena con el subdominio actual (si la columna existe). En
+--    una base creada después de 0011 ya no hay `subdominio`: el código llega en
+--    el propio alta del colegio y este relleno no tiene nada que hacer.
 ALTER TABLE colegios ADD COLUMN IF NOT EXISTS codigo text;
-UPDATE colegios SET codigo = subdominio WHERE codigo IS NULL OR codigo = '';
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'colegios' AND column_name = 'subdominio'
+  ) THEN
+    EXECUTE $sql$UPDATE colegios SET codigo = subdominio WHERE codigo IS NULL OR codigo = ''$sql$;
+  END IF;
+END $$;
 ALTER TABLE colegios ALTER COLUMN codigo SET NOT NULL;
 
 -- 2. La caja no distingue: juanaArias y JuanaArias son el mismo colegio.
