@@ -148,6 +148,7 @@ tocar datos reales:
 El primer ingreso obliga a cambiar la contraseña temporal.
 
 Para crear otro colegio de prueba:
+
 ```bash
 MIGRATOR_URL='postgresql://...' \
   pnpm --filter @eduplatform/database run db:colegio prueba2 --nombre "Colegio de Prueba"
