@@ -18,6 +18,8 @@ interface SelectFieldProps {
   error?: string | null | undefined;
   ayuda?: string | undefined;
   disabled?: boolean | undefined;
+  /** Se dispara al perder el foco (p. ej. validación del campo). */
+  onBlur?: (() => void) | undefined;
 }
 
 export function SelectField({
@@ -30,6 +32,7 @@ export function SelectField({
   error = null,
   ayuda,
   disabled = false,
+  onBlur,
 }: SelectFieldProps) {
   const helperId = `${id}-helper`;
   const mensaje = error ?? ayuda;
@@ -42,6 +45,7 @@ export function SelectField({
         className="m3-tf m3-tf--select"
         value={value}
         onChange={(e: ChangeEvent<HTMLSelectElement>) => onChange(e.target.value)}
+        onBlur={onBlur}
         disabled={disabled}
         aria-invalid={error !== null ? true : undefined}
         aria-describedby={mensaje !== undefined ? helperId : undefined}

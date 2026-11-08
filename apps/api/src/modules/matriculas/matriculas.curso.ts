@@ -6,7 +6,7 @@
  * cursos: un CSV con datos que no cuadran se reporta fila por fila.
  */
 import type { CursoMatricula, FilaMatriculaRequest, Jornada } from '@eduplatform/types';
-import { Jornada as Jornadas } from '@eduplatform/types';
+import { CondicionMatricula, Jornada as Jornadas, TipoDocumento } from '@eduplatform/types';
 
 /** Error de negocio de una fila: el mensaje se devuelve tal cual al usuario. */
 export class ErrorMatricula extends Error {
@@ -33,6 +33,8 @@ const JORNADAS_POR_TEXTO: Record<string, Jornada> = {
   noche: Jornadas.NOCTURNA,
   nocturna: Jornadas.NOCTURNA,
   unica: Jornadas.UNICA,
+  completa: Jornadas.COMPLETA,
+  completo: Jornadas.COMPLETA,
   sabado: Jornadas.FIN_SEMANA,
   sabados: Jornadas.FIN_SEMANA,
   sabatina: Jornadas.FIN_SEMANA,
@@ -54,6 +56,41 @@ export function numeroDeGrado(texto: string): number | null {
 export function jornadaDeTexto(texto: string): Jornada | null {
   const limpio = normalizar(texto);
   return JORNADAS_POR_TEXTO[limpio] ?? null;
+}
+
+const CONDICIONES_POR_TEXTO: Record<string, CondicionMatricula> = {
+  nuevo: CondicionMatricula.NUEVO,
+  nueva: CondicionMatricula.NUEVO,
+  antiguo: CondicionMatricula.ANTIGUO,
+  antigua: CondicionMatricula.ANTIGUO,
+  repitente: CondicionMatricula.REPITENTE,
+  reingreso: CondicionMatricula.REINGRESO,
+  trasladado: CondicionMatricula.TRASLADADO,
+  trasladada: CondicionMatricula.TRASLADADO,
+};
+
+/** Acepta «Repitente», «REPITENTE», «repitente»… null si no se reconoce. */
+export function condicionDeTexto(texto: string): CondicionMatricula | null {
+  return CONDICIONES_POR_TEXTO[normalizar(texto)] ?? null;
+}
+
+const TIPOS_DOCUMENTO_POR_TEXTO: Record<string, TipoDocumento> = {
+  cc: TipoDocumento.CC,
+  cedula: TipoDocumento.CC,
+  'cedula de ciudadania': TipoDocumento.CC,
+  ti: TipoDocumento.TI,
+  'tarjeta de identidad': TipoDocumento.TI,
+  rc: TipoDocumento.RC,
+  'registro civil': TipoDocumento.RC,
+  ce: TipoDocumento.CE,
+  'cedula de extranjeria': TipoDocumento.CE,
+  pep: TipoDocumento.PEP,
+  ppt: TipoDocumento.PPT,
+};
+
+/** Acepta «CC», «cc», «Cédula»… null si no se reconoce. */
+export function tipoDocumentoDeTexto(texto: string): TipoDocumento | null {
+  return TIPOS_DOCUMENTO_POR_TEXTO[normalizar(texto)] ?? null;
 }
 
 /**

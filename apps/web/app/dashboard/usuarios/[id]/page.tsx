@@ -7,7 +7,7 @@
  */
 import { useEffect, useState, type FormEvent } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ActualizarUsuarioSchema, TIPOS_DOCUMENTO } from '@eduplatform/types';
+import { TIPOS_DOCUMENTO, type TipoDocumento } from '@eduplatform/types';
 import { ErrorBanner } from '@/components/ErrorBanner';
 import { M3Button } from '@/components/M3Button';
 import { PaperBg } from '@/components/PaperBg';
@@ -40,7 +40,7 @@ export default function EditarUsuarioPage() {
   const [nombres, setNombres] = useState('');
   const [apellidos, setApellidos] = useState('');
   const [nombreUsuario, setNombreUsuario] = useState('');
-  const [tipoDocumento, setTipoDocumento] = useState<string>('CC');
+  const [tipoDocumento, setTipoDocumento] = useState<TipoDocumento>('CC');
   const [numeroDocumento, setNumeroDocumento] = useState('');
   const [activo, setActivo] = useState(true);
   const [permisos, setPermisos] = useState<string[]>([]);
@@ -53,7 +53,7 @@ export default function EditarUsuarioPage() {
     setNombres(usuario.nombres);
     setApellidos(usuario.apellidos);
     setNombreUsuario(usuario.usuario);
-    setTipoDocumento(usuario.tipoDocumento ?? 'CC');
+    setTipoDocumento((usuario.tipoDocumento as TipoDocumento | null) ?? 'CC');
     setNumeroDocumento(usuario.numeroDocumento);
     setActivo(usuario.activo);
     setPermisos(usuario.permisos);
@@ -72,6 +72,9 @@ export default function EditarUsuarioPage() {
     e.preventDefault();
     setMensaje(null);
     setErrorForm(null);
+    // El esquema de la API se carga bajo demanda: mismas reglas y mismos
+    // mensajes que el servidor, sin copias que puedan desincronizarse.
+    const { ActualizarUsuarioSchema } = await import('@eduplatform/types');
     const validado = ActualizarUsuarioSchema.safeParse({
       nombres,
       apellidos,
@@ -205,7 +208,7 @@ export default function EditarUsuarioPage() {
                       id="tipo-documento"
                       className="m3-select"
                       value={tipoDocumento}
-                      onChange={(e) => setTipoDocumento(e.target.value)}
+                      onChange={(e) => setTipoDocumento(e.target.value as TipoDocumento)}
                     >
                       {TIPOS_DOCUMENTO.map((tipo) => (
                         <option key={tipo} value={tipo}>

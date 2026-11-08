@@ -1,3 +1,11 @@
+# Miembros del monorepo. La raíz entra sola.
 packages:
   - 'apps/*'
   - 'packages/*'
+
+# OJO: las cuatro reglas de `pnpm.overrides` (postcss, multer, body-parser,
+# fast-uri) viven en el package.json de la raíz A PROPÓSITO. pnpm 10.13+ movió
+# los ajustes a este archivo, pero el proyecto fija `packageManager: pnpm@9.12`
+# y esa versión NO los lee de aquí: moverlas las desactivaría en silencio.
+# (El aviso «The "pnpm" field … is no longer read» lo imprime el lanzador global
+# de pnpm 10/11 antes de delegar en el 9.12; el que instala sí los aplica.)

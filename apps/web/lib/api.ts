@@ -116,14 +116,17 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   return envelope.data;
 }
 
-/** Contexto público + subdominio (respuesta del login unificado). */
-export interface ContextoConSede extends ContextoColegioPublico {
-  subdominio: string;
+/** Contexto público del colegio (respuesta del login unificado). */
+export type ContextoConSede = ContextoColegioPublico;
+
+/** Branding público por código de colegio (enlace directo o sufijo del usuario). */
+export function getContextoColegio(codigo: string): Promise<ContextoConSede> {
+  return request(`/auth/contexto-colegio?codigo=${encodeURIComponent(codigo)}`);
 }
 
-/** Branding público por subdominio (enlaces directos a un colegio). */
-export function getContextoColegio(subdominio: string): Promise<ContextoConSede> {
-  return request(`/auth/contexto-colegio?subdominio=${encodeURIComponent(subdominio)}`);
+/** Clave de caché del contexto por código: la comparten login y branding. */
+export function claveCodigo(codigo: string): readonly ['contexto-colegio', string] {
+  return ['contexto-colegio', `cod:${codigo.toLowerCase()}`] as const;
 }
 
 /** Login de usuario de colegio (guarda la cookie httpOnly). */
@@ -291,6 +294,11 @@ export function guardarColegioOnboarding(dto: ColegioOnboardingRequest): Promise
 
 export function guardarSedeOnboarding(dto: SedeOnboardingRequest): Promise<EstadoOnboarding> {
   return request('/onboarding/sedes', { method: 'PUT', body: dto });
+}
+
+/** Quita una sede (la API rechaza la última y las que ya tienen cursos). */
+export function eliminarSedeOnboarding(id: string): Promise<EstadoOnboarding> {
+  return request(`/onboarding/sedes/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
 export function generarEstructuraOnboarding(

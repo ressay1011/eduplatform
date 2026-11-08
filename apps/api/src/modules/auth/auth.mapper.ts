@@ -3,7 +3,8 @@
  * (AGENTS.md §2.1: conversiones van a un mapper, no al service.)
  */
 import type { ColegioSesion, LoginResponse, MeResponse, UsuarioSesion } from '@eduplatform/types';
-import { RolPlataforma } from '@eduplatform/types';
+import { RolPlataforma, paletaDelColegio } from '@eduplatform/types';
+import type { PaletaColegio } from '@eduplatform/types';
 import type { AuthContext } from './auth.types';
 import type { ColegioAuthRow, UsuarioAuthRow } from './auth.repository';
 
@@ -23,6 +24,9 @@ export interface ColegioSesionFuente {
   readonly nombre: string;
   readonly codigoDane: string | null;
   readonly primaryColor: string | null;
+  readonly secondaryColor?: string | null;
+  readonly tertiaryColor?: string | null;
+  readonly palette?: PaletaColegio | null;
 }
 
 export function toUsuarioSesion(usuario: UsuarioSesionFuente): UsuarioSesion {
@@ -42,6 +46,9 @@ export function toColegioSesion(colegio: ColegioSesionFuente): ColegioSesion {
     nombre: colegio.nombre,
     codigoDane: colegio.codigoDane ?? '',
     primaryColor: colegio.primaryColor,
+    secondaryColor: colegio.secondaryColor ?? null,
+    tertiaryColor: colegio.tertiaryColor ?? null,
+    palette: paletaDelColegio(colegio),
   };
 }
 

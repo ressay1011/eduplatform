@@ -19,9 +19,15 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: eduplatform
     ports:
-      - '5432:5432'
+      # Solo localhost. Con '5432:5432' el puerto queda en 0.0.0.0 y cualquiera
+      # en la misma red entra como superusuario (postgres/postgres), que además
+      # se salta RLS. Las herramientas del escritorio siguen usando localhost.
+      - '127.0.0.1:5432:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Ojo: /docker-entrypoint-initdb.d SOLO corre con el volumen vacío. Si el
+      # volumen ya existe, este archivo no se vuelve a ejecutar: un cambio en
+      # los roles hay que aplicarlo a mano (o recrear el volumen, que borra todo).
       - ./packages/database/sql/0000_roles.sql:/docker-entrypoint-initdb.d/0000_roles.sql:ro
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U postgres -d eduplatform']

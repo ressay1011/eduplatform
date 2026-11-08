@@ -2,7 +2,10 @@
  * CSV de matrículas (paso 5 del onboarding) — utilidades puras del cliente.
  *
  * El formato es el de la plantilla:
- *   documento,nombres,apellidos,correo,sede,grado,letra,jornada[,fechaNacimiento]
+ *   documento,nombres,apellidos,correo,sede,grado,letra,jornada[,fechaNacimiento[,condicion[,tipoDocumento]]]
+ *
+ * Con encabezado se lee **por nombre de columna**; sin él, por posición (las
+ * ocho primeras y, si vienen, fecha y condición al final).
  *
  * El cliente solo hace una validación de forma y resuelve el curso contra los
  * cursos reales para la vista previa; la API vuelve a validar todo (es la
@@ -22,6 +25,10 @@ export interface FilaCsvMatricula {
   letra: string;
   jornada: string;
   fechaNacimiento?: string;
+  /** Texto tal cual del CSV; el API lo normaliza y reporta la fila si no vale. */
+  condicion?: string;
+  /** Tipo de documento (CC, TI…) para desambiguar números repetidos. */
+  tipoDocumento?: string;
 }
 
 export interface CsvMatriculasLeido {
@@ -30,6 +37,9 @@ export interface CsvMatriculasLeido {
 }
 
 const COLUMNAS = 8;
+
+/** Sin estas columnas la fila no se puede resolver; el resto es informativo. */
+const COLUMNAS_OBLIGATORIAS = ['documento', 'sede', 'grado', 'letra', 'jornada'] as const;
 
 /** Divide una línea CSV respetando las comillas dobles. */
 function dividirLinea(linea: string): string[] {
@@ -76,16 +86,37 @@ export function parsearCsvMatriculas(texto: string): CsvMatriculasLeido {
   const filas: FilaCsvMatricula[] = [];
   const lineas = texto.replace(/^\uFEFF/, '').split(/\r?\n/);
 
+  // Con encabezado se lee por NOMBRE: así `condicion` puede ir en cualquier
+  // sitio y un archivo con el orden cambiado no se rompe. Sin encabezado se
+  // mantiene el orden histórico (8 columnas; fecha en la 9.ª y condición en la
+  // 10.ª si vienen).
+  let encabezado: Record<string, number> | null = null;
   let primera = true;
+
   for (const [indice, cruda] of lineas.entries()) {
     const linea = cruda.trim();
     if (linea === '') continue;
 
     if (primera) {
       primera = false;
-      // Encabezado opcional: si la primera celda es «documento», se salta.
-      const cabecera = dividirLinea(linea).map(normalizar);
-      if (cabecera[0]?.includes('documento') === true) continue;
+      // Encabezado opcional: si la primera celda es «documento», se toma como
+      // mapa de columnas (gana la primera aparición de cada nombre).
+      const celdas = dividirLinea(linea).map(normalizar);
+      if (celdas[0]?.includes('documento') === true) {
+        const mapa: Record<string, number> = {};
+        for (const [posicion, celda] of celdas.entries()) {
+          if (celda !== '' && !(celda in mapa)) mapa[celda] = posicion;
+        }
+        const faltantes = COLUMNAS_OBLIGATORIAS.filter((columna) => !(columna in mapa));
+        if (faltantes.length > 0) {
+          return {
+            filas: [],
+            errores: [`Al encabezado le faltan columnas: ${faltantes.join(', ')}`],
+          };
+        }
+        encabezado = mapa;
+        continue;
+      }
     }
 
     const campos = dividirLinea(linea);
@@ -96,18 +127,29 @@ export function parsearCsvMatriculas(texto: string): CsvMatriculasLeido {
       continue;
     }
 
-    const fechaNacimiento = campos[8] ?? '';
+    /** Por nombre de encabezado; sin encabezado, por posición histórica. */
+    const valor = (nombre: string, posicional: number): string => {
+      if (encabezado === null) return campos[posicional] ?? '';
+      const posicion = encabezado[nombre];
+      return posicion === undefined ? '' : (campos[posicion] ?? '');
+    };
+
+    const fechaNacimiento = valor('fechanacimiento', 8);
+    const condicion = valor('condicion', 9);
+    const tipoDocumento = valor('tipodocumento', 10);
     filas.push({
       linea: indice + 1,
-      documento: campos[0] ?? '',
-      nombres: campos[1] ?? '',
-      apellidos: campos[2] ?? '',
-      correo: campos[3] ?? '',
-      sede: campos[4] ?? '',
-      grado: campos[5] ?? '',
-      letra: campos[6] ?? '',
-      jornada: campos[7] ?? '',
+      documento: valor('documento', 0),
+      nombres: valor('nombres', 1),
+      apellidos: valor('apellidos', 2),
+      correo: valor('correo', 3),
+      sede: valor('sede', 4),
+      grado: valor('grado', 5),
+      letra: valor('letra', 6),
+      jornada: valor('jornada', 7),
       ...(fechaNacimiento === '' ? {} : { fechaNacimiento }),
+      ...(condicion === '' ? {} : { condicion }),
+      ...(tipoDocumento === '' ? {} : { tipoDocumento }),
     });
   }
 
@@ -135,6 +177,8 @@ const JORNADAS: Record<string, string> = {
   noche: 'NOCTURNA',
   nocturna: 'NOCTURNA',
   unica: 'UNICA',
+  completa: 'COMPLETA',
+  completo: 'COMPLETA',
   sabado: 'FIN_SEMANA',
   sabados: 'FIN_SEMANA',
   sabatina: 'FIN_SEMANA',
@@ -198,14 +242,18 @@ export function aFilaRequest(fila: FilaCsvMatricula): FilaMatriculaRequest {
     ...(fila.apellidos === '' ? {} : { apellidos: fila.apellidos }),
     ...(fila.correo === '' ? {} : { correo: fila.correo }),
     ...(fila.fechaNacimiento === undefined ? {} : { fechaNacimiento: fila.fechaNacimiento }),
+    ...(fila.condicion === undefined || fila.condicion === '' ? {} : { condicion: fila.condicion }),
+    ...(fila.tipoDocumento === undefined || fila.tipoDocumento === ''
+      ? {}
+      : { tipoDocumento: fila.tipoDocumento }),
   };
 }
 
 /** Plantilla descargable: encabezado + una fila de ejemplo. */
 export function plantillaMatriculasCsv(): string {
   return [
-    'documento,nombres,apellidos,correo,sede,grado,letra,jornada,fechaNacimiento',
-    '1098765432,Ana María,Gómez Ruiz,ana.gomez@cole.edu.co,Sede Principal,6,A,Mañana,2013-04-18',
+    'documento,nombres,apellidos,correo,sede,grado,letra,jornada,fechaNacimiento,condicion,tipoDocumento',
+    '1098765432,Ana María,Gómez Ruiz,ana.gomez@cole.edu.co,Sede Principal,6,A,Mañana,2013-04-18,Nuevo,TI',
   ].join('\r\n');
 }
 

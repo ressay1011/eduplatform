@@ -53,18 +53,18 @@ describe('Auth (e2e)', () => {
   let db: Database;
 
   // Sufijo aleatorio: varios specs corren en hilos en paralelo y con
-  // `Date.now()` compartían milisegundo (choque de codigo_dane/subdominio).
+  // `Date.now()` compartían milisegundo (choque de codigo_dane/codigo).
   const sufijo = String(randomInt(0, 100_000_000)).padStart(8, '0');
-  const subdominioA = `e2e-a-${sufijo}`;
-  const subdominioB = `e2e-b-${sufijo}`;
+  const codigoA = `e2e-a-${sufijo}`;
+  const codigoB = `e2e-b-${sufijo}`;
   // Dominios de correo: son la llave del login unificado (únicos por colegio).
-  const emailAdminA = `admin-a@${subdominioA}`;
-  const emailStaffA = `staff-a@${subdominioA}`;
-  const emailAdminB = `user-b@${subdominioB}`;
-  // Correo de un proveedor libre: con el subdominio debe poder entrar igual.
-  const emailGmailA = `rector.juanaarias.${sufijo}@gmail.com`;
-  // Usuario cuyo sufijo ES el subdominio: resuelve el colegio sin URL de colegio.
-  const usuarioSufijoA = `rector@${subdominioA}`;
+  const emailAdminA = `admin-a@${codigoA}`;
+  const emailStaffA = `staff-a@${codigoA}`;
+  const emailAdminB = `user-b@${codigoB}`;
+  // Usuario con forma de correo: entra porque lleva el código del colegio al final.
+  const emailGmailA = `rector.juanaarias.${sufijo}@gmail.com@${codigoA}`;
+  // Usuario cuyo sufijo ES el código: resuelve el colegio sin pista.
+  const usuarioSufijoA = `rector@${codigoA}`;
   let colegioAId = '';
   let colegioBId = '';
   let adminId = '';
@@ -90,7 +90,7 @@ describe('Auth (e2e)', () => {
           {
             nombre: 'Colegio E2E A',
             codigoDane: `1${sufijo}000`,
-            subdominio: subdominioA,
+            codigo: codigoA,
             municipio: 'Plato',
             departamento: 'Magdalena',
             email: 'a@e2e.co',
@@ -99,7 +99,7 @@ describe('Auth (e2e)', () => {
           {
             nombre: 'Colegio E2E B',
             codigoDane: `2${sufijo}000`,
-            subdominio: subdominioB,
+            codigo: codigoB,
             municipio: 'Plato',
             departamento: 'Magdalena',
             email: 'b@e2e.co',
@@ -134,6 +134,8 @@ describe('Auth (e2e)', () => {
             apellidos: 'A',
             tipoDocumento: 'CC',
             numeroDocumento: `72${sufijo}1`,
+            // Cada test que dependa de este flag lo fija al empezar: aquí
+            // conviven el primer ingreso (true) y el uso normal (false).
             debeCambiarPassword: true,
           },
           {
@@ -202,34 +204,48 @@ describe('Auth (e2e)', () => {
 
   it('contexto-colegio devuelve el branding público del colegio', async () => {
     const res = await request(app.getHttpServer()).get(
-      `/api/auth/contexto-colegio?subdominio=${subdominioA}`,
+      `/api/auth/contexto-colegio?codigo=${codigoA}`,
     );
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({
       success: true,
-      data: { nombre: 'Colegio E2E A', codigoDane: `1${sufijo}000`, estado: 'PRUEBA' },
+      data: {
+        codigo: codigoA,
+        nombre: 'Colegio E2E A',
+        codigoDane: `1${sufijo}000`,
+        estado: 'PRUEBA',
+      },
     });
   });
 
-  it('contexto-colegio con subdominio inexistente → 404 con el contrato', async () => {
+  it('el login no distingue la caja del identificador', async () => {
+    const { body } = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({ usuario: `Admin-A@${codigoA.toUpperCase()}`, password: PASSWORD_ADMIN })
+      .expect(200);
+
+    expect(body.data.usuario.usuario).toBe(emailAdminA);
+  });
+
+  it('contexto-colegio con codigo inexistente → 404 con el contrato', async () => {
     const res = await request(app.getHttpServer()).get(
-      '/api/auth/contexto-colegio?subdominio=no-existe-xyz',
+      '/api/auth/contexto-colegio?codigo=no-existe-xyz',
     );
     expect(res.status).toBe(404);
     expect(res.body).toMatchObject({ success: false, error: { code: 'NOT_FOUND' } });
   });
 
-  it('login por subdominio: el correo puede ser de cualquier dominio', async () => {
+  it('un usuario con forma de correo entra si lleva el código al final', async () => {
     const { body } = await request(app.getHttpServer())
       .post('/api/auth/login')
-      .send({ usuario: emailGmailA, password: PASSWORD_STAFF, subdominio: subdominioA })
+      .send({ usuario: emailGmailA, password: PASSWORD_STAFF })
       .expect(200);
 
     expect(body.data.usuario.usuario).toBe(emailGmailA);
     expect(body.data.colegio.id).toBe(colegioAId);
   });
 
-  it('sin URL de colegio, el colegio sale del sufijo del usuario (admin@colegio)', async () => {
+  it('el colegio sale del código del usuario (admin@codigo)', async () => {
     const { body } = await request(app.getHttpServer())
       .post('/api/auth/login')
       .send({ usuario: usuarioSufijoA, password: PASSWORD_ADMIN })
@@ -239,17 +255,10 @@ describe('Auth (e2e)', () => {
     expect(body.data.usuario.usuario).toBe(usuarioSufijoA);
   });
 
-  it('el mismo correo con el subdominio de OTRO colegio → 401 (aislamiento)', async () => {
+  it('un sufijo que no es el código de ningún colegio → 401', async () => {
     await request(app.getHttpServer())
       .post('/api/auth/login')
-      .send({ usuario: emailGmailA, password: PASSWORD_STAFF, subdominio: subdominioB })
-      .expect(401);
-  });
-
-  it('sin subdominio, un correo de Gmail no resuelve colegio → 401', async () => {
-    await request(app.getHttpServer())
-      .post('/api/auth/login')
-      .send({ usuario: emailGmailA, password: PASSWORD_STAFF })
+      .send({ usuario: `rector@dominio-inexistente.test`, password: PASSWORD_STAFF })
       .expect(401);
   });
 
@@ -264,7 +273,7 @@ describe('Auth (e2e)', () => {
   it('anti-diccionario: 5 fallos con un correo INEXISTENTE bloquean el identificador (423)', async () => {
     // Correo con dominio válido pero usuario que no existe en la BD: antes
     // solo lo frenaba el rate limit por IP; ahora se bloquea el identificador.
-    const correoFantasma = `fantasma-${sufijo}@${subdominioA}`;
+    const correoFantasma = `fantasma-${sufijo}@${codigoA}`;
 
     for (let i = 0; i < 5; i += 1) {
       const intento = await request(app.getHttpServer())
@@ -298,7 +307,6 @@ describe('Auth (e2e)', () => {
   it('login con contraseña incorrecta → 401 y suma intento fallido', async () => {
     const res = await request(app.getHttpServer())
       .post('/api/auth/login')
-      .set('X-Colegio-Subdominio', subdominioA)
       .send({ usuario: emailAdminA, password: 'Incorrecta999' });
     expect(res.status).toBe(401);
     expect(res.body.error.code).toBe('INVALID_CREDENTIALS');
@@ -314,7 +322,6 @@ describe('Auth (e2e)', () => {
   it('login correcto → 200, cookie httpOnly y reset de intentos', async () => {
     const res = await request(app.getHttpServer())
       .post('/api/auth/login')
-      .set('X-Colegio-Subdominio', subdominioA)
       .send({ usuario: emailAdminA, password: PASSWORD_ADMIN });
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({
@@ -338,10 +345,116 @@ describe('Auth (e2e)', () => {
     expect(filas[0]?.intentos).toBe(0);
   });
 
+  it('tras vencer el bloqueo, un fallo NO vuelve a bloquear (cuenta recuperable)', async () => {
+    // Estado exacto de una cuenta a la que se le pasaron los 15 minutos:
+    // contador en el máximo y el bloqueo ya en el pasado.
+    await withTenant(db, platformCtx, (tx) =>
+      tx
+        .update(usuarios)
+        .set({ intentosFallidos: 5, bloqueadoHasta: new Date(Date.now() - 60_000) })
+        .where(eq(usuarios.id, adminId)),
+    );
+
+    const fallo = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({ usuario: emailAdminA, password: 'Incorrecta999' });
+    expect(fallo.status).toBe(401);
+
+    // Un solo fallo cuenta como el PRIMERO de la ventana nueva, no como el sexto.
+    const trasFallo = await withTenant(db, platformCtx, (tx) =>
+      tx
+        .select({ intentos: usuarios.intentosFallidos, bloqueo: usuarios.bloqueadoHasta })
+        .from(usuarios)
+        .where(eq(usuarios.id, adminId)),
+    );
+    expect(trasFallo[0]?.intentos).toBe(1);
+    expect(trasFallo[0]?.bloqueo).toBeNull();
+
+    // Y el dueño de la cuenta puede entrar con su contraseña correcta.
+    const ok = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({ usuario: emailAdminA, password: PASSWORD_ADMIN });
+    expect(ok.status).toBe(200);
+  });
+
+  it('sesión con 59 minutos de inactividad sigue válida', async () => {
+    const login = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({ usuario: emailAdminA, password: PASSWORD_ADMIN });
+    const cookie = (login.headers['set-cookie'] as unknown as string[]).map(String).join('; ');
+    await withTenant(db, platformCtx, (tx) =>
+      tx
+        .update(sesiones)
+        .set({ ultimaActividadEn: new Date(Date.now() - 59 * 60_000) })
+        .where(eq(sesiones.usuarioId, adminId)),
+    );
+    const me = await request(app.getHttpServer()).get('/api/auth/me').set('Cookie', cookie);
+    expect(me.status).toBe(200);
+  });
+
+  it('sesión inactiva más de 60 min → 401 y queda revocada en BD', async () => {
+    // Cuenta de sesiones revocadas de este usuario (antes/después): hay
+    // sesiones antiguas que ya lo estaban.
+    const revocadas = async (): Promise<number> =>
+      (
+        await withTenant(db, platformCtx, (tx) =>
+          tx
+            .select({ revocada: sesiones.revocadaEn })
+            .from(sesiones)
+            .where(eq(sesiones.usuarioId, adminId)),
+        )
+      ).filter((f) => f.revocada !== null).length;
+
+    const login = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({ usuario: emailAdminA, password: PASSWORD_ADMIN });
+    const cookie = (login.headers['set-cookie'] as unknown as string[]).map(String).join('; ');
+    await withTenant(db, platformCtx, (tx) =>
+      tx
+        .update(sesiones)
+        .set({ ultimaActividadEn: new Date(Date.now() - 61 * 60_000) })
+        .where(eq(sesiones.usuarioId, adminId)),
+    );
+
+    const antes = await revocadas();
+    const me = await request(app.getHttpServer()).get('/api/auth/me').set('Cookie', cookie);
+    expect(me.status).toBe(401);
+    expect(me.body.error.code).toBe('UNAUTHORIZED');
+    expect(await revocadas()).toBe(antes + 1);
+  });
+
+  it('contraseña inicial sin cambiar → 403 fuera de las rutas permitidas', async () => {
+    await withTenant(db, platformCtx, (tx) =>
+      tx.update(usuarios).set({ debeCambiarPassword: true }).where(eq(usuarios.id, adminId)),
+    );
+    try {
+      const login = await request(app.getHttpServer())
+        .post('/api/auth/login')
+        .send({ usuario: emailAdminA, password: PASSWORD_ADMIN });
+      expect(login.status).toBe(200);
+      expect(login.body.data.usuario.debeCambiarPassword).toBe(true);
+      const cookie = (login.headers['set-cookie'] as unknown as string[]).map(String).join('; ');
+
+      // Las tres rutas que sí puede usar.
+      const me = await request(app.getHttpServer()).get('/api/auth/me').set('Cookie', cookie);
+      expect(me.status).toBe(200);
+
+      // Cualquier otra, no.
+      const protegido = await request(app.getHttpServer())
+        .get('/api/test-guard/protegido')
+        .set('Cookie', cookie);
+      expect(protegido.status).toBe(403);
+      expect(protegido.body.error.code).toBe('PASSWORD_CHANGE_REQUIRED');
+    } finally {
+      await withTenant(db, platformCtx, (tx) =>
+        tx.update(usuarios).set({ debeCambiarPassword: false }).where(eq(usuarios.id, adminId)),
+      );
+    }
+  });
+
   it('login de usuario inexistente → 401 con mensaje genérico', async () => {
     const res = await request(app.getHttpServer())
       .post('/api/auth/login')
-      .set('X-Colegio-Subdominio', subdominioA)
       .send({ usuario: 'nadie@e2e.co', password: 'Cualquiera123' });
     expect(res.status).toBe(401);
     expect(res.body.error.message).toBe('Usuario o contraseña incorrectos');
@@ -357,7 +470,6 @@ describe('Auth (e2e)', () => {
     const agent = request.agent(app.getHttpServer());
     await agent
       .post('/api/auth/login')
-      .set('X-Colegio-Subdominio', subdominioA)
       .send({ usuario: emailAdminA, password: PASSWORD_ADMIN })
       .expect(200);
 
@@ -379,10 +491,13 @@ describe('Auth (e2e)', () => {
   });
 
   it('staff sin permiso → 403 + audit; con permiso asignado → 200', async () => {
+    // Ya cambió su contraseña inicial: esta prueba es de permisos.
+    await withTenant(db, platformCtx, (tx) =>
+      tx.update(usuarios).set({ debeCambiarPassword: false }).where(eq(usuarios.id, staffId)),
+    );
     const agent = request.agent(app.getHttpServer());
     await agent
       .post('/api/auth/login')
-      .set('X-Colegio-Subdominio', subdominioA)
       .send({ usuario: emailStaffA, password: PASSWORD_STAFF })
       .expect(200);
 
@@ -419,28 +534,19 @@ describe('Auth (e2e)', () => {
     expect(permitido.status).toBe(200);
   });
 
-  it('TenantGuard: header con otro subdominio → 403', async () => {
-    const agent = request.agent(app.getHttpServer());
-    await agent
-      .post('/api/auth/login')
-      .set('X-Colegio-Subdominio', subdominioA)
-      .send({ usuario: emailAdminA, password: PASSWORD_ADMIN })
-      .expect(200);
-    const res = await agent.get('/api/auth/me').set('X-Colegio-Subdominio', subdominioB);
-    expect(res.status).toBe(403);
-  });
-
   it('cambio de contraseña (primer login): sin actual, y revoca las demás sesiones', async () => {
+    // Primer ingreso: contraseña inicial sin cambiar (la que puso el admin).
+    await withTenant(db, platformCtx, (tx) =>
+      tx.update(usuarios).set({ debeCambiarPassword: true }).where(eq(usuarios.id, staffId)),
+    );
     const agent = request.agent(app.getHttpServer());
     await agent
       .post('/api/auth/login')
-      .set('X-Colegio-Subdominio', subdominioA)
       .send({ usuario: emailStaffA, password: PASSWORD_STAFF })
       .expect(200);
     const agent2 = request.agent(app.getHttpServer());
     await agent2
       .post('/api/auth/login')
-      .set('X-Colegio-Subdominio', subdominioA)
       .send({ usuario: emailStaffA, password: PASSWORD_STAFF })
       .expect(200);
 
@@ -456,14 +562,12 @@ describe('Auth (e2e)', () => {
     // La contraseña vieja ya no sirve; la nueva sí (y limpia el flag).
     const viejo = await request(app.getHttpServer())
       .post('/api/auth/login')
-      .set('X-Colegio-Subdominio', subdominioA)
       .send({ usuario: emailStaffA, password: PASSWORD_STAFF });
     expect(viejo.status).toBe(401);
 
     const nuevo = await request
       .agent(app.getHttpServer())
       .post('/api/auth/login')
-      .set('X-Colegio-Subdominio', subdominioA)
       .send({ usuario: emailStaffA, password: PASSWORD_NUEVA });
     expect(nuevo.status).toBe(200);
     expect(nuevo.body.data.usuario.debeCambiarPassword).toBe(false);
@@ -473,7 +577,6 @@ describe('Auth (e2e)', () => {
     const agent = request.agent(app.getHttpServer());
     await agent
       .post('/api/auth/login')
-      .set('X-Colegio-Subdominio', subdominioA)
       .send({ usuario: emailAdminA, password: PASSWORD_ADMIN })
       .expect(200);
     const res = await agent
@@ -486,7 +589,6 @@ describe('Auth (e2e)', () => {
     const agent = request.agent(app.getHttpServer());
     await agent
       .post('/api/auth/login')
-      .set('X-Colegio-Subdominio', subdominioA)
       .send({ usuario: emailAdminA, password: PASSWORD_ADMIN })
       .expect(200);
     const out = await agent.post('/api/auth/logout');
@@ -498,17 +600,13 @@ describe('Auth (e2e)', () => {
     const agentB = request.agent(app.getHttpServer());
     const loginB = await agentB
       .post('/api/auth/login')
-      .set('X-Colegio-Subdominio', subdominioB)
       .send({ usuario: emailAdminB, password: PASSWORD_ADMIN });
     expect(loginB.status).toBe(200);
 
     const meB = await agentB.get('/api/auth/me');
     expect(meB.body.data.colegio.nombre).toBe('Colegio E2E B');
 
-    // Con el header de A → 403 (TenantGuard).
-    const cruzado = await agentB.get('/api/auth/me').set('X-Colegio-Subdominio', subdominioA);
-    expect(cruzado.status).toBe(403);
-
+    // El tenant sale de la sesión: la sesión de B nunca ve datos de A.
     // RLS de verdad: con el contexto de A, la BD solo devuelve usuarios de A.
     const filas = await withTenant(db, { colegioId: colegioAId, isPlatformAdmin: false }, (tx) =>
       tx.select({ id: usuarios.id }).from(usuarios),
@@ -522,7 +620,7 @@ describe('Auth (e2e)', () => {
   it('contexto-colegio: ETag/304 y la invalidación refleja el cambio de color al instante', async () => {
     // 1) Primera carga: 200 + ETag + no-cache (el navegador siempre revalida).
     const primera = await request(app.getHttpServer()).get(
-      `/api/auth/contexto-colegio?subdominio=${subdominioA}`,
+      `/api/auth/contexto-colegio?codigo=${codigoA}`,
     );
     expect(primera.status).toBe(200);
     const etag = primera.headers['etag'];
@@ -531,7 +629,7 @@ describe('Auth (e2e)', () => {
 
     // 2) Con If-None-Match: 304 sin cuerpo (sin tráfico de más).
     const revalidacion = await request(app.getHttpServer())
-      .get(`/api/auth/contexto-colegio?subdominio=${subdominioA}`)
+      .get(`/api/auth/contexto-colegio?codigo=${codigoA}`)
       .set('If-None-Match', String(etag));
     expect(revalidacion.status).toBe(304);
 
@@ -540,16 +638,16 @@ describe('Auth (e2e)', () => {
       tx.update(colegios).set({ primaryColor: '#a3331a' }).where(eq(colegios.id, colegioAId)),
     );
     const antesDeInvalidar = await request(app.getHttpServer()).get(
-      `/api/auth/contexto-colegio?subdominio=${subdominioA}`,
+      `/api/auth/contexto-colegio?codigo=${codigoA}`,
     );
     expect(antesDeInvalidar.body.data.primaryColor).toBeNull();
 
     // 4) …y al invalidar (lo hará el módulo de colegios al editar), el nuevo
     //    valor sale YA — sin esperar ventanas de 60s ni TTL.
     //    Se invalida por la MISMA vía que usará el módulo de colegios.
-    app.get(AuthService).invalidarContextoColegio({ subdominio: subdominioA });
+    app.get(AuthService).invalidarContextoColegio({ codigo: codigoA });
     const despues = await request(app.getHttpServer()).get(
-      `/api/auth/contexto-colegio?subdominio=${subdominioA}`,
+      `/api/auth/contexto-colegio?codigo=${codigoA}`,
     );
     expect(despues.body.data.primaryColor).toBe('#a3331a');
     expect(despues.headers['etag']).not.toBe(etag);

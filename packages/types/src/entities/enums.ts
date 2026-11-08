@@ -65,6 +65,7 @@ export type EstadoPeriodo = (typeof EstadoPeriodo)[keyof typeof EstadoPeriodo];
 export const Jornada = {
   MANANA: 'MANANA',
   TARDE: 'TARDE',
+  COMPLETA: 'COMPLETA',
   UNICA: 'UNICA',
   NOCTURNA: 'NOCTURNA',
   FIN_SEMANA: 'FIN_SEMANA',
@@ -120,3 +121,13 @@ export const TipoCierre = {
   MANUAL_REAPERTURA: 'MANUAL_REAPERTURA',
 } as const;
 export type TipoCierre = (typeof TipoCierre)[keyof typeof TipoCierre];
+
+/** Valores válidos de tipo de documento, en el orden en que se ofrecen. */
+export const TIPOS_DOCUMENTO = [
+  TipoDocumento.CC,
+  TipoDocumento.TI,
+  TipoDocumento.CE,
+  TipoDocumento.RC,
+  TipoDocumento.PEP,
+  TipoDocumento.PPT,
+] as const;

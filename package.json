@@ -5,7 +5,7 @@
   "description": "EduPlatform — SaaS multi-tenant de gestión escolar para colegios públicos colombianos",
   "packageManager": "pnpm@9.12.0",
   "engines": {
-    "node": ">=20.0.0",
+    "node": "24.x",
     "pnpm": ">=9.0.0"
   },
   "scripts": {
@@ -17,12 +17,13 @@
     "test": "turbo run test",
     "preflight": "node scripts/preflight.mjs",
     "preflight:fast": "node scripts/preflight.mjs --fast",
-    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml}\"",
-    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml}\"",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml,css}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml,css}\"",
     "clean": "turbo run clean",
     "coverage": "turbo run test:coverage",
     "coverage:check": "node scripts/coverage-floor.mjs",
     "e2e": "playwright test",
+    "e2e:seed": "node scripts/e2e-seed.mjs",
     "e2e:changed": "playwright test --only-changed",
     "e2e:ui": "playwright test --ui",
     "e2e:types": "tsc -p tsconfig.e2e.json",
@@ -34,7 +35,7 @@
       "eslint --fix --max-warnings=0",
       "prettier --write"
     ],
-    "*.{json,md,yml,yaml}": [
+    "*.{json,md,yml,yaml,css}": [
       "prettier --write"
     ]
   },
@@ -48,18 +49,19 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
-    "@next/eslint-plugin-next": "^16.4.3",
-    "@playwright/test": "^1.56.0",
-    "@types/node": "^22",
-    "eslint": "^9",
+    "@next/eslint-plugin-next": "^15.5.29",
+    "@playwright/test": "^1.65.0",
+    "@types/node": "^24.19.2",
+    "eslint": "^9.39.5",
     "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.1.1",
-    "globals": "^17.13.0",
-    "husky": "^9",
-    "lint-staged": "^16",
-    "prettier": "^3.3.3",
+    "globals": "^17.14.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
+    "prettier": "^3.9.10",
     "turbo": "^2.11.10",
-    "typescript": "^5.6.0",
-    "typescript-eslint": "^8.72.0"
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.72.1"
   }
 }

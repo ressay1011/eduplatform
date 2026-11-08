@@ -12,9 +12,12 @@ coverage/
 
 # Entorno (NUNCA commitear secretos — copiar de .env.example)
 .env
-.env.local
-.env.*.local
+.env.*
 !.env.example
+
+# Llaves y certificados: el repo es público, que no se cuele ninguno
+*.pem
+*.key
 
 # CLI de Vercel (project.json y entorno local)
 .vercel
@@ -28,9 +31,6 @@ Thumbs.db
 *.swp
 *.swo
 
-# Datos locales de Docker (si se llegan a montar)
-.docker-data/scripts/*.log
-
 # === Solo local: no se publica en el remoto de producción ===
 # El repo de GitHub es únicamente la fuente de despliegue (Render/Vercel).
 /docs/
@@ -38,6 +38,7 @@ Thumbs.db
 /scripts/*
 !/scripts/preflight.mjs
 !/scripts/coverage-floor.mjs
+!/scripts/e2e-seed.mjs
 /AGENTS.md
 /apps/web/server.mjs
 
@@ -50,6 +51,4 @@ Thumbs.db
 /blob-report/
 /playwright/.cache/
 
-# Solo local: hooks de git y plantilla de PR (no hacen falta para desplegar)
-/.husky/
-/.github/pull_request_template.md
+# .husky/ se versiona a propósito: los hooks se comparten con el repo.

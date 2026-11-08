@@ -10,7 +10,13 @@
  *   HASH=$(cd apps/api && node -e "require('bcrypt').hash(process.argv[1],12).then(console.log)" 'Clave')
  *   DEMO_HASH="$HASH" DATABASE_URL='postgresql://app_migrator:...' node packages/database/scripts/seed-demo.mjs
  */
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import postgres from 'postgres';
+
+/** Carpeta de este script: el SQL de al lado vive en `../sql`. */
+const here = dirname(fileURLToPath(import.meta.url));
 
 const URL = process.env.DATABASE_URL;
 const HASH = process.env.DEMO_HASH;
@@ -19,27 +25,30 @@ if (!URL || !HASH) {
   process.exit(1);
 }
 
-const SUBDOMINIO = process.env.DEMO_SUBDOMINIO ?? 'demo-dist-1';
-// El acceso es con nombre de usuario, no un correo: admin@<subdominio>.
-const USUARIO_ADMIN = process.env.DEMO_ADMIN ?? `admin@${SUBDOMINIO}`;
+// El colegio se identifica por su CÓDIGO (el que va en `admin@<codigo>`).
+// `DEMO_SUBDOMINIO` se sigue aceptando como nombre heredado de la variable.
+const CODIGO = (process.env.DEMO_CODIGO ?? process.env.DEMO_SUBDOMINIO ?? 'demo-dist-1').trim();
+// El acceso es con nombre de usuario, no un correo: admin@<codigo>.
+const USUARIO_ADMIN = process.env.DEMO_ADMIN ?? `admin@${CODIGO}`;
 const NOMBRE_COLEGIO = process.env.DEMO_COLEGIO ?? 'I.E.T.D. Juana Arias de Benavides';
 
 const sql = postgres(URL, { max: 1 });
 
 try {
-  const existente = await sql`SELECT id FROM colegios WHERE subdominio = ${SUBDOMINIO} LIMIT 1`;
+  const existente =
+    await sql`SELECT id FROM colegios WHERE lower(codigo) = ${CODIGO.toLowerCase()} LIMIT 1`;
   let colegioId = existente[0]?.id;
   if (colegioId === undefined) {
     const [creado] = await sql`
-      INSERT INTO colegios (nombre, codigo_dane, subdominio, municipio, departamento, email, calendario, estado, primary_color)
-      VALUES (${NOMBRE_COLEGIO}, '105001000123', ${SUBDOMINIO}, 'Plato', 'Magdalena',
+      INSERT INTO colegios (nombre, codigo_dane, codigo, municipio, departamento, email, calendario, estado, primary_color)
+      VALUES (${NOMBRE_COLEGIO}, '105001000123', ${CODIGO}, 'Plato', 'Magdalena',
               'rectoria@eduplatform.co', 'A', 'ACTIVO', '#0b57d0')
       RETURNING id
     `;
     colegioId = creado?.id;
-    console.log(`# colegio creado: ${SUBDOMINIO} (${colegioId})`);
+    console.log(`# colegio creado: ${CODIGO} (${colegioId})`);
   } else {
-    console.log(`# colegio existente: ${SUBDOMINIO} (${colegioId})`);
+    console.log(`# colegio existente: ${CODIGO} (${colegioId})`);
   }
 
   const sede = await sql`
@@ -75,6 +84,15 @@ try {
 
   const [{ total }] = await sql`SELECT count(*)::int AS total FROM permisos`;
   console.log(`# permisos en catálogo: ${total}`);
+
+  // Roles base del colegio (0003 es idempotente): sin ellos el colegio demo no
+  // puede asignar personal y la verificación de RLS se queda en 0.
+  const rolesSql = readFileSync(join(here, '..', 'sql', '0003_roles_seed.sql'), 'utf8');
+  await sql.unsafe(rolesSql);
+  const [{ roles }] = await sql`
+    SELECT count(*)::int AS roles FROM roles WHERE colegio_id = ${colegioId}
+  `;
+  console.log(`# roles base del colegio: ${roles}`);
 } finally {
   await sql.end({ timeout: 5 });
 }

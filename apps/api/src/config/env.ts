@@ -13,7 +13,7 @@ const EnvSchema = z
     /** Orígenes del frontend separados por coma. */
     CORS_ORIGINS: z.string().default('http://localhost:3000'),
     /** Rol de runtime SIEMPRE app_user (sujeto a RLS). Obligatoria en producción. */
-    DATABASE_URL: z.string().url().optional(),
+    DATABASE_URL: z.url().optional(),
     /** Pepper de tokens de sesión (sha256(token + pepper)). */
     TOKEN_PEPPER: z.string().min(16, 'TOKEN_PEPPER debe tener al menos 16 caracteres'),
     /** Rate limiting global: requests por ventana de 60s, por IP. */
@@ -43,7 +43,8 @@ const EnvSchema = z
   .superRefine((val, ctx) => {
     if (val.NODE_ENV === 'production' && val.DATABASE_URL === undefined) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        // Zod 4 deprecó `z.ZodIssueCode.*`: ahora se usa el literal.
+        code: 'custom',
         path: ['DATABASE_URL'],
         message: 'DATABASE_URL es obligatoria en producción',
       });

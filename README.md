@@ -35,15 +35,51 @@ packages/
 
 ## Matrículas y onboarding
 
-El wizard `/onboarding` (6 pasos) configura el colegio, agrega personal (paso 4)
-e importa estudiantes (paso 5). El paso 1 empieza por el **código DANE**: el
-botón «Buscar» trae del MEN (datos.gov.co) nombre, municipio, dirección,
-contacto, calendario y tamaño del establecimiento como propuesta editable. El
-**dominio de correo no se edita** en el wizard: es la llave del login (ADR-006)
-y se fija una sola vez con el dominio del correo del administrador; cambiarlo
-dejaba a todos los usuarios fuera. Una matrícula vincula un estudiante con un
-curso del año lectivo vigente (`UNIQUE (anio_lectivo_id, estudiante_id)`); la
-baja es lógica (`estado = RETIRADO`), nunca un borrado.
+El wizard `/onboarding` (**7 pasos**) deja un colegio operativo:
+
+| Paso | Qué configura                                                    |
+| ---- | ---------------------------------------------------------------- |
+| 1    | Identidad: código DANE, nombre, NIT, contacto, calendario        |
+| 2    | Calendario escolar, año lectivo y períodos académicos            |
+| 3    | Sedes y jornadas (varias por colegio, cada una con su ubicación) |
+| 4    | Estructura: cursos por sede y jornada (grados × letras)          |
+| 5    | Personal: alta rápida con rol y alcance                          |
+| 6    | Estudiantes: importación CSV                                     |
+| 7    | Resumen y cierre                                                 |
+
+El paso 1 empieza por el **código DANE**: al llegar a los 12 dígitos se consulta
+el MEN (datos.gov.co) y se propone nombre, nombre oficial, municipio, dirección,
+teléfono, correo, calendario y tamaño. Se consultan dos datasets: el de
+establecimientos (`cfw5-qzt5`) y el de jornadas (`emd6-ef7x`), porque el primero
+no las publica. Esas jornadas (Mañana, Tarde, Completa, Única, Noche, Fin de
+semana) se guardan en el colegio y aparecen premarcadas en el paso 3. Los datos
+del MEN vienen sucios a veces: si el teléfono trae dos (`7422210/7422215`) se
+queda el primero, y del campo de correo se toma la primera dirección válida. El
+código inexistente **no bloquea**: se puede escribir el colegio a mano.
+
+El login es **`usuario@codigo`** (por ejemplo `admin@juanaarias`); el dominio del
+correo no identifica al colegio y no se edita en el wizard (ADR-006).
+
+En el paso 3 se pueden **crear y eliminar sedes**: cada una lleva nombre,
+dirección, municipio y departamento propios (una IE puede tener una sede en el
+municipio vecino) y las jornadas que ofrece. La primera se propone como
+«Principal» con la dirección del paso 1; las nuevas empiezan con la dirección
+vacía. La API no deja borrar la última sede ni una que ya tenga cursos.
+
+| Método | Ruta                       | Permiso                | Uso                                               |
+| ------ | -------------------------- | ---------------------- | ------------------------------------------------- |
+| GET    | `/onboarding`              | `configuracion.editar` | estado completo del wizard                        |
+| GET    | `/onboarding/dane/:codigo` | `configuracion.editar` | datos del MEN + jornadas del establecimiento      |
+| PATCH  | `/onboarding/colegio`      | `configuracion.editar` | identidad, calendario, año y períodos             |
+| PUT    | `/onboarding/sedes`        | `configuracion.editar` | alta o edición de una sede                        |
+| DELETE | `/onboarding/sedes/:id`    | `configuracion.editar` | baja lógica (nunca la última ni con cursos)       |
+| POST   | `/onboarding/estructura`   | `configuracion.editar` | genera los cursos de sede × jornada               |
+| PATCH  | `/onboarding/paso`         | `configuracion.editar` | guarda el avance (reanudar donde quedó)           |
+| POST   | `/onboarding/finalizar`    | `configuracion.editar` | cierra el wizard (exige sede con jornada y curso) |
+
+Una matrícula vincula un estudiante con un curso del año lectivo vigente
+(`UNIQUE (anio_lectivo_id, estudiante_id)`); la baja es lógica
+(`estado = RETIRADO`), nunca un borrado.
 
 | Método | Ruta                                     | Permiso                  | Uso                                            |
 | ------ | ---------------------------------------- | ------------------------ | ---------------------------------------------- |
@@ -61,7 +97,8 @@ documento,nombres,apellidos,correo,sede,grado,letra,jornada,fechaNacimiento
 ```
 
 - `grado` acepta `6`, `6°` o `Transición`; `jornada` acepta `Mañana`, `Tarde`,
-  `Noche`, `Única` o `Sabatina`.
+  `Completa`, `Noche`, `Única`, `Sabatina` o `Fin de semana` (también sin
+  tildes y en mayúsculas).
 - `fechaNacimiento` es opcional, salvo cuando la cuenta existe pero todavía no
   tiene ficha `estudiantes`: en ese caso es obligatoria.
 - La importación **no crea cuentas**: un documento inexistente se reporta con un
@@ -78,32 +115,56 @@ documento,nombres,apellidos,correo,sede,grado,letra,jornada,fechaNacimiento
 Copia los ejemplos y completa los valores:
 
 ```bash
-cp .env.example .env
 cp apps/api/.env.example apps/api/.env
 cp apps/web/.env.example apps/web/.env.local
+cp packages/database/.env.example packages/database/.env
 ```
 
-| Variable              | Dónde                 | Notas                                                                                       |
-| --------------------- | --------------------- | ------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`        | `apps/api/.env`       | Rol **`app_user`** (RLS activa)                                                             |
-| `TOKEN_PEPPER`        | `apps/api/.env`       | ≥16 caracteres; `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`  |
-| `CORS_ORIGINS`        | `apps/api/.env`       | Origen exacto de la web, sin barra final                                                    |
-| `COOKIE_SAMESITE`     | `apps/api/.env`       | `lax` con dominio propio; `none` si web y API están en dominios distintos (exige HTTPS)     |
-| `DATOS_GOV_APP_TOKEN` | `apps/api/.env`       | Opcional. App token de datos.gov.co: cupo propio (1.000 req/h) al consultar por código DANE |
-| `NEXT_PUBLIC_API_URL` | `apps/web/.env.local` | Incluye `/api`; se fija en **build**                                                        |
+| Variable              | Dónde                    | Notas                                                                                       |
+| --------------------- | ------------------------ | ------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`        | `apps/api/.env`          | Rol **`app_user`** (RLS activa)                                                             |
+| `TOKEN_PEPPER`        | `apps/api/.env`          | ≥16 caracteres; `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`  |
+| `CORS_ORIGINS`        | `apps/api/.env`          | Origen exacto de la web, sin barra final                                                    |
+| `COOKIE_SAMESITE`     | `apps/api/.env`          | `lax` con dominio propio; `none` si web y API están en dominios distintos (exige HTTPS)     |
+| `DATOS_GOV_APP_TOKEN` | `apps/api/.env`          | Opcional. App token de datos.gov.co: cupo propio (1.000 req/h) al consultar por código DANE |
+| `DATABASE_URL`        | `packages/database/.env` | Rol **`app_migrator`** (dueño del esquema; drizzle-kit y los scripts de `db:*`)             |
+| `NEXT_PUBLIC_API_URL` | `apps/web/.env.local`    | Incluye `/api`; se fija en **build**                                                        |
 
 ## Entornos
 
-|            | Rama   | API                            | Web                            | Base de datos              |
-| ---------- | ------ | ------------------------------ | ------------------------------ | -------------------------- |
-| Producción | `main` | `eduplatform-api` (Render)     | `eduplatform-ivory.vercel.app` | Neon `main`                |
-| Pruebas    | `dev`  | `eduplatform-api-dev` (Render) | preview de Vercel de la rama   | rama `dev` de Neon (copia) |
+|            | Rama   | API                           | Web                       | Base de datos              |
+| ---------- | ------ | ----------------------------- | ------------------------- | -------------------------- |
+| Producción | `main` | `api.eduplatform.co` (Render) | `eduplatform.co` (Vercel) | Neon `main`                |
+| Pruebas    | `dev`  | `api-dev.eduplatform.co`      | `dev.eduplatform.co`      | rama `dev` de Neon (copia) |
 
 - **`main` solo se actualiza por PR desde `dev` y con autorización explícita**; un push a `main` despliega solo.
-- Cada push a `dev` despliega la API de pruebas y crea un preview de la web que apunta a esa API
-  (`NEXT_PUBLIC_API_URL` del entorno _Preview_). La web del preview exige sesión de Vercel.
-- `CORS_ORIGINS` de la API de pruebas acepta `https://eduplatform-*-<equipo>.vercel.app`, así que
-  cualquier preview funciona sin tocar la variable; en producción los orígenes son exactos.
+- Cada push a `dev` despliega la API de pruebas y la web de `dev.eduplatform.co` apuntando a esa API.
+  Cualquier preview de Vercel de la rama también funciona: `CORS_ORIGINS` de la API de pruebas
+  acepta los dominios de preview; en producción los orígenes son exactos.
+
+## Probar la producción
+
+La base de `main` tiene un colegio de prueba para revisar la app desplegada sin
+tocar datos reales:
+
+| Qué     | Valor                            |
+| ------- | -------------------------------- |
+| Web     | `https://eduplatform.co`         |
+| API     | `https://api.eduplatform.co/api` |
+| Colegio | `prueba`                         |
+| Usuario | `admin@prueba`                   |
+
+La contraseña temporal **no vive en el repositorio**: se entrega aparte y el
+primer ingreso obliga a cambiarla. Para crear otro colegio de prueba:
+
+```bash
+MIGRATOR_URL='postgresql://...' \
+  pnpm --filter @eduplatform/database run db:colegio prueba2 --nombre "Colegio de Prueba"
+# imprime los roles base y deja la contraseña temporal en ~/.eduplatform/admin-prueba2.txt
+```
+
+El colegio nace vacío (sin sede): al entrar, el wizard arranca en el paso 1 y se
+puede recorrer completo con datos inventados.
 
 ## Puesta en marcha
 
@@ -136,10 +197,11 @@ pnpm --filter @eduplatform/database run test
 
 ## Base de datos y despliegue
 
-**Producción actual:** web en `https://eduplatform-ivory.vercel.app` (Vercel,
-root `apps/web`, deploy automático desde `main`) y API en
-`https://eduplatform-api-0yrs.onrender.com` (Render free, Virginia, health
-`/api/health`) sobre PostgreSQL en Neon (`aws-us-east-1`).
+**Producción actual:** web en `https://eduplatform.co` (Vercel, root
+`apps/web`, deploy automático desde `main`) y API en `https://api.eduplatform.co`
+(Render free, Virginia, health `/api/health`) sobre PostgreSQL en Neon
+(`aws-us-east-1`). El entorno de pruebas vive en `https://dev.eduplatform.co`
+con la API en `https://api-dev.eduplatform.co`.
 
 ```bash
 # Bootstrap de Neon (crea app_migrator/app_user y la base; imprime las URLs)
@@ -180,12 +242,14 @@ configurada), así que no se sube una rama con el patrón de seguridad roto.
 
 ## Estado
 
-Implementado y verificado: monorepo, RLS multi-tenant, auth propia (login
-unificado por dominio del correo), dashboard del admin, módulo **Personas**
-(Empleados · Estudiantes · Acudientes · Roles) con roles por colegio y alcance
-por sede, **onboarding de 6 pasos** (personal en el paso 4) y **matrículas**
-(API + importación CSV en el paso 5; el curso de cada estudiante se ve en
-Personas).
+Implementado y verificado: monorepo, RLS multi-tenant, auth propia (acceso
+`usuario@codigo`), dashboard del admin, módulo **Personas** (Empleados ·
+Estudiantes · Acudientes · Roles) con roles por colegio y alcance por sede,
+**onboarding de 7 pasos** (calendario con períodos validados al elegirlos,
+varias sedes con su ubicación, estructura, personal y CSV de estudiantes) y
+**matrículas** (API + importación CSV; el curso de cada estudiante se ve en
+Personas). La marca del colegio se genera en CIELAB a partir de sus tres colores
+semilla y se aplica antes del primer pintado (14 roles M3), con favicon propio.
 
 Pendiente: dashboards por rol (docente, estudiante, acudiente), alta masiva de
 cuentas de estudiante/acudiente y el resto de las mejoras de rendimiento del

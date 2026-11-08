@@ -29,7 +29,7 @@ export function GuardiaAcceso({ children }: { children: ReactNode }) {
   const { data: onboarding } = useQuery({
     queryKey: ['onboarding'],
     queryFn: getOnboarding,
-    enabled: esAdminColegio === true,
+    enabled: esAdminColegio === true && debeCambiarPassword !== true,
     retry: false,
     staleTime: 30_000,
   });

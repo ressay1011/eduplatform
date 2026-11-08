@@ -38,4 +38,11 @@ describe('Health (e2e)', () => {
     const res = await request(app.getHttpServer()).get('/api/no-existe');
     expect(res.status).toBe(404);
   });
+
+  // Este sí toca la base: es el endpoint que despierta Neon y Render a la vez.
+  it('GET /api/health/calentamiento consulta la base y responde 200', async () => {
+    const res = await request(app.getHttpServer()).get('/api/health/calentamiento');
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ success: true, data: { estado: 'caliente' } });
+  });
 });

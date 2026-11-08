@@ -22,7 +22,7 @@ import {
   unique,
   uuid,
 } from 'drizzle-orm/pg-core';
-import { AlcancePermiso, TipoDocumento } from '@eduplatform/types';
+import { AlcancePermiso, TIPOS_DOCUMENTO } from '@eduplatform/types';
 import { colegios, sedes } from './colegios';
 import { permisos } from './permisos';
 import { roles } from './roles';
@@ -43,16 +43,7 @@ export const usuarios = pgTable(
     // obligatoria (`usuario` y `password_hash` no vacíos, ver checks).
     nombres: text('nombres'),
     apellidos: text('apellidos'),
-    tipoDocumento: text('tipo_documento', {
-      enum: [
-        TipoDocumento.CC,
-        TipoDocumento.TI,
-        TipoDocumento.CE,
-        TipoDocumento.RC,
-        TipoDocumento.PEP,
-        TipoDocumento.PPT,
-      ],
-    }),
+    tipoDocumento: text('tipo_documento', { enum: TIPOS_DOCUMENTO }),
     numeroDocumento: text('numero_documento'),
     /** Único "rol" fijo: admin del colegio (todos los permisos implícitos). */
     esAdmin: boolean('es_admin').notNull().default(false),

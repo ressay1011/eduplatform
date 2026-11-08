@@ -117,13 +117,41 @@ describe('DaneService', () => {
     expect((error as HttpException).getStatus()).toBe(502);
   });
 
-  it('cachea el resultado: dos consultas del mismo código hacen una sola petición', async () => {
+  it('cachea el resultado: dos consultas del mismo código no repiten peticiones', async () => {
     fetchMock.mockResolvedValue(json([FILA]));
 
     await servicio.buscar('147555000295');
     await servicio.buscar('147555000295');
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    // Dos por búsqueda (establecimiento y jornadas) y ninguna más la segunda vez.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('propone las jornadas que el MEN publica para el establecimiento', async () => {
+    fetchMock.mockImplementation((url: string) =>
+      Promise.resolve(
+        String(url).includes('emd6-ef7x')
+          ? json([{ jornadas: 'MAÑANA,COMPLETA,TARDE' }])
+          : json([FILA]),
+      ),
+    );
+
+    const datos = await servicio.buscar('147555000295');
+
+    expect(datos.jornadas).toEqual(['MANANA', 'COMPLETA', 'TARDE']);
+  });
+
+  it('si el dataset de jornadas falla, la búsqueda sigue y las deja vacías', async () => {
+    fetchMock.mockImplementation((url: string) =>
+      String(url).includes('emd6-ef7x')
+        ? Promise.resolve(json({ message: 'boom' }, 500))
+        : Promise.resolve(json([FILA])),
+    );
+
+    const datos = await servicio.buscar('147555000295');
+
+    expect(datos.jornadas).toEqual([]);
+    expect(datos.codigoDane).toBe('147555000295');
   });
 
   it('se queda con la primera dirección si el campo email trae dos', async () => {
@@ -134,6 +162,14 @@ describe('DaneService', () => {
     const datos = await servicio.buscar('147555000295');
 
     expect(datos.email).toBe('rectoria@x.edu.co');
+  });
+
+  it('se queda con el primer teléfono si el campo trae dos', async () => {
+    fetchMock.mockResolvedValue(json([{ ...FILA, telefono: '7422210/7422215' }]));
+
+    const datos = await servicio.buscar('147555000295');
+
+    expect(datos.telefono).toBe('7422210');
   });
 
   it('sin calendario reconocible asume calendario A', async () => {

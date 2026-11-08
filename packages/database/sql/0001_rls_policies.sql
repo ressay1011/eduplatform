@@ -98,13 +98,11 @@ CREATE POLICY permisos_write_policy ON permisos FOR ALL
 -- activo, así que RLS todavía no puede aplicarse. Estas vistas exponen SOLO
 -- las columnas necesarias y app_user recibe únicamente SELECT.
 -- ---------------------------------------------------------------------------
+-- `colegios_publico` NO se crea aquí: su forma depende de si el colegio aún
+-- tiene `subdominio` (0009) y la versión final la deja 0011. Aquí va solo la de
+-- sesiones, que no cambia.
 -- Nota: DROP + CREATE (no CREATE OR REPLACE) porque este último solo permite
 -- añadir columnas AL FINAL; los cambios de orden/medio exigen recrear.
-DROP VIEW IF EXISTS colegios_publico;
-CREATE VIEW colegios_publico AS
-  SELECT id, nombre, subdominio, codigo_dane, logo_url, primary_color, estado, municipio, departamento
-  FROM colegios;
-GRANT SELECT ON colegios_publico TO app_user;
 
 DROP VIEW IF EXISTS sesiones_auth;
 CREATE VIEW sesiones_auth AS

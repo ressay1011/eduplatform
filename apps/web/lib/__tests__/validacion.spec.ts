@@ -72,16 +72,21 @@ describe('esTelefonoValido', () => {
 });
 
 describe('esUsuarioValido', () => {
-  it.each(['admin@juanaarias', 'rector.garcia', 'ana_maria-2', 'cc1088123456', 'abc'])(
-    'acepta %s',
-    (valor) => {
-      expect(esUsuarioValido(valor)).toBe(true);
-    },
-  );
+  it.each([
+    'admin@juanaarias',
+    'rector.garcia',
+    'ana_maria-2',
+    'cc1088123456',
+    'abc',
+    'Admin@Juana',
+    'muñoz@juanaarias',
+    'mmuñoz',
+  ])('acepta %s', (valor) => {
+    expect(esUsuarioValido(valor)).toBe(true);
+  });
 
   it.each([
     'ab', // menos de 3
-    'Admin@Juana', // mayúsculas
     'con espacio',
     'usuario!',
     '.empieza-por-punto',

@@ -4,21 +4,35 @@ import { expect, test, type Page } from '@playwright/test';
  * Humo E2E contra API + web reales.
  *
  * Los datos son los del colegio demo (`packages/database/scripts/seed-demo.mjs`):
- * se entra por la dirección del colegio (`?colegio=`) con su nombre de usuario.
+ * se entra con el usuario completo (`admin@demo-dist-1`), que lleva el código del
+ * colegio después de la `@`.
  */
-const SUBDOMINIO = process.env['E2E_DEMO_SUBDOMINIO'] ?? 'demo-dist-1';
-const USUARIO = process.env['E2E_ADMIN_USUARIO'] ?? `admin@${SUBDOMINIO}`;
+const CODIGO = process.env['E2E_DEMO_CODIGO'] ?? 'demo-dist-1';
+const USUARIO = process.env['E2E_ADMIN_USUARIO'] ?? `admin@${CODIGO}`;
 const PASSWORD = process.env['E2E_ADMIN_PASSWORD'] ?? 'Demo2026!';
 const COLEGIO = 'I.E.T.D. Juana Arias de Benavides';
 
 async function entrar(page: Page): Promise<void> {
-  await page.goto(`/login?colegio=${SUBDOMINIO}`);
+  await page.goto('/login');
   await page.getByLabel('Nombre de usuario').fill(USUARIO);
   await page.getByRole('button', { name: /continuar/i }).click();
   await expect(page.getByText(/Estás entrando como/)).toBeVisible();
   await page.getByLabel('Contraseña', { exact: true }).fill(PASSWORD);
   await page.getByRole('button', { name: /ingresar/i }).click();
   await expect(page).toHaveURL(/\/dashboard/);
+}
+
+/**
+ * Si la barra lateral está fuera de la pantalla (hasta 1100 px es un drawer con
+ * hamburguesa), la abre.
+ */
+async function abrirMenuSiHaceFalta(page: Page): Promise<void> {
+  const personas = page.getByRole('button', { name: 'Personas' });
+  const caja = await personas.boundingBox();
+  if (!caja || caja.x < 0) {
+    await page.getByRole('button', { name: 'Abrir menú' }).click();
+    await expect(personas).toBeInViewport();
+  }
 }
 
 test.describe('humo', () => {
@@ -32,6 +46,7 @@ test.describe('humo', () => {
 
   test('Personas → Empleados lista al admin con su rol', async ({ page }) => {
     await entrar(page);
+    await abrirMenuSiHaceFalta(page);
     await page.getByRole('button', { name: 'Personas' }).click();
     await expect(page).toHaveURL(/\/dashboard\/personas/);
 
@@ -45,7 +60,7 @@ test.describe('humo', () => {
   });
 
   test('una contraseña errada no entra y muestra el error', async ({ page }) => {
-    await page.goto(`/login?colegio=${SUBDOMINIO}`);
+    await page.goto('/login');
     await page.getByLabel('Nombre de usuario').fill(USUARIO);
     await page.getByRole('button', { name: /continuar/i }).click();
     await page.getByLabel('Contraseña', { exact: true }).fill('ClaveIncorrecta123!');

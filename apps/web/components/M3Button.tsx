@@ -30,11 +30,7 @@ export function M3Button({
 
   const iconoEl =
     icono !== undefined ? (
-      <span
-        className="material-symbols-outlined"
-        aria-hidden="true"
-        style={{ fontSize: 20, position: 'relative' }}
-      >
+      <span className="material-symbols-outlined m3-btn-icono" aria-hidden="true">
         {icono}
       </span>
     ) : null;
@@ -43,9 +39,7 @@ export function M3Button({
     <button className={clases} {...resto}>
       <span className="state-layer" />
       {iconoEl !== null && !iconoAlFinal ? iconoEl : null}
-      <span className="m3-label-large" style={{ position: 'relative' }}>
-        {children}
-      </span>
+      <span className="m3-label-large m3-btn-etiqueta">{children}</span>
       {iconoEl !== null && iconoAlFinal ? iconoEl : null}
     </button>
   );

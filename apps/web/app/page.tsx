@@ -1,7 +1,6 @@
 /**
  * Raíz — por ahora redirige al login.
- * (El landing público "tu colegio está en <subdominio>..." llega en otra
- * iteración, cuando exista el dominio real de producción.)
+ * (El landing público llega en otra iteración.)
  */
 import { redirect } from 'next/navigation';
 

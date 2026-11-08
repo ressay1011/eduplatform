@@ -22,7 +22,7 @@ export class ContextoCacheService {
 
   private readonly cache = new Map<string, Entrada>();
 
-  /** `clave` = `dominio:<correo>` o `subdominio:<slug>` según la vía. */
+  /** `clave` = `codigo:<codigo del colegio>` (sin caja). */
   obtener(clave: string): ContextoPublicoConSede | null {
     const entrada = this.cache.get(clave);
     if (entrada === undefined) return null;

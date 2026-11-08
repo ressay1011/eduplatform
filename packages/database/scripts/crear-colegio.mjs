@@ -2,17 +2,20 @@
  * crear-colegio.mjs — alta manual de un colegio desde la línea de comandos.
  *
  * Uso:
- *   pnpm db:colegio <subdominio> [--nombre "I.E.T.D. Juana Arias"]
+ *   pnpm db:colegio <codigo> [--nombre "I.E.T.D. Juana Arias"] [--usuario admin@juanaArias]
  *
- * Crea el colegio con lo mínimo (solo `subdominio`; el resto por defaults) y su
- * admin `admin@<subdominio>` con una contraseña temporal aleatoria que se deja
- * en `~/.eduplatform/admin-<subdominio>.txt` (permisos 600) y obliga a cambiarla
- * al entrar: la contraseña nunca se escribe en la salida del comando, que puede
- * acabar en logs. Siembra los roles base.
+ * `<codigo>` es el identificador estable del colegio: arma los usuarios
+ * (`admin@<codigo>`) y es lo que el login usa para resolver el colegio. Se puede
+ * escribir con mayúsculas (`juanaArias`) y **no se edita nunca**; la comparación
+ * es sin caja.
+ *
+ * Crea el colegio con lo mínimo (el resto por defaults) y su admin con una
+ * contraseña temporal aleatoria que se deja en `~/.eduplatform/admin-<codigo>.txt`
+ * (permisos 600) y obliga a cambiarla al entrar: la contraseña nunca se escribe
+ * en la salida del comando, que puede acabar en logs. Siembra los roles base.
  *
  * No crea sedes: el wizard de onboarding empieza en el paso 1.
- * Idempotente en el sentido contrario: si el subdominio ya existe, falla sin
- * tocar nada (para no pisar un colegio en producción).
+ * Si el código ya existe, falla sin tocar nada.
  */
 import { randomInt } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -28,7 +31,8 @@ const require = createRequire(
 const bcrypt = require('bcrypt');
 
 const here = dirname(fileURLToPath(import.meta.url));
-const SUBDOMINIO_RE = /^[a-z0-9](?:[a-z0-9-]{1,30}[a-z0-9])$/;
+/** Código: letras en cualquier caja (con ñ), números y guiones. */
+const CODIGO_RE = /^[A-Za-z0-9Ññ](?:[A-Za-z0-9Ññ-]{1,30}[A-Za-z0-9Ññ])$/;
 
 /** Contraseña temporal: 12 caracteres con mayúscula, minúscula, dígito y símbolo. */
 function passwordTemporal() {
@@ -53,11 +57,11 @@ function argumento(nombre) {
   return i === -1 ? undefined : process.argv[i + 1];
 }
 
-const subdominio = (process.argv[2] ?? '').trim().toLowerCase();
-if (!SUBDOMINIO_RE.test(subdominio)) {
+const codigo = (process.argv[2] ?? '').trim();
+if (!CODIGO_RE.test(codigo)) {
   console.error(
-    'Uso: pnpm db:colegio <subdominio> [--nombre "..."]\n' +
-      'El subdominio debe ser 3–32 caracteres: minúsculas, números y guiones.',
+    'Uso: pnpm db:colegio <codigo> [--nombre "..."] [--usuario "admin@<codigo>"]\n' +
+      'El código debe ser 3–32 caracteres: letras (cualquier caja), números y guiones.',
   );
   process.exit(1);
 }
@@ -74,21 +78,24 @@ if (url === undefined) {
 }
 
 const sql = postgres(url, { max: 1 });
-const usuario = argumento('usuario') ?? `admin@${subdominio}`;
+const usuario = argumento('usuario') ?? `admin@${codigo}`;
 const nombre = argumento('nombre') ?? '';
 const password = passwordTemporal();
 
 try {
   const resultado = await sql.begin(async (tx) => {
+    const [choque] = await tx`
+      SELECT codigo FROM colegios WHERE lower(codigo) = ${codigo.toLowerCase()} LIMIT 1
+    `;
+    if (choque !== undefined) {
+      throw new Error(`Ya existe un colegio con el código «${codigo}».`);
+    }
+
     const [colegio] = await tx`
-      INSERT INTO colegios (subdominio, nombre)
-      VALUES (${subdominio}, ${nombre})
-      ON CONFLICT (subdominio) DO NOTHING
+      INSERT INTO colegios (codigo, nombre)
+      VALUES (${codigo}, ${nombre})
       RETURNING id
     `;
-    if (colegio === undefined) {
-      throw new Error(`Ya existe un colegio con el subdominio «${subdominio}».`);
-    }
 
     const hash = await bcrypt.hash(password, 12);
     await tx`
@@ -109,15 +116,14 @@ try {
 
   // La contraseña temporal NO se imprime: la salida de un comando acaba en logs,
   // en el historial y en capturas. Se deja en un archivo fuera del repo, 600.
-  const destino = join(homedir(), '.eduplatform', `admin-${subdominio}.txt`);
+  const destino = join(homedir(), '.eduplatform', `admin-${codigo}.txt`);
   mkdirSync(dirname(destino), { recursive: true });
   writeFileSync(destino, `usuario: ${usuario}\ncontraseña: ${password}\n`, { mode: 0o600 });
 
   console.log('\n✔ Colegio creado');
   console.log(`  id          ${resultado.colegioId}`);
-  console.log(`  subdominio  ${subdominio}`);
-  console.log(`  roles base  ${resultado.roles}`);
   console.log(`  usuario     ${usuario}`);
+  console.log(`  roles base  ${resultado.roles}`);
   console.log(`  contraseña  en ${destino} (permisos 600)`);
   console.log('\nGuárdala ahora: al entrar pedirá cambiarla.');
   console.log('El wizard de onboarding empieza en el paso 1 (no hay sede todavía).\n');

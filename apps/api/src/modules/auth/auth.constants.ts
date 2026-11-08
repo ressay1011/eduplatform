@@ -1,5 +1,5 @@
 /** Constantes del módulo de autenticación. */
-import { hashSync } from 'bcrypt';
+import { hash } from 'bcrypt';
 import { randomBytes } from 'node:crypto';
 
 /** Nombre de la cookie httpOnly que transporta la sesión. */
@@ -16,6 +16,16 @@ export const BLOQUEO_MINUTOS = 15;
 /** Throttle de `sesiones.ultima_actividad_en` (evita un UPDATE por request). */
 export const ACTIVIDAD_THROTTLE_MS = 5 * 60 * 1000;
 
+/**
+ * Cierre por inactividad: 60 minutos sin ninguna petición. Se suma al tope
+ * absoluto (`SESION_TTL_MS`), que NO se renueva al usar la app.
+ *
+ * Como `ultima_actividad_en` se refresca como mucho cada ACTIVIDAD_THROTTLE_MS,
+ * el corte real cae entre 60 y 65 minutos. Sin esto, una sesión abierta en un
+ * equipo compartido seguía viva hasta agotar las 12 horas.
+ */
+export const SESION_INACTIVIDAD_MS = 60 * 60 * 1000;
+
 /** Costo bcrypt (AGENTS.md §1.5: rounds >= 10). */
 export const BCRYPT_ROUNDS = 12;
 
@@ -28,12 +38,17 @@ export const BCRYPT_ROUNDS = 12;
  * Se genera en memoria a propósito: un hash bcrypt literal en el código es un
  * secreto embebido (Sonar `secrets:S8215`) y además no aporta nada, porque el
  * señuelo solo tiene que costar lo mismo que un hash real.
+ *
+ * Asíncrono y con la promesa cacheada: `bcrypt.hash` corre en el pool de
+ * hilos, así que no bloquea el event loop como hacía `hashSync` (≈250 ms con
+ * coste 12 en el primer login de un correo inexistente), y dos peticiones
+ * simultáneas esperan la misma generación. `AuthService.onModuleInit` la
+ * arranca al levantar el servicio, así que cuando llega la primera petición
+ * ya está lista.
  */
-let cacheSenuelo: string | null = null;
+let cacheSenuelo: Promise<string> | null = null;
 
-export function hashSenuelo(): string {
-  if (cacheSenuelo === null) {
-    cacheSenuelo = hashSync(randomBytes(32).toString('base64'), BCRYPT_ROUNDS);
-  }
+export function hashSenuelo(): Promise<string> {
+  cacheSenuelo ??= hash(randomBytes(32).toString('base64'), BCRYPT_ROUNDS);
   return cacheSenuelo;
 }

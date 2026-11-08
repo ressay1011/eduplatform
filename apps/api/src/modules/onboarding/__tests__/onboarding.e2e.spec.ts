@@ -30,6 +30,8 @@ import { configureApp } from '../../../app.setup';
 import { DATABASE } from '../../../shared/database.module';
 import { SIN_COLEGIO_ID } from '../../../shared/platform-context';
 
+/** Año en curso: el schema solo acepta el anterior, el actual y el próximo. */
+const ANIO = new Date().getFullYear();
 const PASSWORD = 'Onboarding123!';
 const platformCtx: TenantContext = { colegioId: SIN_COLEGIO_ID, isPlatformAdmin: true };
 
@@ -41,7 +43,7 @@ describe('Onboarding (e2e)', () => {
   // estos specs en hilos en paralelo, así que un sufijo por reloj se repetía
   // entre archivos y chocaba con `colegios_codigo_dane_unique`.
   const sufijo = String(randomInt(0, 100_000_000)).padStart(8, '0');
-  const subdominio = `onb-${sufijo}`;
+  const codigo = `onb-${sufijo}`;
   const codigoDane = `1${sufijo}000`;
 
   let colegioId = '';
@@ -70,10 +72,10 @@ describe('Onboarding (e2e)', () => {
         .values({
           nombre: 'Colegio Onboarding',
           codigoDane,
-          subdominio,
+          codigo: codigo,
           municipio: 'Plato',
           departamento: 'Magdalena',
-          email: `contacto@${subdominio}`,
+          email: `contacto@${codigo}`,
           calendario: 'A',
           estado: 'ACTIVO',
         })
@@ -81,8 +83,8 @@ describe('Onboarding (e2e)', () => {
       if (colegio === undefined) throw new Error('Fixtures: colegio');
       colegioId = colegio.id;
 
-      adminEmail = `admin@${subdominio}`;
-      staffEmail = `staff@${subdominio}`;
+      adminEmail = `admin@${codigo}`;
+      staffEmail = `staff@${codigo}`;
 
       const creados = await tx
         .insert(usuarios)
@@ -148,7 +150,7 @@ describe('Onboarding (e2e)', () => {
     expect(body.data.paso).toBe(1);
     expect(body.data.completado).toBe(false);
     expect(body.data.sedes).toHaveLength(0);
-    expect(body.data.colegio.subdominio).toBe(subdominio);
+    expect(body.data.colegio.nombre).toBe('Colegio Onboarding');
   });
 
   it('un usuario con permiso pero sin ser admin recibe 403', async () => {
@@ -166,43 +168,73 @@ describe('Onboarding (e2e)', () => {
         nombreOficial: 'INSTITUCIÓN EDUCATIVA TÉCNICA DEPARTAMENTAL ONBOARDING',
         nit: `9${sufijo}-1`,
         codigoDane,
-        subdominio,
-        // El dominio de login NO se edita en el wizard: se envía a propósito
-        // para comprobar que la API lo ignora y el colegio conserva el suyo.
         municipio: 'Plato',
         departamento: 'Magdalena',
         direccion: 'Calle 1 # 2-3',
         telefono: '3001234567',
-        email: `rectoria@${subdominio}.test`,
+        email: `rectoria@${codigo}.test`,
         calendario: 'A',
-        anioLectivo: 2026,
+        anioLectivo: ANIO,
         periodos: [
           {
             numero: 1,
             nombre: 'Período 1',
-            fechaInicio: '2026-02-02',
-            fechaFin: '2026-04-24',
+            fechaInicio: `${ANIO}-02-02`,
+            fechaFin: `${ANIO}-04-24`,
           },
           {
             numero: 2,
             nombre: 'Período 2',
-            fechaInicio: '2026-04-28',
-            fechaFin: '2026-07-03',
+            fechaInicio: `${ANIO}-04-28`,
+            fechaFin: `${ANIO}-07-03`,
           },
         ],
       })
       .expect(200);
 
     expect(body.data.paso).toBeGreaterThanOrEqual(2);
-    expect(body.data.anioLectivo?.anio).toBe(2026);
+    expect(body.data.anioLectivo?.anio).toBe(ANIO);
     expect(body.data.periodos).toHaveLength(2);
     // El nombre corto y el oficial conviven: uno para la UI, otro para documentos.
     expect(body.data.colegio.nombre).toBe('I.E.T.D. Onboarding');
     expect(body.data.colegio.nombreOficial).toBe(
       'INSTITUCIÓN EDUCATIVA TÉCNICA DEPARTAMENTAL ONBOARDING',
     );
-    // El subdominio es el único identificador y el wizard no lo cambia.
-    expect(body.data.colegio.subdominio).toBe(subdominio);
+  });
+
+  it('el estado devuelve el año lectivo guardado al final, no el mayor', async () => {
+    const agente = await login(adminEmail);
+    const guardar = (anio: number) =>
+      agente.patch('/api/onboarding/colegio').send({
+        nombre: 'I.E.T.D. Onboarding',
+        nombreOficial: 'INSTITUCIÓN EDUCATIVA TÉCNICA DEPARTAMENTAL ONBOARDING',
+        codigoDane,
+        municipio: 'Plato',
+        departamento: 'Magdalena',
+        email: `rectoria@${codigo}.test`,
+        calendario: 'A',
+        anioLectivo: anio,
+        periodos: [
+          {
+            numero: 1,
+            nombre: 'Período 1',
+            fechaInicio: `${anio}-02-02`,
+            fechaFin: `${anio}-04-24`,
+          },
+          {
+            numero: 2,
+            nombre: 'Período 2',
+            fechaInicio: `${anio}-04-28`,
+            fechaFin: `${anio}-07-03`,
+          },
+        ],
+      });
+
+    // El wizard permite volver a un año anterior: el estado no puede quedarse
+    // con el mayor (el admin vería el año cambiar solo tras guardar).
+    expect((await guardar(ANIO).expect(200)).body.data.anioLectivo?.anio).toBe(ANIO);
+    expect((await guardar(ANIO + 1).expect(200)).body.data.anioLectivo?.anio).toBe(ANIO + 1);
+    expect((await guardar(ANIO).expect(200)).body.data.anioLectivo?.anio).toBe(ANIO);
   });
 
   it('la consulta por código DANE es exclusiva del admin y valida el formato', async () => {

@@ -17,7 +17,7 @@ updates:
       time: '06:00'
       timezone: America/Bogota
     open-pull-requests-limit: 5
-    versioning-strategy: increase
+    versioning-strategy: increase-if-necessary
     labels:
       - dependencias
       - automatizado
@@ -39,8 +39,9 @@ updates:
     ignore:
       # Política del repo: un salto de versión MAYOR se hace a mano, con su
       # migración y sus pruebas (Next, React, Nest, TypeScript, Vite…).
-      # Dependabot solo propone minor y patch; las alertas de seguridad siguen
-      # activas por su cuenta.
+      # Dependabot solo propone minor y patch. `update-types` no filtra las
+      # actualizaciones de seguridad: si hay una vulnerabilidad con arreglo en
+      # una versión mayor, Dependabot abre igual su PR y la alerta aparece.
       - dependency-name: '*'
         update-types: ['version-update:semver-major']
 
@@ -63,3 +64,26 @@ updates:
       actions:
         patterns:
           - '*'
+
+  # La imagen de Postgres del docker-compose de desarrollo no es una dependencia
+  # npm: sin este bloque, los parches de la 16 nunca se proponen.
+  - package-ecosystem: docker
+    directory: /
+    target-branch: dev
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: America/Bogota
+    open-pull-requests-limit: 1
+    labels:
+      - dependencias
+      - automatizado
+    commit-message:
+      prefix: 'chore'
+      include: scope
+    ignore:
+      # Un salto de versión mayor (Postgres 17) es migración a mano, como en el
+      # resto del repo; los parches de la 16 sí entran solos.
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']

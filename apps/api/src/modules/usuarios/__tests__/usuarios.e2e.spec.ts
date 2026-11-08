@@ -27,6 +27,7 @@ import { AppModule } from '../../../app.module';
 import { configureApp } from '../../../app.setup';
 import { DATABASE } from '../../../shared/database.module';
 import { SIN_COLEGIO_ID } from '../../../shared/platform-context';
+import { LoginAttemptsService } from '../../auth/login-attempts.service';
 
 const PASSWORD_ADMIN = 'AdminSegura123';
 const PASSWORD_STAFF = 'StaffSegura123';
@@ -38,11 +39,11 @@ describe('Usuarios (e2e)', () => {
   let db: Database;
 
   // Sufijo aleatorio: varios specs corren en hilos en paralelo y con
-  // `Date.now()` compartían milisegundo (choque de codigo_dane/subdominio).
+  // `Date.now()` compartían milisegundo (choque de codigo_dane/codigo).
   const sufijo = String(randomInt(0, 100_000_000)).padStart(8, '0');
-  const subdominioA = `usr-a-${sufijo}`;
-  const sinDatosEmail = `sin-datos@${subdominioA}`;
-  const subdominioB = `usr-b-${sufijo}`;
+  const codigoA = `usr-a-${sufijo}`;
+  const sinDatosEmail = `sin-datos@${codigoA}`;
+  const codigoB = `usr-b-${sufijo}`;
 
   let colegioAId = '';
   let colegioBId = '';
@@ -76,20 +77,20 @@ describe('Usuarios (e2e)', () => {
           {
             nombre: 'Colegio Usuarios A',
             codigoDane: `3${sufijo}000`,
-            subdominio: subdominioA,
+            codigo: codigoA,
             municipio: 'Plato',
             departamento: 'Magdalena',
-            email: `contacto@${subdominioA}`,
+            email: `contacto@${codigoA}`,
             calendario: 'A',
             estado: 'ACTIVO',
           },
           {
             nombre: 'Colegio Usuarios B',
             codigoDane: `4${sufijo}000`,
-            subdominio: subdominioB,
+            codigo: codigoB,
             municipio: 'Plato',
             departamento: 'Magdalena',
-            email: `contacto@${subdominioB}`,
+            email: `contacto@${codigoB}`,
             calendario: 'A',
             estado: 'ACTIVO',
           },
@@ -100,11 +101,11 @@ describe('Usuarios (e2e)', () => {
       colegioAId = cA.id;
       colegioBId = cB.id;
 
-      adminEmail = `admin@${subdominioA}`;
-      lectorEmail = `lector@${subdominioA}`;
-      gestorEmail = `gestor@${subdominioA}`;
-      portalEmail = `portal@${subdominioA}`;
-      adminBEmail = `admin@${subdominioB}`;
+      adminEmail = `admin@${codigoA}`;
+      lectorEmail = `lector@${codigoA}`;
+      gestorEmail = `gestor@${codigoA}`;
+      portalEmail = `portal@${codigoA}`;
+      adminBEmail = `admin@${codigoB}`;
 
       const creadosUsuarios = await tx
         .insert(usuarios)
@@ -270,7 +271,7 @@ describe('Usuarios (e2e)', () => {
 
   it('admin crea usuario con contraseña temporal válida para entrar', async () => {
     const agente = await login(adminEmail, PASSWORD_ADMIN);
-    const emailNuevo = `nuevo@${subdominioA}`;
+    const emailNuevo = `nuevo@${codigoA}`;
     const res = await agente.post('/api/usuarios').send({
       nombres: 'Nuevo',
       apellidos: 'Docente',
@@ -314,7 +315,7 @@ describe('Usuarios (e2e)', () => {
     expect(eventos.some((e) => e.accion === 'CREATE' && e.entidad === 'usuarios')).toBe(true);
   });
 
-  it('acepta un nombre de usuario que no es un correo (sin dominio institucional)', async () => {
+  it('completa con el código del colegio un usuario que no lo trae', async () => {
     const agente = await login(adminEmail, PASSWORD_ADMIN);
     const res = await agente.post('/api/usuarios').send({
       nombres: 'Portero',
@@ -326,7 +327,29 @@ describe('Usuarios (e2e)', () => {
     });
 
     expect(res.status).toBe(201);
-    expect(res.body.data.usuario).toMatchObject({ usuario: 'portero.garcia', activo: true });
+    // Sin `@` el servidor añade el código: es lo que resuelve el colegio al entrar.
+    expect(res.body.data.usuario).toMatchObject({
+      usuario: `portero.garcia@${codigoA}`,
+      activo: true,
+    });
+  });
+
+  it('rechaza dos cuentas que solo difieren en la caja', async () => {
+    const agente = await login(adminEmail, PASSWORD_ADMIN);
+    const crear = (usuario: string, documento: string) =>
+      agente.post('/api/usuarios').send({
+        nombres: 'Caja',
+        apellidos: 'Prueba',
+        usuario,
+        tipoDocumento: 'CC',
+        numeroDocumento: documento,
+        permisos: ['portal.consultar'],
+      });
+
+    const primero = await crear(`Caja.${sufijo}@${codigoA}`, `84${sufijo}1`);
+    expect(primero.status).toBe(201);
+    const segundo = await crear(`caja.${sufijo}@${codigoA}`, `84${sufijo}2`);
+    expect(segundo.status).toBe(409);
   });
 
   it('editar una cuenta sin datos personales no rompe (solo documento)', async () => {
@@ -366,7 +389,7 @@ describe('Usuarios (e2e)', () => {
     const res = await agente.post('/api/usuarios').send({
       nombres: 'Otro',
       apellidos: 'Admin',
-      usuario: `admin2@${subdominioA}`,
+      usuario: `admin2@${codigoA}`,
       tipoDocumento: 'CC',
       numeroDocumento: `83${sufijo}4`,
       esAdmin: true,
@@ -452,5 +475,104 @@ describe('Usuarios (e2e)', () => {
     const res = await agente.post(`/api/usuarios/${adminAId}/reset-password`);
     expect(res.status).toBe(400);
     expect(res.body.error.message).toContain('Cambiar contraseña');
+  });
+
+  it('rechaza un identificador con un sufijo que no es el código del colegio', async () => {
+    const agente = await login(adminEmail, PASSWORD_ADMIN);
+    const crear = (usuario: string, documento: string) =>
+      agente.post('/api/usuarios').send({
+        nombres: 'Sufijo',
+        apellidos: 'Ajeno',
+        usuario,
+        tipoDocumento: 'CC',
+        numeroDocumento: documento,
+        permisos: ['portal.consultar'],
+      });
+
+    // Antes se creaba (201) una cuenta que después no podía entrar: el login
+    // resuelve el colegio por el sufijo.
+    for (const [usuario, documento] of [
+      ['correo.ajeno@gmail.com', `86${sufijo}1`],
+      [`ajeno@otro-colegio`, `86${sufijo}2`],
+    ] as const) {
+      const res = await crear(usuario, documento);
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toContain(`@${codigoA}`);
+    }
+
+    // El mismo identificador con el código correcto sí entra.
+    const ok = await crear(`sufijo.ok@${codigoA}`, `86${sufijo}3`);
+    expect(ok.status).toBe(201);
+  });
+
+  it('un gestor con usuarios.editar no puede resetear contraseñas ni renombrar cuentas', async () => {
+    const gestor = await login(gestorEmail, PASSWORD_STAFF);
+    const lista = await gestor.get('/api/usuarios');
+    const lector = (lista.body.data.items as Array<{ id: string; usuario: string }>).find(
+      (u) => u.usuario === lectorEmail,
+    );
+    if (lector === undefined) throw new Error('lector no encontrado');
+
+    // Resetear equivale a suplantar: se reserva al administrador.
+    const reset = await gestor.post(`/api/usuarios/${lector.id}/reset-password`);
+    expect(reset.status).toBe(403);
+
+    // Renombrar deja fuera al dueño de la cuenta: también.
+    const renombrar = await gestor
+      .patch(`/api/usuarios/${lector.id}`)
+      .send({ usuario: `renombrado@${codigoA}` });
+    expect(renombrar.status).toBe(403);
+  });
+
+  it('reset de contraseña limpia el bloqueo por intentos fallidos en memoria', async () => {
+    // 5 fallos del identificador: el bloqueo vive en memoria del proceso, así
+    // que se registra por el servicio en vez de con 5 peticiones (throttle).
+    const attempts = app.get(LoginAttemptsService);
+    for (let i = 0; i < 5; i += 1) attempts.registrarFallo(lectorEmail);
+
+    const bloqueado = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({ usuario: lectorEmail, password: 'MalaClave123' });
+    expect(bloqueado.status).toBe(423);
+
+    const admin = await login(adminEmail, PASSWORD_ADMIN);
+    const lista = await admin.get('/api/usuarios');
+    const lector = (lista.body.data.items as Array<{ id: string; usuario: string }>).find(
+      (u) => u.usuario === lectorEmail,
+    );
+    if (lector === undefined) throw new Error('lector no encontrado');
+    const reset = await admin.post(`/api/usuarios/${lector.id}/reset-password`);
+    expect(reset.status).toBe(200);
+
+    // Con la contraseña nueva entra: sin limpiar el mapa seguiría en 423.
+    const nuevo = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({ usuario: lectorEmail, password: reset.body.data.passwordTemporal as string });
+    expect(nuevo.status).toBe(200);
+  });
+
+  it('acepta la ñ en el identificador y en los apellidos', async () => {
+    const agente = await login(adminEmail, PASSWORD_ADMIN);
+    const usuarioÑ = `mmuñoz@${codigoA}`;
+    const res = await agente.post('/api/usuarios').send({
+      nombres: 'María',
+      apellidos: 'Muñoz Peña',
+      usuario: usuarioÑ,
+      tipoDocumento: 'CC',
+      numeroDocumento: `85${sufijo}1`,
+      permisos: ['calificaciones.editar'],
+    });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.usuario).toMatchObject({ usuario: usuarioÑ, apellidos: 'Muñoz Peña' });
+
+    // La ñ no rompe ni el formato del identificador ni la resolución del
+    // colegio por el sufijo: con la temporal entra sin tocar nada.
+    const temporal = res.body.data.passwordTemporal as string;
+    const suyo = request.agent(app.getHttpServer());
+    const entrada = await suyo
+      .post('/api/auth/login')
+      .send({ usuario: usuarioÑ, password: temporal });
+    expect(entrada.status).toBe(200);
   });
 });

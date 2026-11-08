@@ -1,0 +1,4 @@
+# Los tipos antes de que los descubra el CI: es el fallo más común entre
+# paquetes y turbo lo cachea (~4 s si nada cambió). Saltar una vez:
+# HUSKY=0 git push
+pnpm typecheck

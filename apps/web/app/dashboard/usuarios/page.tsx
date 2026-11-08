@@ -13,7 +13,7 @@ import { PaperBg } from '@/components/PaperBg';
 import { TextField } from '@/components/TextField';
 import { useSesion } from '@/hooks/useSesion';
 import { useUsuarios } from '@/hooks/useUsuarios';
-import { inicialesDe } from '@/lib/subdominio';
+import { inicialesDe } from '@/lib/iniciales';
 
 type FiltroEstado = 'todos' | 'activo' | 'inactivo';
 

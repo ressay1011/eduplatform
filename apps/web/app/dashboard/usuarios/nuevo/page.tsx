@@ -7,7 +7,7 @@
  */
 import { useMemo, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { CrearUsuarioSchema, TIPOS_DOCUMENTO, type UsuarioCreado } from '@eduplatform/types';
+import { TIPOS_DOCUMENTO, type TipoDocumento, type UsuarioCreado } from '@eduplatform/types';
 import { ErrorBanner } from '@/components/ErrorBanner';
 import { M3Button } from '@/components/M3Button';
 import { PaperBg } from '@/components/PaperBg';
@@ -27,7 +27,7 @@ export default function NuevoUsuarioPage() {
   const [nombres, setNombres] = useState('');
   const [apellidos, setApellidos] = useState('');
   const [usuario, setUsuario] = useState('');
-  const [tipoDocumento, setTipoDocumento] = useState<string>('CC');
+  const [tipoDocumento, setTipoDocumento] = useState<TipoDocumento>('CC');
   const [numeroDocumento, setNumeroDocumento] = useState('');
   const [esAdmin, setEsAdmin] = useState(false);
   const [permisos, setPermisos] = useState<string[]>([]);
@@ -41,10 +41,15 @@ export default function NuevoUsuarioPage() {
     sesionColegio !== null &&
     (sesionColegio.esAdmin || sesionColegio.permisos.includes('usuarios.crear'));
 
-  /** Valida con el MISMO esquema que la API y envía. */
-  const onSubmit = (e: FormEvent): void => {
-    e.preventDefault();
-    const resultado = CrearUsuarioSchema.safeParse({
+  /**
+   * Valida con el MISMO esquema que la API y envía. El esquema se carga bajo
+   * demanda (`import()`): son ~91 KB gzip que solo paga quien envía el
+   * formulario, y así las reglas y los mensajes son los del servidor, sin copias
+   * que se puedan desincronizar.
+   */
+  const enviar = async (): Promise<void> => {
+    const { CrearUsuarioSchema } = await import('@eduplatform/types');
+    const validado = CrearUsuarioSchema.safeParse({
       nombres,
       apellidos,
       usuario,
@@ -53,16 +58,21 @@ export default function NuevoUsuarioPage() {
       esAdmin,
       permisos: esAdmin ? [] : permisos,
     });
-    if (!resultado.success) {
-      setError(resultado.error.issues[0]?.message ?? 'Revisa los datos.');
+    if (!validado.success) {
+      setError(validado.error.issues[0]?.message ?? 'Revisa los datos.');
       return;
     }
     setError(null);
-    crear.mutate(resultado.data, {
+    crear.mutate(validado.data, {
       onSuccess: (data) => setCreado(data),
       onError: (err) =>
         setError(err instanceof ApiError ? err.message : 'No se pudo crear el usuario.'),
     });
+  };
+
+  const onSubmit = (e: FormEvent): void => {
+    e.preventDefault();
+    void enviar();
   };
 
   const contenido = useMemo(() => {
@@ -152,7 +162,7 @@ export default function NuevoUsuarioPage() {
                     id="tipo-documento"
                     className="m3-select"
                     value={tipoDocumento}
-                    onChange={(e) => setTipoDocumento(e.target.value)}
+                    onChange={(e) => setTipoDocumento(e.target.value as TipoDocumento)}
                   >
                     {TIPOS_DOCUMENTO.map((tipo) => (
                       <option key={tipo} value={tipo}>

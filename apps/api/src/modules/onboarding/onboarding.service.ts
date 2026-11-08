@@ -9,14 +9,17 @@ import { Injectable } from '@nestjs/common';
 import type { TenantContext } from '@eduplatform/database';
 import {
   ErrorCodes,
+  anioLocal,
   type ColegioDane,
   type ColegioOnboardingRequest,
   type EstadoOnboarding,
   type EstructuraOnboardingRequest,
+  type Jornada,
   type SedeOnboardingRequest,
 } from '@eduplatform/types';
 import { apiError } from '../../shared/api-error';
 import { AuditService } from '../../shared/audit.service';
+import { codigoPg } from '../../shared/pg-errors';
 import { AuthService } from '../auth/auth.service';
 import { DaneService } from './dane.service';
 import { OnboardingRepository, type FotoOnboarding } from './onboarding.repository';
@@ -67,19 +70,20 @@ export class OnboardingService {
     return {
       completado: colegio.onboardingCompletadoEn !== null,
       paso: colegio.onboardingPaso,
+      anioActual: anioLocal(),
       colegio: {
         id: colegio.id,
         nombre: colegio.nombre,
         nombreOficial: colegio.nombreOficial,
         nit: colegio.nit,
         codigoDane: colegio.codigoDane ?? '',
-        subdominio: colegio.subdominio,
         municipio: colegio.municipio,
         departamento: colegio.departamento,
         direccion: colegio.direccion,
         telefono: colegio.telefono,
         email: colegio.email,
         calendario: colegio.calendario,
+        jornadasMen: (colegio.jornadasMen ?? []) as Jornada[],
       },
       sedes: foto.sedes,
       anioLectivo: foto.anio,
@@ -135,8 +139,9 @@ export class OnboardingService {
   ): Promise<EstadoOnboarding> {
     this.asegurarAdmin(actor);
     const contexto = this.contexto(actor);
-    // Claves de caché ANTES del cambio: si el subdominio o el nombre cambian,
-    // las llaves viejas quedarían sirviendo el branding anterior hasta el TTL.
+    // Claves de caché ANTES del cambio: la llave es el código del colegio, que no
+    // se edita aquí, pero el nombre y los colores sí: se invalida para que el
+    // branding nuevo se vea en la siguiente carga y no espere al TTL.
     const previo = await this.repo.contextoPublico(contexto);
 
     try {
@@ -145,11 +150,20 @@ export class OnboardingService {
         periodos: datos.periodos,
       });
     } catch (error) {
-      if (this.esUnico(error)) {
+      const estado = codigoPg(error);
+      if (estado === '23505') {
         throw apiError(
           ErrorCodes.ALREADY_EXISTS,
           409,
-          'El código DANE, el subdominio o el dominio del correo del administrador ya están en uso',
+          'El código DANE o el dominio del correo del administrador ya están en uso',
+        );
+      }
+      // 23503 = el período que se quiso quitar ya tiene notas o evaluaciones.
+      if (estado === '23503') {
+        throw apiError(
+          ErrorCodes.CONFLICT,
+          409,
+          'No se pueden quitar períodos que ya tienen notas o evaluaciones en este año lectivo',
         );
       }
       throw error;
@@ -196,6 +210,41 @@ export class OnboardingService {
 
     await this.audit.registrar({
       accion: datos.id === undefined ? 'CREATE' : 'UPDATE',
+      entidad: 'sedes',
+      entidadId: sedeId,
+      colegioId: actor.colegioId,
+      usuarioId: actor.usuarioId,
+      metadata: { motivo: 'onboarding paso 2 (sede y jornadas)' },
+    });
+
+    return this.estado(actor);
+  }
+
+  /** Paso 2: quitar una sede (nunca la última, nunca una con cursos). */
+  async eliminarSede(actor: ActorOnboarding, sedeId: string): Promise<EstadoOnboarding> {
+    this.asegurarAdmin(actor);
+    const hecho = await this.repo.eliminarSede(this.contexto(actor), sedeId);
+
+    if (hecho === 'no-existe') {
+      throw apiError(ErrorCodes.NOT_FOUND, 404, 'Esa sede ya no existe.');
+    }
+    if (hecho === 'ultima') {
+      throw apiError(
+        ErrorCodes.CONFLICT,
+        409,
+        'El colegio necesita al menos una sede: crea otra antes de eliminar esta.',
+      );
+    }
+    if (hecho === 'con-cursos') {
+      throw apiError(
+        ErrorCodes.CONFLICT,
+        409,
+        'Esa sede ya tiene cursos: elimínalos antes de borrarla.',
+      );
+    }
+
+    await this.audit.registrar({
+      accion: 'DELETE',
       entidad: 'sedes',
       entidadId: sedeId,
       colegioId: actor.colegioId,
@@ -284,16 +333,5 @@ export class OnboardingService {
     this.asegurarAdmin(actor);
     await this.repo.marcarPaso(this.contexto(actor), paso);
     return this.estado(actor);
-  }
-
-  /** 23505 = unique_violation de Postgres (drizzle lo deja en `cause`). */
-  private esUnico(error: unknown): boolean {
-    const codigo = (posible: unknown): unknown =>
-      typeof posible === 'object' && posible !== null && 'code' in posible
-        ? (posible as { code?: unknown }).code
-        : undefined;
-    return (
-      codigo(error) === '23505' || codigo((error as { cause?: unknown } | null)?.cause) === '23505'
-    );
   }
 }

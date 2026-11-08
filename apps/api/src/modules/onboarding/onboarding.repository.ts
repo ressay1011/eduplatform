@@ -18,7 +18,7 @@ import {
   sedes,
   usuarios,
 } from '@eduplatform/database';
-import { and, asc, count, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, isNull, notInArray, sql } from 'drizzle-orm';
 import type { Jornada, PeriodoOnboardingRequest } from '@eduplatform/types';
 import { BaseRepository } from '../../shared/base.repository';
 
@@ -29,7 +29,6 @@ export interface DatosColegio {
   nombreOficial?: string | undefined;
   nit?: string | undefined;
   codigoDane: string;
-  subdominio: string;
   /**
    * Dominio del correo del admin que configura el colegio. NO se escribe como
    * actualización: solo rellena `dominio_email` cuando todavía es NULL (colegio
@@ -42,6 +41,8 @@ export interface DatosColegio {
   telefono?: string | undefined;
   email: string;
   calendario: 'A' | 'B';
+  /** Jornadas que publica el MEN para el colegio (sugerencia del paso de sedes). */
+  jornadasMen?: Jornada[] | undefined;
   anioLectivo: number;
   periodos: PeriodoOnboardingRequest[];
 }
@@ -52,6 +53,8 @@ export interface DatosSede {
   nombre: string;
   codigoDaneSede?: string | undefined;
   direccion?: string | undefined;
+  municipio?: string | undefined;
+  departamento?: string | undefined;
   jornadas: Jornada[];
 }
 
@@ -71,13 +74,14 @@ export interface FotoOnboarding {
     nombreOficial: string | null;
     nit: string | null;
     codigoDane: string | null;
-    subdominio: string;
     municipio: string;
     departamento: string;
     direccion: string | null;
     telefono: string | null;
     email: string;
     calendario: 'A' | 'B';
+    /** Jornadas que publica el MEN (sugerencia del paso de sedes). */
+    jornadasMen: string[] | null;
     onboardingPaso: number;
     onboardingCompletadoEn: Date | null;
   } | null;
@@ -86,6 +90,8 @@ export interface FotoOnboarding {
     nombre: string;
     codigoDaneSede: string | null;
     direccion: string | null;
+    municipio: string;
+    departamento: string;
     jornadas: Jornada[];
   }[];
   anio: { id: string; anio: number; fechaInicio: string; fechaFin: string } | null;
@@ -106,13 +112,13 @@ const COLEGIO_COLUMNS = {
   nombreOficial: colegios.nombreOficial,
   nit: colegios.nit,
   codigoDane: colegios.codigoDane,
-  subdominio: colegios.subdominio,
   municipio: colegios.municipio,
   departamento: colegios.departamento,
   direccion: colegios.direccion,
   telefono: colegios.telefono,
   email: colegios.email,
   calendario: colegios.calendario,
+  jornadasMen: colegios.jornadasMen,
   onboardingPaso: colegios.onboardingPaso,
   onboardingCompletadoEn: colegios.onboardingCompletadoEn,
 } as const;
@@ -134,6 +140,8 @@ export class OnboardingRepository extends BaseRepository {
           nombre: sedes.nombre,
           codigoDaneSede: sedes.codigoDaneSede,
           direccion: sedes.direccion,
+          municipio: sedes.municipio,
+          departamento: sedes.departamento,
           jornadas: sedes.jornadas,
         })
         .from(sedes)
@@ -149,7 +157,10 @@ export class OnboardingRepository extends BaseRepository {
         })
         .from(aniosLectivos)
         .where(eq(aniosLectivos.colegioId, ctx.colegioId))
-        .orderBy(desc(aniosLectivos.anio))
+        // El año que se está configurando es el último que se guardó, no el
+        // mayor: el wizard permite elegir 2026 después de 2027 y con
+        // «mayor primero» volvía a mostrar el 2027 tras guardar.
+        .orderBy(desc(aniosLectivos.updatedAt), desc(aniosLectivos.anio))
         .limit(1);
 
       const filasPeriodos =
@@ -208,11 +219,11 @@ export class OnboardingRepository extends BaseRepository {
     });
   }
 
-  /** Claves públicas de caché del colegio (subdominio y dominio de login). */
-  async contextoPublico(ctx: TenantContext): Promise<{ subdominio: string } | null> {
+  /** Clave pública de caché del colegio (su código: nunca cambia). */
+  async contextoPublico(ctx: TenantContext): Promise<{ codigo: string } | null> {
     return this.withTenant(ctx, async (tx) => {
       const [fila] = await tx
-        .select({ subdominio: colegios.subdominio })
+        .select({ codigo: colegios.codigo })
         .from(colegios)
         .where(eq(colegios.id, ctx.colegioId))
         .limit(1);
@@ -233,13 +244,13 @@ export class OnboardingRepository extends BaseRepository {
               : datos.nombreOficial,
           nit: datos.nit ?? null,
           codigoDane: datos.codigoDane,
-          subdominio: datos.subdominio,
           municipio: datos.municipio,
           departamento: datos.departamento,
           direccion: datos.direccion ?? null,
           telefono: datos.telefono ?? null,
           email: datos.email,
           calendario: datos.calendario,
+          jornadasMen: datos.jornadasMen ?? null,
           onboardingPaso: sql`greatest(${colegios.onboardingPaso}, 2)`,
           updatedAt: new Date(),
         })
@@ -289,19 +300,37 @@ export class OnboardingRepository extends BaseRepository {
           .where(eq(aniosLectivos.id, anioId));
       }
 
-      await tx.delete(periodos).where(eq(periodos.anioLectivoId, anioId));
-      await tx.insert(periodos).values(
-        datos.periodos.map((p) => ({
-          colegioId: ctx.colegioId,
-          anioLectivoId: anioId,
-          numero: p.numero,
-          nombre: p.nombre,
-          fechaInicio: p.fechaInicio,
-          fechaFin: p.fechaFin,
-          fechaAperturaNotas: p.fechaInicio,
-          fechaCierreNotas: p.fechaFin,
-        })),
-      );
+      // Los períodos se actualizan EN SU SITIO. Borrarlos y recrearlos cambiaba
+      // su id (las notas y evaluaciones apuntan a él con onDelete: restrict) y
+      // devolvía el estado a PENDIENTE, reabriendo en silencio un período ya
+      // cerrado. `estado`, `cerrado_en` y la ventana de notas no se tocan.
+      const numeros = datos.periodos.map((p) => p.numero);
+      for (const periodo of datos.periodos) {
+        await tx
+          .insert(periodos)
+          .values({
+            colegioId: ctx.colegioId,
+            anioLectivoId: anioId,
+            numero: periodo.numero,
+            nombre: periodo.nombre,
+            fechaInicio: periodo.fechaInicio,
+            fechaFin: periodo.fechaFin,
+            fechaAperturaNotas: periodo.fechaInicio,
+            fechaCierreNotas: periodo.fechaFin,
+          })
+          .onConflictDoUpdate({
+            target: [periodos.anioLectivoId, periodos.numero],
+            set: {
+              nombre: periodo.nombre,
+              fechaInicio: periodo.fechaInicio,
+              fechaFin: periodo.fechaFin,
+            },
+          });
+      }
+      // Solo se borran los períodos que el admin quitó del formulario.
+      await tx
+        .delete(periodos)
+        .where(and(eq(periodos.anioLectivoId, anioId), notInArray(periodos.numero, numeros)));
     });
   }
 
@@ -317,6 +346,8 @@ export class OnboardingRepository extends BaseRepository {
             nombre: datos.nombre,
             codigoDaneSede: datos.codigoDaneSede ?? null,
             direccion: datos.direccion ?? null,
+            municipio: datos.municipio ?? '',
+            departamento: datos.departamento ?? '',
             jornadas: datos.jornadas,
           })
           .returning({ id: sedes.id });
@@ -328,6 +359,8 @@ export class OnboardingRepository extends BaseRepository {
             nombre: datos.nombre,
             codigoDaneSede: datos.codigoDaneSede ?? null,
             direccion: datos.direccion ?? null,
+            municipio: datos.municipio ?? '',
+            departamento: datos.departamento ?? '',
             jornadas: datos.jornadas,
             updatedAt: new Date(),
           })
@@ -339,10 +372,43 @@ export class OnboardingRepository extends BaseRepository {
       if (sedeId !== null) {
         await tx
           .update(colegios)
-          .set({ onboardingPaso: sql`greatest(${colegios.onboardingPaso}, 3)` })
+          .set({ onboardingPaso: sql`greatest(${colegios.onboardingPaso}, 4)` })
           .where(eq(colegios.id, ctx.colegioId));
       }
       return sedeId;
+    });
+  }
+
+  /**
+   * Borra (lógicamente) una sede del colegio. Devuelve el hecho para que el
+   * servicio decida el código: el colegio no puede quedarse sin sedes y una
+   * sede con cursos no se borra (los grupos quedarían huérfanos).
+   */
+  async eliminarSede(
+    ctx: TenantContext,
+    sedeId: string,
+  ): Promise<'borrada' | 'no-existe' | 'ultima' | 'con-cursos'> {
+    return this.withTenant(ctx, async (tx) => {
+      const activas = await tx
+        .select({ id: sedes.id })
+        .from(sedes)
+        .where(and(eq(sedes.colegioId, ctx.colegioId), isNull(sedes.deletedAt)));
+
+      if (!activas.some((s) => s.id === sedeId)) return 'no-existe';
+      if (activas.length <= 1) return 'ultima';
+
+      const [cursos] = await tx
+        .select({ n: count() })
+        .from(grupos)
+        .where(and(eq(grupos.colegioId, ctx.colegioId), eq(grupos.sedeId, sedeId)));
+      if (Number(cursos?.n ?? 0) > 0) return 'con-cursos';
+
+      await tx
+        .update(sedes)
+        .set({ deletedAt: new Date(), activa: false, updatedAt: new Date() })
+        .where(and(eq(sedes.id, sedeId), eq(sedes.colegioId, ctx.colegioId)));
+
+      return 'borrada';
     });
   }
 
@@ -429,7 +495,7 @@ export class OnboardingRepository extends BaseRepository {
 
       await tx
         .update(colegios)
-        .set({ onboardingPaso: sql`greatest(${colegios.onboardingPaso}, 4)` })
+        .set({ onboardingPaso: sql`greatest(${colegios.onboardingPaso}, 5)` })
         .where(eq(colegios.id, ctx.colegioId));
 
       return { creados: insertados.length, grados: datos.grados.length };
@@ -462,7 +528,7 @@ export class OnboardingRepository extends BaseRepository {
     await this.withTenant(ctx, async (tx) => {
       await tx
         .update(colegios)
-        .set({ onboardingCompletadoEn: new Date(), onboardingPaso: 6, updatedAt: new Date() })
+        .set({ onboardingCompletadoEn: new Date(), onboardingPaso: 7, updatedAt: new Date() })
         .where(eq(colegios.id, ctx.colegioId));
     });
   }
@@ -472,7 +538,7 @@ export class OnboardingRepository extends BaseRepository {
     await this.withTenant(ctx, async (tx) => {
       await tx
         .update(colegios)
-        .set({ onboardingPaso: Math.min(6, Math.max(1, paso)) })
+        .set({ onboardingPaso: Math.min(7, Math.max(1, paso)) })
         .where(eq(colegios.id, ctx.colegioId));
     });
   }

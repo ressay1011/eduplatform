@@ -16,6 +16,24 @@
 # Fuera del Blueprint, a propósito: el servicio de pruebas `eduplatform-api-dev`
 # (rama dev, https://api-dev.eduplatform.co) se administra desde el dashboard.
 # Si algún día se declara aquí, Render lo adopta por nombre y no lo duplica.
+#
+# ── El apagado del plan free: no se evita, se controla ─────────────────────
+# El servicio se suspende a los 15 min sin tráfico y el primer request tarda
+# ~30-60 s. La estrategia es despertarlo SOLO cuando hay alguien a quien
+# atender, nunca por mantenerlo encendido:
+#
+#   · Despertador: un monitor de UptimeRobot consulta cada 5 min
+#     `GET /api/health/calentamiento`. Ese endpoint hace `SELECT 1`, así que
+#     despierta Render y el compute de Neon en el mismo viaje. `/api/health`
+#     se deja estático a propósito: es el health check del deploy y no debe
+#     tocar la base.
+#   · Franja: 6:00-20:00, lunes a viernes (hora de Bogotá). El encendido y el
+#     apagado del monitor los hace `.github/workflows/despertador.yml`, porque
+#     las ventanas de mantenimiento de UptimeRobot son de plan de pago.
+#   · Presupuesto: ~350 h/mes de las 750 del plan free. Encendido 24/7 serían
+#     ~730 h: cabe por poco y no deja margen para `eduplatform-api-dev`.
+#
+# Con plan Starter (sin suspensión) el despertador sobra y se puede borrar.
 services:
   - type: web
     name: eduplatform-api
@@ -39,7 +57,7 @@ services:
     startCommand: node apps/api/dist/main.js
     envVars:
       - key: NODE_VERSION
-        value: '22'
+        value: '24'
       - key: NODE_ENV
         value: production
       # La web se sirve en eduplatform.co y la API en api.eduplatform.co: para el

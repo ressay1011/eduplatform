@@ -7,17 +7,10 @@
  */
 import { z } from 'zod';
 import { UsuarioSchema } from './auth';
-import { TipoDocumento } from './entities/enums';
+import { TIPOS_DOCUMENTO, TipoDocumento } from './entities/enums';
 
-/** Valores válidos de tipo de documento (espejo del enum de BD). */
-export const TIPOS_DOCUMENTO = [
-  TipoDocumento.CC,
-  TipoDocumento.TI,
-  TipoDocumento.CE,
-  TipoDocumento.RC,
-  TipoDocumento.PEP,
-  TipoDocumento.PPT,
-] as const;
+/** Los tipos de documento viven con el enum, en `entities/enums.ts` (sin zod). */
+export { TIPOS_DOCUMENTO } from './entities/enums';
 
 /** Código de permiso del catálogo: `modulo.accion` (p. ej. `usuarios.crear`). */
 export const PermisoCodigoSchema = z
@@ -43,11 +36,11 @@ const DatosPersonalesSchema = z.object({
 export const CrearUsuarioSchema = DatosPersonalesSchema.extend({
   esAdmin: z.boolean().default(false),
   /** Rol único de la persona (módulo Personas). Si viene, manda sobre `permisos`. */
-  rolId: z.string().uuid('Rol inválido').nullable().optional(),
+  rolId: z.uuid('Rol inválido').nullable().optional(),
   permisos: z.array(PermisoCodigoSchema).max(100).default([]),
   /** Alcance sobre sedes: TODAS o las listadas en `sedesIds`. */
   alcance: z.enum(['TODAS', 'ESPECIFICAS']).default('TODAS'),
-  sedesIds: z.array(z.string().uuid('Sede inválida')).max(50).default([]),
+  sedesIds: z.array(z.uuid('Sede inválida')).max(50).default([]),
 })
   .refine((datos) => datos.esAdmin || datos.rolId != null || datos.permisos.length > 0, {
     message: 'Asigna un rol, al menos un permiso, o marca la cuenta como admin',
@@ -63,9 +56,9 @@ export type CrearUsuarioRequest = z.input<typeof CrearUsuarioSchema>;
 export const ActualizarUsuarioSchema = DatosPersonalesSchema.partial()
   .extend({
     activo: z.boolean().optional(),
-    rolId: z.string().uuid('Rol inválido').nullable().optional(),
+    rolId: z.uuid('Rol inválido').nullable().optional(),
     alcance: z.enum(['TODAS', 'ESPECIFICAS']).optional(),
-    sedesIds: z.array(z.string().uuid('Sede inválida')).max(50).optional(),
+    sedesIds: z.array(z.uuid('Sede inválida')).max(50).optional(),
   })
   .refine((datos) => Object.keys(datos).length > 0, {
     message: 'Envía al menos un campo para actualizar',

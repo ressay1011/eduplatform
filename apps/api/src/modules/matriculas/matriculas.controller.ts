@@ -85,7 +85,7 @@ export class MatriculasController {
     @CurrentAuth() auth: AuthContext,
     @Param('id') id: string,
   ): Promise<ApiResponse<{ id: string }>> {
-    const matriculaId = z.string().uuid('Identificador inválido').parse(id);
+    const matriculaId = z.uuid('Identificador inválido').parse(id);
     return { success: true, data: await this.matriculas.retirar(this.actor(auth), matriculaId) };
   }
 }

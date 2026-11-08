@@ -5,10 +5,10 @@
  * la contraseña temporal, baja lógica, vista previa del CSV e importación).
  * El contrato real de la API lo cubre `matriculas.e2e.spec.ts`.
  */
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   ColegioDane,
   CursoMatricula,
@@ -40,8 +40,10 @@ vi.mock('@/lib/api', () => {
     ApiError: ApiErrorMock,
     getOnboarding: vi.fn(),
     buscarColegioDane: vi.fn(),
+    cerrarSesion: vi.fn(),
     guardarColegioOnboarding: vi.fn(),
     guardarSedeOnboarding: vi.fn(),
+    eliminarSedeOnboarding: vi.fn(),
     generarEstructuraOnboarding: vi.fn(),
     guardarPasoOnboarding: vi.fn(),
     finalizarOnboarding: vi.fn(),
@@ -59,7 +61,9 @@ import {
   ApiError,
   actualizarUsuario,
   buscarColegioDane,
+  cerrarSesion,
   crearUsuario,
+  eliminarSedeOnboarding,
   getOnboarding,
   guardarColegioOnboarding,
   guardarPasoOnboarding,
@@ -72,6 +76,17 @@ import {
 } from '@/lib/api';
 import OnboardingPage from '../page';
 
+/**
+ * Año en curso: el wizard compara con él el año lectivo y las fechas de los
+ * períodos. Los fixtures lo usan para no caducar el 1 de enero.
+ */
+const ANIO = new Date().getFullYear();
+
+/** Fecha ISO del año en curso, con el mes y el día indicados. */
+function fecha(mes: number, dia: number): string {
+  return `${ANIO}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
+}
+
 const CURSO: CursoMatricula = {
   id: 'curso-1',
   nombre: '6° A',
@@ -81,26 +96,34 @@ const CURSO: CursoMatricula = {
   sedeId: 'sede-1',
   sedeNombre: 'Sede Principal',
   anioLectivoId: 'anio-1',
-  anio: 2026,
+  anio: ANIO,
 };
+
+/** Detalle del período tal como se anuncia en el aviso flotante. */
+async function detalleEnElAviso(regex: RegExp): Promise<HTMLElement> {
+  const aviso = await screen.findByRole('alert');
+  return within(aviso).getByText(regex);
+}
 
 function estado(paso: number): EstadoOnboarding {
   return {
     completado: false,
     paso,
+    // Año del servidor: el wizard propone con este, no con el reloj del equipo.
+    anioActual: ANIO,
     colegio: {
       id: 'colegio-1',
       nombre: 'I.E. Demo',
-      nombreOficial: null,
+      nombreOficial: 'INSTITUCIÓN EDUCATIVA TÉCNICA DEPARTAMENTAL DEMO',
       nit: null,
       codigoDane: '105001001234',
-      subdominio: 'demo',
       municipio: 'Plato',
       departamento: 'Magdalena',
       direccion: null,
       telefono: null,
       email: 'rectoria@demo.edu.co',
       calendario: 'A',
+      jornadasMen: [],
     },
     sedes: [
       {
@@ -108,13 +131,20 @@ function estado(paso: number): EstadoOnboarding {
         nombre: 'Sede Principal',
         codigoDaneSede: null,
         direccion: null,
+        municipio: 'Plato',
+        departamento: 'Magdalena',
         jornadas: ['MANANA'],
       },
     ],
-    anioLectivo: { id: 'anio-1', anio: 2026, fechaInicio: '2026-02-02', fechaFin: '2026-11-30' },
+    anioLectivo: {
+      id: 'anio-1',
+      anio: ANIO,
+      fechaInicio: fecha(2, 2),
+      fechaFin: fecha(11, 30),
+    },
     periodos: [
-      { numero: 1, nombre: 'Período 1', fechaInicio: '2026-02-02', fechaFin: '2026-04-24' },
-      { numero: 2, nombre: 'Período 2', fechaInicio: '2026-04-28', fechaFin: '2026-07-03' },
+      { numero: 1, nombre: 'Período 1', fechaInicio: fecha(2, 2), fechaFin: fecha(4, 24) },
+      { numero: 2, nombre: 'Período 2', fechaInicio: fecha(4, 28), fechaFin: fecha(7, 3) },
     ],
     estructura: { grados: 1, cursos: 1 },
     personal: { total: 2 },
@@ -201,7 +231,7 @@ beforeEach(() => {
   vi.mocked(obtenerSedes).mockResolvedValue([{ id: 'sede-1', nombre: 'Sede Principal' }]);
   vi.mocked(listarEmpleados).mockResolvedValue(personal([]));
   vi.mocked(listarCursosMatricula).mockResolvedValue([CURSO]);
-  vi.mocked(guardarPasoOnboarding).mockResolvedValue(estado(5));
+  vi.mocked(guardarPasoOnboarding).mockResolvedValue(estado(6));
 });
 
 const DANE: ColegioDane = {
@@ -220,6 +250,7 @@ const DANE: ColegioDane = {
   rector: 'ARMANDO JAIME DE ARCO CACERES',
   matricula: 3748,
   sedes: 7,
+  jornadas: ['MANANA', 'COMPLETA', 'TARDE'],
 };
 
 /** Colegio recién creado: todavía no tiene código DANE guardado. */
@@ -227,19 +258,41 @@ function estadoSinCodigo(): EstadoOnboarding {
   const datos = estado(1);
   datos.colegio.codigoDane = '';
   datos.colegio.nombre = '';
-  datos.colegio.subdominio = '';
   return datos;
 }
 
 describe('Onboarding · paso 1 (identidad)', () => {
-  it('no ofrece el dominio de correo como campo editable y explica la entrada por colegio', async () => {
+  it('con dos avisos a la vez, el más nuevo queda al frente de la pila', async () => {
+    const inicio = estadoSinCodigo();
+    inicio.sedes = [];
+    vi.mocked(getOnboarding).mockResolvedValue(inicio);
+    vi.mocked(buscarColegioDane).mockResolvedValue(DANE);
+    renderPagina();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Empezar' }));
+    fireEvent.change(await screen.findByLabelText('Código DANE'), {
+      target: { value: '147555000295' },
+    });
+    // Primero el éxito del MEN; después un error de validación.
+    expect(await screen.findByLabelText('Nombre')).toHaveValue('I.E.T.D. Juana Arias de Benavides');
+    fireEvent.change(screen.getByLabelText('Nombre oficial (documentos)'), {
+      target: { value: '' },
+    });
+    await userEvent.click(screen.getByRole('button', { name: /continuar al calendario/i }));
+
+    const avisos = [...document.querySelectorAll('.m3-toast-pila .m3-toast')];
+    expect(avisos).toHaveLength(2);
+    // El último del DOM se pinta encima: el error recién salido, no el éxito viejo.
+    expect(avisos[0]).toHaveClass('m3-toast--exito');
+    expect(avisos.at(-1)).toHaveClass('m3-toast--error');
+  });
+
+  it('no ofrece el dominio de correo como campo editable', async () => {
     vi.mocked(getOnboarding).mockResolvedValue(estado(1));
     renderPagina();
 
     expect(await screen.findByLabelText('Nombre')).toHaveValue('I.E. Demo');
     expect(screen.queryByLabelText('Dominio de correo')).toBeNull();
-    // La entrada ya no depende del dominio del correo: se explica por la dirección.
-    expect(screen.getByText(/entran por la dirección del colegio/i)).toBeInTheDocument();
   });
 
   it('oculta el formulario hasta que hay código DANE', async () => {
@@ -249,8 +302,18 @@ describe('Onboarding · paso 1 (identidad)', () => {
     expect(await screen.findByLabelText('Código DANE')).toBeInTheDocument();
     expect(screen.queryByLabelText('Nombre')).toBeNull();
     expect(screen.queryByLabelText('Departamento')).toBeNull();
-    expect(screen.queryByRole('button', { name: /continuar a sedes/i })).toBeNull();
-    expect(screen.getByText(/para ver el resto del formulario/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /continuar al calendario/i })).toBeNull();
+    expect(screen.getByText('Digita los 12 dígitos del código DANE.')).toBeInTheDocument();
+    // Sin código guardado, el campo recibe el foco.
+    expect(screen.getByLabelText('Código DANE')).toHaveFocus();
+  });
+
+  it('no roba el foco cuando el colegio ya tiene código DANE', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(1));
+    renderPagina();
+
+    const dane = await screen.findByLabelText('Código DANE');
+    expect(dane).not.toHaveFocus();
   });
 
   it('busca solo al llegar a los 12 dígitos, muestra el formulario y lo prellena', async () => {
@@ -274,6 +337,154 @@ describe('Onboarding · paso 1 (identidad)', () => {
     expect(screen.getByLabelText('Municipio')).toHaveValue('Plato');
     expect(screen.getByLabelText('Dirección')).toHaveValue(DANE.direccion);
     expect(screen.getByText(/Datos del MEN de 2025/)).toBeInTheDocument();
+  });
+
+  it('si el código nuevo no está en el MEN, vacía los datos del anterior', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estadoSinCodigo());
+    vi.mocked(buscarColegioDane).mockResolvedValueOnce(DANE);
+    renderPagina();
+
+    const dane = await screen.findByLabelText('Código DANE');
+    fireEvent.change(dane, { target: { value: '147555000295' } });
+    expect(await screen.findByLabelText('Nombre')).toHaveValue('I.E.T.D. Juana Arias de Benavides');
+
+    vi.mocked(buscarColegioDane).mockRejectedValueOnce(
+      new ApiError(
+        404,
+        'NOT_FOUND',
+        'No encontramos un establecimiento educativo con ese código DANE.',
+      ),
+    );
+    fireEvent.change(dane, { target: { value: '999999999999' } });
+
+    expect(
+      await screen.findByText('No encontramos un establecimiento educativo con ese código DANE.'),
+    ).toBeInTheDocument();
+    // Los datos del código anterior no pueden quedarse: se guardaría un colegio
+    // con el nombre de otro.
+    expect(screen.getByLabelText('Nombre')).toHaveValue('');
+    expect(screen.getByLabelText('Nombre oficial (documentos)')).toHaveValue('');
+    expect(screen.getByLabelText('Municipio')).toHaveValue('');
+    expect(screen.getByLabelText('Código DANE')).toHaveValue('999999999999');
+  });
+
+  it('guarda el paso 1 aunque todavía no haya períodos (colegio fuera del MEN)', async () => {
+    const sinPeriodos = estadoSinCodigo();
+    sinPeriodos.periodos = [];
+    vi.mocked(getOnboarding).mockResolvedValue(sinPeriodos);
+    vi.mocked(buscarColegioDane).mockRejectedValue(
+      new ApiError(
+        404,
+        'NOT_FOUND',
+        'No encontramos un establecimiento educativo con ese código DANE.',
+      ),
+    );
+    vi.mocked(guardarColegioOnboarding).mockResolvedValue(estado(2));
+    renderPagina();
+
+    fireEvent.change(await screen.findByLabelText('Código DANE'), {
+      target: { value: '999999999999' },
+    });
+    fireEvent.change(await screen.findByLabelText('Nombre'), {
+      target: { value: 'Colegio Rural La Esperanza' },
+    });
+    fireEvent.change(screen.getByLabelText('Correo del colegio'), {
+      target: { value: 'rector@laesperanza.edu.co' },
+    });
+    fireEvent.change(screen.getByLabelText('Departamento'), { target: { value: 'Magdalena' } });
+    fireEvent.change(await screen.findByLabelText('Municipio'), { target: { value: 'Plato' } });
+
+    await userEvent.click(screen.getByRole('button', { name: /continuar al calendario/i }));
+
+    await waitFor(() => expect(guardarColegioOnboarding).toHaveBeenCalledTimes(1));
+    const enviado = vi.mocked(guardarColegioOnboarding).mock.calls[0]?.[0];
+    // Sin datos del MEN no hay calendario elegido ni períodos, y la API exige
+    // dos como mínimo: sin este respaldo, el guardado devolvía un 400 genérico
+    // («Datos inválidos en la solicitud») y el wizard no pasaba del paso 1.
+    expect(enviado?.calendario).toBe('A');
+    expect(enviado?.periodos).toHaveLength(4);
+    expect(enviado?.periodos[0]?.fechaInicio).toBe(`${enviado?.anioLectivo}-02-02`);
+  });
+
+  it('respeta lo escrito a mano cuando otro código tampoco existe en el MEN', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estadoSinCodigo());
+    vi.mocked(buscarColegioDane).mockRejectedValue(
+      new ApiError(
+        404,
+        'NOT_FOUND',
+        'No encontramos un establecimiento educativo con ese código DANE.',
+      ),
+    );
+    renderPagina();
+
+    const dane = await screen.findByLabelText('Código DANE');
+    fireEvent.change(dane, { target: { value: '999999999999' } });
+    fireEvent.change(await screen.findByLabelText('Nombre'), {
+      target: { value: 'Colegio Rural La Esperanza' },
+    });
+    fireEvent.change(screen.getByLabelText('Dirección'), { target: { value: 'Vereda El Prado' } });
+
+    // El segundo código tampoco existe, pero lo de pantalla lo escribió el
+    // admin: no se borra.
+    fireEvent.change(dane, { target: { value: '888888888888' } });
+    expect(await screen.findByLabelText('Nombre')).toHaveValue('Colegio Rural La Esperanza');
+    expect(screen.getByLabelText('Dirección')).toHaveValue('Vereda El Prado');
+  });
+
+  it('al encontrar el código borra los errores que ya estaban en el formulario', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estadoSinCodigo());
+    vi.mocked(buscarColegioDane).mockRejectedValueOnce(
+      new ApiError(
+        404,
+        'NOT_FOUND',
+        'No encontramos un establecimiento educativo con ese código DANE.',
+      ),
+    );
+    renderPagina();
+
+    const dane = await screen.findByLabelText('Código DANE');
+    fireEvent.change(dane, { target: { value: '999999999999' } });
+    // El formulario aparece vacío; se intenta continuar y se marcan los campos.
+    expect(await screen.findByLabelText('Nombre')).toHaveValue('');
+    await userEvent.click(screen.getByRole('button', { name: /continuar al calendario/i }));
+    expect(await screen.findByText('Escribe el nombre del colegio.')).toBeInTheDocument();
+
+    // Ahora un código que sí existe: los datos del MEN sustituyen a los vacíos
+    // y los mensajes de antes ya no describen nada.
+    vi.mocked(buscarColegioDane).mockResolvedValueOnce(DANE);
+    fireEvent.change(dane, { target: { value: '147555000295' } });
+
+    expect(await screen.findByLabelText('Nombre')).toHaveValue('I.E.T.D. Juana Arias de Benavides');
+    expect(screen.queryByText('Escribe el nombre del colegio.')).toBeNull();
+    expect(screen.queryByText('Elige el departamento.')).toBeNull();
+    expect(screen.queryByText('Elige el municipio del departamento.')).toBeNull();
+  });
+
+  it('sin departamento, el municipio está deshabilitado y no lleva mensaje', async () => {
+    const vacio = estadoSinCodigo();
+    vacio.colegio.departamento = '';
+    vacio.colegio.municipio = '';
+    vi.mocked(getOnboarding).mockResolvedValue(vacio);
+    vi.mocked(buscarColegioDane).mockRejectedValue(
+      new ApiError(
+        404,
+        'NOT_FOUND',
+        'No encontramos un establecimiento educativo con ese código DANE.',
+      ),
+    );
+    renderPagina();
+
+    fireEvent.change(await screen.findByLabelText('Código DANE'), {
+      target: { value: '999999999999' },
+    });
+    const municipio = await screen.findByLabelText('Municipio');
+    expect(municipio).toBeDisabled();
+    // El estado deshabilitado se ve en el campo: no hace falta explicarlo.
+    expect(screen.queryByText(/Primero el departamento/i)).toBeNull();
+    expect(screen.queryByText(/Se habilita al elegir el departamento/i)).toBeNull();
+
+    fireEvent.change(screen.getByLabelText('Departamento'), { target: { value: 'Magdalena' } });
+    expect(screen.getByLabelText('Municipio')).toBeEnabled();
   });
 
   it('no consulta el portal ni muestra el formulario con el código incompleto', async () => {
@@ -304,7 +515,7 @@ describe('Onboarding · paso 1 (identidad)', () => {
 
     expect(await screen.findByText(mensaje)).toBeInTheDocument();
     expect(screen.getByLabelText('Nombre')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /continuar a sedes/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /continuar al calendario/i })).toBeInTheDocument();
   });
 
   it('muestra el formulario de entrada si el colegio ya tiene código guardado', async () => {
@@ -316,7 +527,7 @@ describe('Onboarding · paso 1 (identidad)', () => {
   });
 
   it('pone el año lectivo en la misma fila que el calendario', async () => {
-    vi.mocked(getOnboarding).mockResolvedValue(estado(1));
+    vi.mocked(getOnboarding).mockResolvedValue(estado(2));
     renderPagina();
 
     const anio = await screen.findByLabelText('Año lectivo');
@@ -324,14 +535,34 @@ describe('Onboarding · paso 1 (identidad)', () => {
     expect(screen.getByRole('radiogroup', { name: /calendario escolar/i })).toBeInTheDocument();
   });
 
+  it('propone el año y los períodos del SERVIDOR, no los del reloj del equipo', async () => {
+    const datos = estado(2);
+    datos.anioActual = 2031; // el equipo dirá otro año: manda el del servidor
+    datos.anioLectivo = null;
+    datos.periodos = [];
+    vi.mocked(getOnboarding).mockResolvedValue(datos);
+    renderPagina();
+
+    const anio = await screen.findByLabelText('Año lectivo');
+    expect(anio).toHaveValue('2031');
+    expect(Array.from(anio.querySelectorAll('option')).map((o) => o.textContent)).toEqual([
+      '2030',
+      '2031',
+      '2032',
+    ]);
+
+    // Las fechas propuestas salen del mismo año del servidor.
+    expect(await screen.findByDisplayValue('2031-02-02')).toBeInTheDocument();
+  });
+
   it('oculta los períodos mientras no haya calendario elegido', async () => {
-    const datos = estado(1);
+    const datos = estado(2);
     // Solo un colegio sin calendario llegaría así (la columna es NOT NULL).
     datos.colegio.calendario = '' as 'A';
     vi.mocked(getOnboarding).mockResolvedValue(datos);
     renderPagina();
 
-    expect(await screen.findByLabelText('Nombre')).toBeInTheDocument();
+    expect(await screen.findByLabelText('Calendario A')).toBeInTheDocument();
     expect(screen.queryByText(/Períodos académicos precargados/i)).toBeNull();
 
     fireEvent.click(screen.getByLabelText('Calendario B'));
@@ -362,31 +593,63 @@ describe('Onboarding · paso 1 (identidad)', () => {
     fireEvent.change(await screen.findByLabelText('Correo del colegio'), {
       target: { value: 'rectoria-sin-arroba' },
     });
-    await userEvent.click(screen.getByRole('button', { name: /continuar a sedes/i }));
+    await userEvent.click(screen.getByRole('button', { name: /continuar al calendario/i }));
 
     expect(await screen.findByText(/Correo inválido/i)).toBeInTheDocument();
     expect(guardarColegioOnboarding).not.toHaveBeenCalled();
     expect(mockPush).not.toHaveBeenCalled();
   });
 
+  it('valida el correo y el NIT al perder el foco, sin pulsar Continuar', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(1));
+    renderPagina();
+
+    const correo = await screen.findByLabelText('Correo del colegio');
+    fireEvent.change(correo, { target: { value: 'rectoria-sin-arroba' } });
+    fireEvent.blur(correo);
+    expect(await screen.findByText(/Correo inválido/i)).toBeInTheDocument();
+
+    const nit = screen.getByLabelText('NIT (opcional)');
+    fireEvent.change(nit, { target: { value: '123' } });
+    fireEvent.blur(nit);
+    expect(await screen.findByText(/NIT inválido/i)).toBeInTheDocument();
+    expect(guardarColegioOnboarding).not.toHaveBeenCalled();
+
+    // Al corregir y volver a salir, el error desaparece sin pulsar nada más.
+    fireEvent.change(correo, { target: { value: 'rectoria@demo.edu.co' } });
+    fireEvent.blur(correo);
+    await waitFor(() => expect(screen.queryByText(/Correo inválido/i)).toBeNull());
+  });
+
   it('guarda el nombre oficial junto al nombre corto', async () => {
     vi.mocked(getOnboarding).mockResolvedValue(estado(1));
-    vi.mocked(guardarColegioOnboarding).mockResolvedValue(estado(2));
+    vi.mocked(guardarColegioOnboarding).mockResolvedValue(estado(3));
     renderPagina();
 
     fireEvent.change(await screen.findByLabelText('Nombre oficial (documentos)'), {
       target: { value: 'INSTITUCIÓN EDUCATIVA TÉCNICA DEPARTAMENTAL JUANA ARIAS DE BENAVIDES' },
     });
-    await userEvent.click(screen.getByRole('button', { name: /continuar a sedes/i }));
+    await userEvent.click(screen.getByRole('button', { name: /continuar al calendario/i }));
 
     await waitFor(() => expect(guardarColegioOnboarding).toHaveBeenCalledTimes(1));
     expect(guardarColegioOnboarding).toHaveBeenCalledWith(
       expect.objectContaining({
         nombre: 'I.E. Demo',
         nombreOficial: 'INSTITUCIÓN EDUCATIVA TÉCNICA DEPARTAMENTAL JUANA ARIAS DE BENAVIDES',
-        subdominio: 'demo',
       }),
     );
+  });
+
+  it('no deja continuar con el nombre oficial vacío', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(1));
+    renderPagina();
+
+    const oficial = await screen.findByLabelText('Nombre oficial (documentos)');
+    fireEvent.change(oficial, { target: { value: '' } });
+    await userEvent.click(screen.getByRole('button', { name: /continuar al calendario/i }));
+
+    expect(await screen.findByText(/Escribe el nombre oficial/i)).toBeInTheDocument();
+    expect(guardarColegioOnboarding).not.toHaveBeenCalled();
   });
 
   it('«Guardar y salir» guarda el paso 1 y sale al dashboard', async () => {
@@ -417,51 +680,199 @@ describe('Onboarding · paso 1 (identidad)', () => {
     expect(mockPush).not.toHaveBeenCalled();
   });
 
-  it('valida NIT, teléfono y año antes de continuar', async () => {
+  it('valida NIT y teléfono antes de continuar', async () => {
     vi.mocked(getOnboarding).mockResolvedValue(estado(1));
     renderPagina();
 
     fireEvent.change(await screen.findByLabelText('NIT (opcional)'), { target: { value: '123' } });
     fireEvent.change(screen.getByLabelText('Teléfono'), { target: { value: '12' } });
-    fireEvent.change(screen.getByLabelText('Año lectivo'), { target: { value: '2019' } });
-    await userEvent.click(screen.getByRole('button', { name: /continuar a sedes/i }));
+    await userEvent.click(screen.getByRole('button', { name: /continuar al calendario/i }));
 
     expect(await screen.findByText(/NIT inválido/i)).toBeInTheDocument();
     expect(screen.getByText(/Teléfono inválido/i)).toBeInTheDocument();
-    expect(screen.getByText(/entre 2020 y 2100/i)).toBeInTheDocument();
     expect(guardarColegioOnboarding).not.toHaveBeenCalled();
   });
 
-  it('rechaza períodos que se cruzan o terminan antes de empezar', async () => {
-    vi.mocked(getOnboarding).mockResolvedValue(estado(1));
+  it('el año lectivo solo ofrece el anterior, el actual y el próximo', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(2));
     renderPagina();
 
-    await screen.findByLabelText('Nombre');
-    // El período 2 empieza antes de que termine el 1.
-    fireEvent.change(screen.getAllByLabelText('Inicio')[1]!, { target: { value: '2026-03-01' } });
+    const anio = await screen.findByLabelText('Año lectivo');
+    const opciones = Array.from(anio.querySelectorAll('option')).map((o) => o.value);
+    expect(opciones).toEqual([String(ANIO - 1), String(ANIO), String(ANIO + 1)]);
+    expect(anio).toHaveValue(String(ANIO));
+  });
+
+  it('rechaza períodos que empiezan antes del año lectivo', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(2));
+    renderPagina();
+
+    await screen.findByLabelText('Calendario A');
+    fireEvent.change(screen.getAllByLabelText('Inicio')[0]!, {
+      target: { value: `${ANIO - 2}-02-02` },
+    });
     await userEvent.click(screen.getByRole('button', { name: /continuar a sedes/i }));
 
-    expect(await screen.findByText(/se cruza con el período anterior/i)).toBeInTheDocument();
+    expect(
+      await detalleEnElAviso(new RegExp(`no puede empezar antes del año lectivo`)),
+    ).toBeInTheDocument();
+    expect(guardarColegioOnboarding).not.toHaveBeenCalled();
+  });
+
+  it('el detalle del período aparece en el aviso flotante y marca el campo en rojo', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(2));
+    renderPagina();
+
+    await screen.findByLabelText('Calendario A');
+    fireEvent.change(screen.getAllByLabelText('Inicio')[0]!, {
+      target: { value: `${ANIO - 2}-02-02` },
+    });
+    await userEvent.click(screen.getByRole('button', { name: /continuar a sedes/i }));
+
+    const aviso = await screen.findByRole('alert');
+    expect(aviso).toHaveTextContent('Revisa el calendario y los períodos antes de continuar.');
+    expect(aviso).toHaveTextContent('no puede empezar antes del año lectivo');
+    // Fuera del flujo: el usuario lo ve aunque tenga la página desplazada.
+    expect(aviso).toHaveClass('m3-toast', 'm3-toast--error');
+    // El campo culpable queda marcado, como un TextField con error.
+    const inicio = document.getElementById('onb-periodo-1-inicio')!;
+    expect(inicio).toHaveClass('onb-input--error');
+    expect(inicio).toHaveAttribute('aria-invalid', 'true');
+    expect(document.getElementById('onb-periodo-1-fin')).not.toHaveClass('onb-input--error');
+    // El mensaje vive en el aviso flotante: nada suelto bajo la lista.
+    expect(document.querySelector('.onb-error')).toBeNull();
+    expect(document.querySelector('.onb-aviso')).toBeNull();
+  });
+
+  it('al corregir la fecha se limpia la marca del campo', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(2));
+    renderPagina();
+
+    const inicio = (await screen.findAllByLabelText('Inicio'))[0]!;
+    fireEvent.change(inicio, { target: { value: `${ANIO - 2}-02-02` } });
+    await userEvent.click(screen.getByRole('button', { name: /continuar a sedes/i }));
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+
+    fireEvent.change(inicio, { target: { value: fecha(2, 2) } });
+    expect(document.getElementById('onb-periodo-1-inicio')).not.toHaveClass('onb-input--error');
+    expect(document.querySelector('.onb-error')).toBeNull();
+  });
+  it('marca el problema y saca el aviso al elegir la fecha, sin pulsar Continuar', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(2));
+    renderPagina();
+
+    const inicio = (await screen.findAllByLabelText('Inicio'))[0]!;
+    fireEvent.change(inicio, { target: { value: `${ANIO - 2}-02-02` } });
+
+    // El campo se marca y el motivo sale en el aviso flotante al momento.
+    expect(inicio).toHaveClass('onb-input--error');
+    expect(inicio).toHaveAttribute('aria-invalid', 'true');
+    const aviso = await screen.findByRole('alert');
+    expect(aviso).toHaveTextContent('no puede empezar antes del año lectivo');
+    expect(inicio).toHaveAttribute('title', expect.stringContaining('no puede empezar antes'));
+
+    fireEvent.change(inicio, { target: { value: fecha(2, 2) } });
+    expect(inicio).not.toHaveClass('onb-input--error');
+    expect(document.getElementById('onb-periodo-1-inicio-error')).toBeNull();
+    // El aviso que puso esta revisión se retira al quedar bien la fecha.
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('al cambiar de calendario se quita la marca roja del período', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(2));
+    renderPagina();
+
+    const inicio = (await screen.findAllByLabelText('Inicio'))[0]!;
+    fireEvent.change(inicio, { target: { value: `${ANIO - 2}-02-02` } });
+    await userEvent.click(screen.getByRole('button', { name: /continuar a sedes/i }));
+    expect(document.getElementById('onb-periodo-1-inicio')).toHaveClass('onb-input--error');
+
+    // Las fechas se regeneran con el calendario B: la marca anterior no aplica.
+    fireEvent.click(await screen.findByLabelText('Calendario B'));
+
+    expect(document.getElementById('onb-periodo-1-inicio')).not.toHaveClass('onb-input--error');
+    expect(document.querySelector('.onb-error')).toBeNull();
+  });
+
+  it('el aviso de datos del MEN desaparece al avanzar de paso', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estadoSinCodigo());
+    vi.mocked(buscarColegioDane).mockResolvedValue(DANE);
+    vi.mocked(guardarColegioOnboarding).mockResolvedValue(estado(2));
+    renderPagina();
+
+    fireEvent.change(await screen.findByLabelText('Código DANE'), {
+      target: { value: '147555000295' },
+    });
+    expect(await screen.findByText(/Datos del MEN de 2025/)).toBeInTheDocument();
+    // Los éxitos usan el mismo aviso flotante, con su tono.
+    expect(document.querySelector('.m3-toast--exito')).not.toBeNull();
+
+    await userEvent.click(screen.getByRole('button', { name: /continuar al calendario/i }));
+
+    expect(
+      await screen.findByRole('heading', { name: 'Calendario y períodos', level: 1 }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Datos del MEN de 2025/)).toBeNull();
+  });
+
+  it('volver al paso 1 con un período inválido no bloquea el avance', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(2));
+    vi.mocked(guardarColegioOnboarding).mockResolvedValue(estado(2));
+    renderPagina();
+
+    await screen.findByLabelText('Calendario A');
+    fireEvent.change(screen.getAllByLabelText('Inicio')[0]!, {
+      target: { value: `${ANIO - 2}-02-02` },
+    });
+    await userEvent.click(screen.getByRole('button', { name: /continuar a sedes/i }));
+    expect(await detalleEnElAviso(/no puede empezar antes del año lectivo/)).toBeInTheDocument();
+    expect(guardarColegioOnboarding).not.toHaveBeenCalled();
+
+    // Atrás y otra vez adelante: el paso 1 no puede mandar los períodos rotos.
+    await userEvent.click(screen.getByRole('button', { name: /paso anterior/i }));
+    expect(
+      await screen.findByRole('heading', { name: 'Tu colegio', level: 1 }),
+    ).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /continuar al calendario/i }));
+    await waitFor(() => expect(guardarColegioOnboarding).toHaveBeenCalledTimes(1));
+    const enviado = vi.mocked(guardarColegioOnboarding).mock.calls[0]?.[0];
+    expect(enviado?.periodos.every((p) => p.fechaInicio >= `${ANIO}-01-01`)).toBe(true);
+    expect(
+      await screen.findByRole('heading', { name: 'Calendario y períodos', level: 1 }),
+    ).toBeInTheDocument();
+  });
+
+  it('rechaza períodos que se cruzan o terminan antes de empezar', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(2));
+    renderPagina();
+
+    await screen.findByLabelText('Calendario A');
+    // El período 2 empieza antes de que termine el 1.
+    fireEvent.change(screen.getAllByLabelText('Inicio')[1]!, { target: { value: fecha(3, 1) } });
+    await userEvent.click(screen.getByRole('button', { name: /continuar a sedes/i }));
+
+    expect(await detalleEnElAviso(/se cruza con el período anterior/i)).toBeInTheDocument();
     expect(guardarColegioOnboarding).not.toHaveBeenCalled();
   });
 
   it('regenera las fechas de los períodos al cambiar el año lectivo', async () => {
-    vi.mocked(getOnboarding).mockResolvedValue(estado(1));
+    vi.mocked(getOnboarding).mockResolvedValue(estado(2));
     renderPagina();
 
     const anio = await screen.findByLabelText('Año lectivo');
-    fireEvent.change(anio, { target: { value: '2027' } });
+    fireEvent.change(anio, { target: { value: String(ANIO + 1) } });
 
     const inicios = screen.getAllByLabelText('Inicio') as HTMLInputElement[];
-    expect(inicios[0]!.value.startsWith('2027')).toBe(true);
+    expect(inicios[0]!.value.startsWith(String(ANIO + 1))).toBe(true);
   });
 
   it('«Guardar y salir» en el paso 2 guarda la sede', async () => {
-    const datos = estado(2);
+    const datos = estado(3);
     datos.sedes[0]!.jornadas = ['MANANA'];
     vi.mocked(getOnboarding).mockResolvedValue(datos);
-    vi.mocked(guardarSedeOnboarding).mockResolvedValue(estado(2));
-    vi.mocked(guardarPasoOnboarding).mockResolvedValue(estado(2));
+    vi.mocked(guardarSedeOnboarding).mockResolvedValue(estado(3));
+    vi.mocked(guardarPasoOnboarding).mockResolvedValue(estado(3));
     renderPagina();
 
     await screen.findByRole('heading', { name: 'Sedes y jornadas', level: 1 });
@@ -471,20 +882,18 @@ describe('Onboarding · paso 1 (identidad)', () => {
     expect(mockPush).toHaveBeenCalledWith('/dashboard');
   });
 
-  it('rechaza nombre corto, departamento vacío y subdominio inválido', async () => {
+  it('rechaza nombre corto, departamento vacío y municipio sin elegir', async () => {
     const datos = estado(1);
     datos.colegio.departamento = '';
     vi.mocked(getOnboarding).mockResolvedValue(datos);
     renderPagina();
 
     fireEvent.change(await screen.findByLabelText('Nombre'), { target: { value: 'AB' } });
-    fireEvent.change(screen.getByLabelText('Subdominio'), { target: { value: 'ab' } });
-    await userEvent.click(screen.getByRole('button', { name: /continuar a sedes/i }));
+    await userEvent.click(screen.getByRole('button', { name: /continuar al calendario/i }));
 
     expect(await screen.findByText('Escribe el nombre del colegio.')).toBeInTheDocument();
     expect(screen.getByText('Elige el departamento.')).toBeInTheDocument();
     expect(screen.getByText('Elige el municipio del departamento.')).toBeInTheDocument();
-    expect(screen.getByText(/Entre 3 y 32 caracteres/)).toBeInTheDocument();
     expect(guardarColegioOnboarding).not.toHaveBeenCalled();
   });
 
@@ -494,7 +903,7 @@ describe('Onboarding · paso 1 (identidad)', () => {
 
     const correo = await screen.findByLabelText('Correo del colegio');
     fireEvent.change(correo, { target: { value: 'malo' } });
-    await userEvent.click(screen.getByRole('button', { name: /continuar a sedes/i }));
+    await userEvent.click(screen.getByRole('button', { name: /continuar al calendario/i }));
     expect(await screen.findByText(/Correo inválido/i)).toBeInTheDocument();
 
     fireEvent.change(correo, { target: { value: 'rectoria@demo.edu.co' } });
@@ -502,17 +911,17 @@ describe('Onboarding · paso 1 (identidad)', () => {
   });
 
   it('exige las dos fechas de cada período y el orden correcto', async () => {
-    vi.mocked(getOnboarding).mockResolvedValue(estado(1));
+    vi.mocked(getOnboarding).mockResolvedValue(estado(2));
     renderPagina();
 
-    await screen.findByLabelText('Nombre');
+    await screen.findByLabelText('Calendario A');
     fireEvent.change(screen.getAllByLabelText('Fin')[0]!, { target: { value: '' } });
     await userEvent.click(screen.getByRole('button', { name: /continuar a sedes/i }));
-    expect(await screen.findByText(/completa las dos fechas/i)).toBeInTheDocument();
+    expect(await detalleEnElAviso(/completa las dos fechas/i)).toBeInTheDocument();
 
-    fireEvent.change(screen.getAllByLabelText('Fin')[0]!, { target: { value: '2026-01-05' } });
+    fireEvent.change(screen.getAllByLabelText('Fin')[0]!, { target: { value: fecha(1, 5) } });
     await userEvent.click(screen.getByRole('button', { name: /continuar a sedes/i }));
-    expect(await screen.findByText(/el inicio debe ser anterior al fin/i)).toBeInTheDocument();
+    expect(await detalleEnElAviso(/el inicio debe ser anterior al fin/i)).toBeInTheDocument();
     expect(guardarColegioOnboarding).not.toHaveBeenCalled();
   });
 
@@ -526,19 +935,53 @@ describe('Onboarding · paso 1 (identidad)', () => {
     expect(screen.getByLabelText('Municipio')).toHaveValue('Manizales');
   });
 
-  it('deja escribir dirección, subdominio y fecha de fin', async () => {
-    vi.mocked(getOnboarding).mockResolvedValue(estado(1));
+  it('deja escribir las fechas de los períodos', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(2));
     renderPagina();
 
-    fireEvent.change(await screen.findByLabelText('Dirección'), {
-      target: { value: 'Calle 10 # 5-20' },
-    });
-    fireEvent.change(screen.getByLabelText('Subdominio'), { target: { value: 'juana-arias' } });
-    fireEvent.change(screen.getAllByLabelText('Fin')[0]!, { target: { value: '2026-04-30' } });
+    const fin = (await screen.findAllByLabelText('Fin'))[0]!;
+    fireEvent.change(fin, { target: { value: fecha(4, 30) } });
 
-    expect(screen.getByLabelText('Dirección')).toHaveValue('Calle 10 # 5-20');
-    expect(screen.getByLabelText('Subdominio')).toHaveValue('juana-arias');
-    expect((screen.getAllByLabelText('Fin')[0] as HTMLInputElement).value).toBe('2026-04-30');
+    expect((screen.getAllByLabelText('Fin')[0] as HTMLInputElement).value).toBe(fecha(4, 30));
+  });
+
+  it('agrega períodos hasta el tope de cuatro y no deja pasar de ahí', async () => {
+    const datos = estado(2);
+    datos.periodos = [
+      ...datos.periodos,
+      { numero: 3, nombre: 'Período 3', fechaInicio: fecha(7, 10), fechaFin: fecha(9, 30) },
+    ];
+    vi.mocked(getOnboarding).mockResolvedValue(datos);
+    renderPagina();
+
+    await screen.findByLabelText('Calendario A');
+    expect(screen.getByText('3 de 4 · mínimo dos períodos')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /agregar período/i }));
+
+    expect(screen.getByText('4 de 4 · mínimo dos períodos')).toBeInTheDocument();
+    expect(screen.getByText('Período 4')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /agregar período/i })).toBeDisabled();
+  });
+
+  it('quita un período y renumera el resto para no dejar huecos', async () => {
+    const datos = estado(2);
+    datos.periodos = [
+      ...datos.periodos,
+      { numero: 3, nombre: 'Período 3', fechaInicio: fecha(7, 10), fechaFin: fecha(9, 30) },
+    ];
+    vi.mocked(getOnboarding).mockResolvedValue(datos);
+    renderPagina();
+
+    await screen.findByLabelText('Calendario A');
+    await userEvent.click(screen.getByRole('button', { name: /quitar el período 2/i }));
+
+    expect(screen.getByText('2 de 4 · mínimo dos períodos')).toBeInTheDocument();
+    // El tercero pasa a ser el segundo: no quedan huecos en la numeración.
+    expect(screen.queryByText('Período 3')).toBeNull();
+    for (const boton of screen.getAllByRole('button', { name: /quitar el período/i })) {
+      expect(boton).toBeDisabled();
+    }
   });
 
   it('no vuelve a buscar si se reescribe el mismo código verificado', async () => {
@@ -552,19 +995,31 @@ describe('Onboarding · paso 1 (identidad)', () => {
     expect(screen.getByLabelText('Nombre')).toBeInTheDocument();
   });
 
-  it('«Guardar y salir» sin código DANE sale sin guardar nada', async () => {
+  it('«Guardar y salir» sin código DANE avisa antes de cerrar', async () => {
     vi.mocked(getOnboarding).mockResolvedValue(estadoSinCodigo());
     renderPagina();
 
     await screen.findByLabelText('Código DANE');
     await userEvent.click(screen.getByRole('button', { name: /guardar y salir/i }));
 
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/dashboard'));
+    // Ya no sale en silencio: aparece el aviso y «Seguir aquí» no navega.
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByText(/¿Salir sin vincular el colegio\?/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /seguir aquí/i }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(mockPush).not.toHaveBeenCalled();
+
+    // Desde el aviso se cierra la sesión de verdad y se vuelve al login.
+    await userEvent.click(screen.getByRole('button', { name: /guardar y salir/i }));
+    await userEvent.click(await screen.findByRole('button', { name: /cerrar sesión/i }));
+
+    await waitFor(() => expect(cerrarSesion).toHaveBeenCalledTimes(1));
+    expect(mockPush).toHaveBeenCalledWith('/login');
     expect(guardarColegioOnboarding).not.toHaveBeenCalled();
   });
 
   it('«Guardar y salir» pide la jornada si la sede no tiene', async () => {
-    const datos = estado(2);
+    const datos = estado(3);
     datos.sedes[0]!.jornadas = [];
     vi.mocked(getOnboarding).mockResolvedValue(datos);
     renderPagina();
@@ -575,33 +1030,257 @@ describe('Onboarding · paso 1 (identidad)', () => {
     expect(await screen.findByText(/Elige al menos una jornada/i)).toBeInTheDocument();
     expect(mockPush).not.toHaveBeenCalled();
   });
+});
 
-  it('sugiere el subdominio a partir del nombre', async () => {
-    const datos = estado(1);
-    datos.colegio.subdominio = '';
-    vi.mocked(getOnboarding).mockResolvedValue(datos);
+describe('Onboarding · paso 3 (sede por defecto)', () => {
+  it('propone «Principal» con la dirección del paso 1 y las jornadas del MEN', async () => {
+    const inicio = estadoSinCodigo();
+    // Colegio recién creado: sin sedes todavía.
+    inicio.sedes = [];
+    vi.mocked(getOnboarding).mockResolvedValue(inicio);
+    vi.mocked(buscarColegioDane).mockResolvedValue(DANE);
+    // Lo que devuelve la API al guardar: el colegio con la dirección escrita,
+    // todavía sin sedes.
+    vi.mocked(guardarColegioOnboarding).mockResolvedValue({
+      ...estado(3),
+      sedes: [],
+      colegio: { ...estado(3).colegio, direccion: DANE.direccion },
+    });
     renderPagina();
 
-    fireEvent.change(await screen.findByLabelText('Nombre'), {
-      target: { value: 'I.E.T.D. Juana Arias de Benavides' },
+    // Colegio nuevo: primero el saludo de bienvenida.
+    await userEvent.click(await screen.findByRole('button', { name: 'Empezar' }));
+    fireEvent.change(await screen.findByLabelText('Código DANE'), {
+      target: { value: '147555000295' },
     });
+    // El formulario se prellena con lo del MEN (el aviso flotante es efímero).
+    expect(await screen.findByLabelText('Nombre')).toHaveValue('I.E.T.D. Juana Arias de Benavides');
+    await userEvent.click(screen.getByRole('button', { name: /continuar al calendario/i }));
+    await userEvent.click(await screen.findByRole('button', { name: /continuar a sedes/i }));
 
-    expect(screen.getByLabelText('Subdominio')).toHaveValue('ietd-juana-arias-de-benavides');
+    expect(await screen.findByLabelText('Nombre de la sede')).toHaveValue('Principal');
+    expect(screen.getByLabelText('Dirección')).toHaveValue(DANE.direccion);
+    // Las jornadas que el MEN publica para el colegio vienen marcadas.
+    expect(screen.getByLabelText('Mañana')).toBeChecked();
+    expect(screen.getByLabelText('Completa')).toBeChecked();
+    expect(screen.getByLabelText('Tarde')).toBeChecked();
+    expect(screen.getByLabelText('Única')).not.toBeChecked();
+    // Y quedan guardadas en el colegio, para que no se pierdan al recargar.
+    expect(vi.mocked(guardarColegioOnboarding).mock.calls[0]?.[0]?.jornadasMen).toEqual([
+      'MANANA',
+      'COMPLETA',
+      'TARDE',
+    ]);
   });
 
-  it('respeta el subdominio propio del colegio aunque cambie el nombre', async () => {
-    vi.mocked(getOnboarding).mockResolvedValue(estado(1));
+  it('una sede guardada sin dirección se completa con la del colegio', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue({
+      ...estado(3),
+      colegio: { ...estado(3).colegio, direccion: 'KR 10 18 99' },
+    });
     renderPagina();
 
-    fireEvent.change(await screen.findByLabelText('Nombre'), { target: { value: 'Otro nombre' } });
+    expect(await screen.findByLabelText('Nombre de la sede')).toHaveValue('Sede Principal');
+    expect(screen.getByLabelText('Dirección')).toHaveValue('KR 10 18 99');
+  });
 
-    expect(screen.getByLabelText('Subdominio')).toHaveValue('demo');
+  it('sin sede, propone las jornadas que el MEN dejó guardadas en el colegio', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue({
+      ...estado(3),
+      sedes: [],
+      colegio: { ...estado(3).colegio, jornadasMen: ['COMPLETA', 'NOCTURNA'] },
+    });
+    renderPagina();
+
+    await screen.findByLabelText('Nombre de la sede');
+    expect(screen.getByLabelText('Completa')).toBeChecked();
+    expect(screen.getByLabelText('Noche')).toBeChecked();
+    expect(screen.getByLabelText('Mañana')).not.toBeChecked();
+  });
+
+  it('sin dirección en el paso 1 la sede queda con la dirección vacía', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue({
+      ...estado(3),
+      sedes: [],
+      colegio: { ...estado(3).colegio, direccion: null },
+    });
+    renderPagina();
+
+    expect(await screen.findByLabelText('Nombre de la sede')).toHaveValue('Principal');
+    expect(screen.getByLabelText('Dirección')).toHaveValue('');
+  });
+});
+
+describe('Onboarding · paso 3 (varias sedes)', () => {
+  const SEGUNDA = {
+    id: 'sede-2',
+    nombre: 'Sede Norte',
+    codigoDaneSede: null,
+    direccion: null,
+    municipio: 'Sitionuevo',
+    departamento: 'Magdalena',
+    jornadas: ['TARDE' as const],
+  };
+
+  it('agrega una sede: guarda la abierta y deja el formulario en blanco', async () => {
+    const actual = estado(3);
+    vi.mocked(getOnboarding).mockResolvedValue(actual);
+    vi.mocked(guardarSedeOnboarding).mockResolvedValue({
+      ...actual,
+      sedes: [...actual.sedes, SEGUNDA],
+    });
+    renderPagina();
+
+    await userEvent.click(await screen.findByRole('button', { name: /agregar sede/i }));
+
+    await waitFor(() =>
+      expect(guardarSedeOnboarding).toHaveBeenCalledWith(expect.objectContaining({ id: 'sede-1' })),
+    );
+    expect(screen.getByLabelText('Nombre de la sede')).toHaveValue('');
+    // La sede nueva arranca sin dirección: lo normal es que esté en otro sitio.
+    expect(screen.getByLabelText('Dirección')).toHaveValue('');
+    expect(screen.getByText('Sede nueva')).toBeInTheDocument();
+  });
+
+  it('propone la ubicación del colegio y guarda la de una sede en otro municipio', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(3));
+    vi.mocked(guardarSedeOnboarding).mockResolvedValue(estado(3));
+    renderPagina();
+
+    // Sede nueva: hereda la ubicación del colegio.
+    await userEvent.click(await screen.findByRole('button', { name: /agregar sede/i }));
+    expect(screen.getByLabelText('Departamento')).toHaveValue('Magdalena');
+    expect(screen.getByLabelText('Municipio')).toHaveValue('Plato');
+
+    // Una sede en las cercanías: otro municipio del mismo departamento.
+    fireEvent.change(screen.getByLabelText('Nombre de la sede'), {
+      target: { value: 'Sede Norte' },
+    });
+    fireEvent.change(screen.getByLabelText('Municipio'), { target: { value: 'Sitionuevo' } });
+    await userEvent.click(screen.getByLabelText('Tarde'));
+    await userEvent.click(screen.getByRole('button', { name: /agregar sede/i }));
+
+    await waitFor(() =>
+      expect(guardarSedeOnboarding).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          nombre: 'Sede Norte',
+          municipio: 'Sitionuevo',
+          departamento: 'Magdalena',
+        }),
+      ),
+    );
+  });
+
+  it('al cambiar el departamento de la sede se vuelve a elegir el municipio', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(3));
+    renderPagina();
+
+    expect(await screen.findByLabelText('Municipio')).toHaveValue('Plato');
+    fireEvent.change(screen.getByLabelText('Departamento'), { target: { value: 'Atlántico' } });
+
+    expect(screen.getByLabelText('Municipio')).toHaveValue('');
+  });
+
+  it('si falta un campo, marca el error y no vacía lo escrito', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(3));
+    vi.mocked(guardarSedeOnboarding).mockResolvedValue(estado(3));
+    renderPagina();
+
+    // Abre una sede nueva (guarda la actual) y marca una jornada sin nombre.
+    await userEvent.click(await screen.findByRole('button', { name: /agregar sede/i }));
+    await userEvent.click(await screen.findByLabelText('Tarde'));
+    await userEvent.click(screen.getByRole('button', { name: /agregar sede/i }));
+
+    expect(await screen.findByText('Escribe el nombre de la sede.')).toBeInTheDocument();
+    expect(screen.getByText('Revisa los campos marcados antes de continuar.')).toBeInTheDocument();
+    // Lo escrito sigue ahí: no se pierde la jornada marcada.
+    expect(screen.getByLabelText('Tarde')).toBeChecked();
+    expect(screen.getByLabelText('Nombre de la sede')).toHaveValue('');
+  });
+
+  it('elimina una sede solo después de confirmar', async () => {
+    const actual = estado(3);
+    const conDos = { ...actual, sedes: [...actual.sedes, SEGUNDA] };
+    vi.mocked(getOnboarding).mockResolvedValue(conDos);
+    vi.mocked(eliminarSedeOnboarding).mockResolvedValue(actual);
+    renderPagina();
+
+    // Se abre la segunda sede desde la lista.
+    await userEvent.click(await screen.findByRole('button', { name: 'Sede Norte' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Eliminar sede' }));
+    // El primer clic solo pide confirmación.
+    expect(eliminarSedeOnboarding).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button', { name: '¿Eliminar esta sede?' }));
+
+    await waitFor(() => expect(eliminarSedeOnboarding).toHaveBeenCalledWith('sede-2'));
+  });
+
+  it('con una sola sede, eliminar está deshabilitado', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(3));
+    renderPagina();
+
+    const borrar = await screen.findByRole('button', { name: 'Eliminar sede' });
+    expect(borrar).toBeDisabled();
+    expect(borrar).toHaveAttribute('title', 'El colegio necesita al menos una sede');
+  });
+});
+
+describe('Onboarding · paso 2 (calendario)', () => {
+  it('el selector de fechas no ofrece años fuera del lectivo', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(2));
+    renderPagina();
+
+    const inicio = (await screen.findAllByLabelText('Inicio'))[0]!;
+    expect(inicio).toHaveAttribute('min', `${ANIO}-01-01`);
+    expect(inicio).toHaveAttribute('max', `${ANIO + 1}-12-31`);
+    const fin = screen.getAllByLabelText('Fin')[0]!;
+    expect(fin).toHaveAttribute('min', `${ANIO}-01-01`);
+    expect(fin).toHaveAttribute('max', `${ANIO + 1}-12-31`);
+  });
+
+  it('avanza a sedes y un refresco con paso 2 no lo devuelve atrás', async () => {
+    // La API marca onboarding_paso = 2 al guardar la identidad Y el calendario
+    // (es el mismo endpoint). Si el wizard se dejara arrastrar por ese valor en
+    // cada refresco, el guardado del paso 2 devolvería al usuario al paso 2
+    // justo después de pulsar «Continuar» (y a veces sí, a veces no, según el
+    // orden de los renders).
+    vi.mocked(getOnboarding).mockResolvedValue(estado(2));
+    vi.mocked(guardarColegioOnboarding).mockResolvedValue(estado(2));
+
+    const cliente = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={cliente}>
+        <OnboardingPage />
+      </QueryClientProvider>,
+    );
+
+    expect(
+      await screen.findByRole('heading', { name: 'Calendario y períodos', level: 1 }),
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /continuar a sedes/i }));
+    expect(
+      await screen.findByRole('heading', { name: 'Sedes y jornadas', level: 1 }),
+    ).toBeInTheDocument();
+
+    // Refresco del estado del servidor (invalidateQueries), que sigue en 2.
+    // Se cambia algo más para que TanStack Query no conserve la referencia por
+    // «structural sharing» y el efecto de sincronización llegue a ejecutarse.
+    await act(async () => {
+      const refresco = estado(2);
+      refresco.colegio.nombre = 'I.E. Demo (refresco)';
+      cliente.setQueryData(['onboarding'], refresco);
+    });
+    await new Promise((listo) => setTimeout(listo, 0));
+
+    expect(screen.getByRole('heading', { name: 'Sedes y jornadas', level: 1 })).toBeInTheDocument();
+    expect(guardarColegioOnboarding).toHaveBeenCalledTimes(1);
   });
 });
 
 describe('Onboarding · paso 4 (personal)', () => {
   it('muestra el formulario y agrega a la persona con su contraseña temporal', async () => {
-    vi.mocked(getOnboarding).mockResolvedValue(estado(4));
+    vi.mocked(getOnboarding).mockResolvedValue(estado(5));
     vi.mocked(crearUsuario).mockResolvedValue({
       usuario: {
         ...USUARIO,
@@ -645,7 +1324,7 @@ describe('Onboarding · paso 4 (personal)', () => {
   });
 
   it('no agrega si el formulario está incompleto', async () => {
-    vi.mocked(getOnboarding).mockResolvedValue(estado(4));
+    vi.mocked(getOnboarding).mockResolvedValue(estado(5));
 
     renderPagina();
     await screen.findByRole('heading', { name: 'Personal del colegio' });
@@ -658,7 +1337,7 @@ describe('Onboarding · paso 4 (personal)', () => {
   });
 
   it('muestra el mensaje por defecto ante un error que no es de la API', async () => {
-    vi.mocked(getOnboarding).mockResolvedValue(estado(4));
+    vi.mocked(getOnboarding).mockResolvedValue(estado(5));
     vi.mocked(crearUsuario).mockRejectedValue(new Error('boom'));
 
     renderPagina();
@@ -674,7 +1353,7 @@ describe('Onboarding · paso 4 (personal)', () => {
   });
 
   it('da de baja a una persona del listado', async () => {
-    vi.mocked(getOnboarding).mockResolvedValue(estado(4));
+    vi.mocked(getOnboarding).mockResolvedValue(estado(5));
     vi.mocked(listarEmpleados).mockResolvedValue(personal([EMPLEADO]));
     vi.mocked(actualizarUsuario).mockResolvedValue({ ...USUARIO, activo: false });
 
@@ -689,7 +1368,7 @@ describe('Onboarding · paso 4 (personal)', () => {
   });
 
   it('informa si la baja falla', async () => {
-    vi.mocked(getOnboarding).mockResolvedValue(estado(4));
+    vi.mocked(getOnboarding).mockResolvedValue(estado(5));
     vi.mocked(listarEmpleados).mockResolvedValue(personal([EMPLEADO]));
     vi.mocked(actualizarUsuario).mockRejectedValue(new Error('boom'));
 
@@ -703,7 +1382,7 @@ describe('Onboarding · paso 4 (personal)', () => {
 
 describe('Onboarding · paso 5 (CSV de matrículas)', () => {
   it('lee el archivo, marca la fila válida y la importa', async () => {
-    vi.mocked(getOnboarding).mockResolvedValue(estado(5));
+    vi.mocked(getOnboarding).mockResolvedValue(estado(6));
     vi.mocked(importarMatriculas).mockResolvedValue({ creadas: 1, errores: [] });
 
     renderPagina();
@@ -739,7 +1418,7 @@ describe('Onboarding · paso 5 (CSV de matrículas)', () => {
   });
 
   it('marca como inválida la fila cuyo curso no existe y bloquea la importación', async () => {
-    vi.mocked(getOnboarding).mockResolvedValue(estado(5));
+    vi.mocked(getOnboarding).mockResolvedValue(estado(6));
 
     renderPagina();
     await screen.findByRole('heading', { name: 'Estudiantes' });
@@ -758,19 +1437,19 @@ describe('Onboarding · paso 5 (CSV de matrículas)', () => {
   });
 
   it('continúa al resumen y guarda el paso', async () => {
-    vi.mocked(getOnboarding).mockResolvedValue(estado(5));
-    vi.mocked(guardarPasoOnboarding).mockResolvedValue(estado(6));
+    vi.mocked(getOnboarding).mockResolvedValue(estado(6));
+    vi.mocked(guardarPasoOnboarding).mockResolvedValue(estado(7));
 
     renderPagina();
     await screen.findByRole('heading', { name: 'Estudiantes' });
     await userEvent.click(screen.getByRole('button', { name: /continuar al resumen/i }));
 
-    await waitFor(() => expect(guardarPasoOnboarding).toHaveBeenCalledWith(6));
+    await waitFor(() => expect(guardarPasoOnboarding).toHaveBeenCalledWith(7));
     expect(await screen.findByRole('heading', { name: 'Todo listo' })).toBeInTheDocument();
   });
 
   it('avisa si el archivo no se puede leer', async () => {
-    vi.mocked(getOnboarding).mockResolvedValue(estado(5));
+    vi.mocked(getOnboarding).mockResolvedValue(estado(6));
 
     renderPagina();
     await screen.findByRole('heading', { name: 'Estudiantes' });
@@ -788,7 +1467,7 @@ describe('Onboarding · paso 5 (CSV de matrículas)', () => {
   });
 
   it('informa si la importación falla', async () => {
-    vi.mocked(getOnboarding).mockResolvedValue(estado(5));
+    vi.mocked(getOnboarding).mockResolvedValue(estado(6));
     vi.mocked(importarMatriculas).mockRejectedValue(new Error('boom'));
 
     renderPagina();
@@ -806,5 +1485,169 @@ describe('Onboarding · paso 5 (CSV de matrículas)', () => {
     await userEvent.click(screen.getByRole('button', { name: /importar 1 fila/i }));
 
     expect(await screen.findByText('No se pudo importar el CSV.')).toBeInTheDocument();
+  });
+});
+
+describe('Onboarding · bienvenida, cabecera y gestos', () => {
+  afterEach(() => {
+    // `?bienvenida=1` se prueba cambiando la URL: se devuelve a la normal.
+    window.history.pushState({}, '', '/');
+  });
+
+  /** Colegio recién creado: sin DANE, sin sedes y en el paso 1. */
+  function estadoVacio() {
+    const datos = estado(1);
+    datos.sedes = [];
+    datos.colegio.codigoDane = '';
+    datos.colegio.nombre = '';
+    return datos;
+  }
+
+  it('muestra la bienvenida solo con el colegio vacío', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estadoVacio());
+    renderPagina();
+
+    expect(
+      await screen.findByRole('heading', { name: /empecemos a configurar tu colegio/i }),
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /empezar/i }));
+
+    // «Empezar» entra al paso 1, que no cuenta como uno más de la bienvenida.
+    expect(await screen.findByLabelText('Código DANE')).toBeInTheDocument();
+    expect(screen.getByText(/de 7 · Colegio/)).toBeInTheDocument();
+  });
+
+  it('la bienvenida cierra la sesión de verdad', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estadoVacio());
+    renderPagina();
+
+    await screen.findByRole('heading', { name: /empecemos a configurar tu colegio/i });
+    await userEvent.click(screen.getByRole('button', { name: /cerrar sesión/i }));
+
+    await waitFor(() => expect(cerrarSesion).toHaveBeenCalledTimes(1));
+    expect(mockPush).toHaveBeenCalledWith('/login');
+  });
+
+  it('no repite la bienvenida si el colegio ya tiene sedes', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(1));
+    renderPagina();
+
+    await screen.findByLabelText('Código DANE');
+    expect(
+      screen.queryByRole('heading', { name: /empecemos a configurar tu colegio/i }),
+    ).toBeNull();
+  });
+
+  it('la cabecera dice el paso y el título, y la barra lo refleja', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(3));
+    renderPagina();
+
+    expect(await screen.findByText(/de 7 · Sedes y jornadas/)).toBeInTheDocument();
+    const barras = screen.getAllByRole('progressbar');
+    expect(barras.length).toBeGreaterThan(0);
+    for (const barra of barras) {
+      expect(barra).toHaveAttribute('aria-valuenow', '3');
+      expect(barra).toHaveAttribute('aria-valuemax', '7');
+    }
+  });
+
+  it('en el paso 1 la cabecera no muestra el botón de volver', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(1));
+    renderPagina();
+
+    await screen.findByLabelText('Código DANE');
+    expect(screen.queryByRole('button', { name: /paso anterior/i })).toBeNull();
+  });
+
+  it('deslizar a la derecha vuelve al paso anterior', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(3));
+    renderPagina();
+
+    await screen.findByRole('heading', { name: 'Sedes y jornadas', level: 1 });
+    const main = screen.getByRole('main');
+    fireEvent.touchStart(main, { touches: [{ clientX: 100, clientY: 300 }] });
+    fireEvent.touchEnd(main, { changedTouches: [{ clientX: 220, clientY: 302 }] });
+
+    expect(
+      await screen.findByRole('heading', { name: 'Calendario y períodos', level: 1 }),
+    ).toBeInTheDocument();
+  });
+
+  it('deslizar a la izquierda avanza y guarda como el botón', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(3));
+    vi.mocked(guardarSedeOnboarding).mockResolvedValue(estado(4));
+    renderPagina();
+
+    await screen.findByRole('heading', { name: 'Sedes y jornadas', level: 1 });
+    const main = screen.getByRole('main');
+    fireEvent.touchStart(main, { touches: [{ clientX: 220, clientY: 300 }] });
+    fireEvent.touchEnd(main, { changedTouches: [{ clientX: 100, clientY: 300 }] });
+
+    await waitFor(() => expect(guardarSedeOnboarding).toHaveBeenCalledTimes(1));
+    expect(
+      await screen.findByRole('heading', { name: 'Estructura académica', level: 1 }),
+    ).toBeInTheDocument();
+  });
+
+  it('no avanza con el gesto si el paso está incompleto', async () => {
+    const datos = estado(3);
+    datos.sedes[0]!.jornadas = [];
+    vi.mocked(getOnboarding).mockResolvedValue(datos);
+    renderPagina();
+
+    await screen.findByRole('heading', { name: 'Sedes y jornadas', level: 1 });
+    const main = screen.getByRole('main');
+    fireEvent.touchStart(main, { touches: [{ clientX: 220, clientY: 300 }] });
+    fireEvent.touchEnd(main, { changedTouches: [{ clientX: 100, clientY: 300 }] });
+
+    expect(guardarSedeOnboarding).not.toHaveBeenCalled();
+    expect(screen.getByRole('heading', { name: 'Sedes y jornadas', level: 1 })).toBeInTheDocument();
+  });
+
+  it('un deslizamiento vertical no cambia de paso', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(3));
+    renderPagina();
+
+    await screen.findByRole('heading', { name: 'Sedes y jornadas', level: 1 });
+    const main = screen.getByRole('main');
+    fireEvent.touchStart(main, { touches: [{ clientX: 220, clientY: 200 }] });
+    fireEvent.touchEnd(main, { changedTouches: [{ clientX: 170, clientY: 300 }] });
+
+    expect(screen.getByRole('heading', { name: 'Sedes y jornadas', level: 1 })).toBeInTheDocument();
+    expect(guardarSedeOnboarding).not.toHaveBeenCalled();
+  });
+
+  it('las flechas del teclado mueven de paso', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(3));
+    vi.mocked(guardarSedeOnboarding).mockResolvedValue(estado(4));
+    renderPagina();
+
+    await screen.findByRole('heading', { name: 'Sedes y jornadas', level: 1 });
+    // El listener vive en un efecto: se reintenta el evento hasta que esté
+    // registrado (si no, bajo carga el keyDown se pierde y el test parpadea).
+    await waitFor(() => {
+      fireEvent.keyDown(window, { key: 'ArrowRight' });
+      expect(guardarSedeOnboarding).toHaveBeenCalled();
+    });
+
+    expect(
+      await screen.findByRole('heading', { name: 'Estructura académica', level: 1 }),
+    ).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: 'ArrowLeft' });
+    expect(
+      await screen.findByRole('heading', { name: 'Sedes y jornadas', level: 1 }),
+    ).toBeInTheDocument();
+  });
+
+  it('las flechas no mueven de paso mientras se escribe en un campo', async () => {
+    vi.mocked(getOnboarding).mockResolvedValue(estado(3));
+    renderPagina();
+
+    const nombre = await screen.findByLabelText('Nombre de la sede');
+    nombre.focus();
+    fireEvent.keyDown(nombre, { key: 'ArrowLeft' });
+
+    expect(screen.getByRole('heading', { name: 'Sedes y jornadas', level: 1 })).toBeInTheDocument();
   });
 });
