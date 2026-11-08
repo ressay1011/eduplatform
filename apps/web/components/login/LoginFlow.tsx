@@ -22,15 +22,16 @@ import { PaperBg } from '@/components/PaperBg';
 import { StepDots } from '@/components/StepDots';
 import { TextField } from '@/components/TextField';
 import { SESION_KEY } from '@/hooks/useSesion';
-import { ApiError, getContextoColegio, iniciarSesion, type ContextoConSede } from '@/lib/api';
-import { aplicarBranding } from '@/lib/branding';
+import {
+  ApiError,
+  claveCodigo,
+  getContextoColegio,
+  iniciarSesion,
+  type ContextoConSede,
+} from '@/lib/api';
+import { aplicarBranding, aplicarPaleta, guardarPaleta } from '@/lib/branding';
 import { inicialesDe } from '@/lib/iniciales';
 import { esUsuarioValido } from '@/lib/validacion';
-
-/** Clave de caché del contexto público por código de colegio. */
-function claveCodigo(codigo: string) {
-  return ['contexto-colegio', `cod:${codigo.toLowerCase()}`] as const;
-}
 
 export function LoginFlow() {
   const router = useRouter();
@@ -84,7 +85,7 @@ export function LoginFlow() {
       // `admin@juanaArias` → colegio `juanaArias`.
       const sufijo = sufijoDeUsuario(valor);
       if (sufijo === null) {
-        setErrorUsuario('Escribe tu usuario con el colegio: por ejemplo admin@juanaarias.');
+        setErrorUsuario('Escribe tu usuario con el colegio: por ejemplo usuario@Codigo.');
         return;
       }
 
@@ -97,7 +98,13 @@ export function LoginFlow() {
           // Un 404 (código sin colegio) no se reintenta: no es transitorio.
           retry: false,
         });
-        aplicarBranding(contexto.primaryColor);
+        if (contexto.palette !== null) {
+          aplicarPaleta(contexto.palette);
+          guardarPaleta(contexto.codigo, contexto.palette);
+        } else {
+          // Colegio sin colores propios: mandan los tokens por defecto.
+          aplicarBranding(contexto.primaryColor, contexto.codigo);
+        }
         setColegio(contexto);
         setPaso(2);
       } catch (err) {
@@ -176,21 +183,14 @@ export function LoginFlow() {
               <div className="locked-icon" aria-hidden="true">
                 <span className="material-symbols-outlined">lock</span>
               </div>
-              <h2
-                id="bloqueada-titulo"
-                className="m3-headline-small"
-                style={{ margin: '0 0 8px 0' }}
-              >
+              <h2 id="bloqueada-titulo" className="m3-headline-small locked-titulo">
                 Cuenta bloqueada
               </h2>
-              <p
-                className="m3-body-medium"
-                style={{ color: 'var(--md-sys-color-on-surface-variant)', margin: '0 0 24px 0' }}
-              >
+              <p className="m3-body-medium locked-bajada">
                 Por seguridad, bloqueamos esta cuenta tras varios intentos fallidos.
               </p>
               <div className="locked-info">
-                <p className="m3-body-medium" style={{ margin: 0 }}>
+                <p className="m3-body-medium locked-nota">
                   El bloqueo se levanta automáticamente en <strong>15 minutos</strong> o contactando
                   al admin de tu colegio.
                 </p>
@@ -239,7 +239,7 @@ export function LoginFlow() {
                         if (errorUsuario !== null) setErrorUsuario(null);
                       }}
                       autoComplete="username"
-                      ayuda="Ejemplo: admin@juanaarias"
+                      ayuda="Ejemplo: usuario@Codigo"
                       error={errorUsuario}
                       autoFocus
                     />

@@ -22,13 +22,7 @@ export function PaperBg() {
             />
           </pattern>
         </defs>
-        <rect
-          width="100%"
-          height="100%"
-          fill="url(#grid)"
-          className="paper-grid"
-          style={{ opacity: 0.3 }}
-        />
+        <rect width="100%" height="100%" fill="url(#grid)" className="paper-grid" />
         <path
           className="paper-curve-1"
           d="M-50,180 C200,120 350,260 580,200 S900,150 1100,220 1380,180 1500,260"

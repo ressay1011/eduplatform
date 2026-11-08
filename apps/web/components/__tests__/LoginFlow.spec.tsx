@@ -31,6 +31,7 @@ vi.mock('@/lib/api', () => {
   }
   return {
     ApiError: ApiErrorMock,
+    claveCodigo: (codigo: string) => ['contexto-colegio', `cod:${codigo.toLowerCase()}`] as const,
     getContextoColegio: vi.fn(),
     iniciarSesion: vi.fn(),
   };
@@ -46,6 +47,9 @@ const contexto: ContextoConSede = {
   codigoDane: '105001001234',
   logoUrl: null,
   primaryColor: null,
+  secondaryColor: null,
+  tertiaryColor: null,
+  palette: null,
   municipio: 'Plato',
   departamento: 'Magdalena',
   estado: 'ACTIVO',
@@ -77,7 +81,15 @@ function loginOk(debeCambiarPassword: boolean) {
       esAdmin: false,
       debeCambiarPassword,
     },
-    colegio: { id: 'c1', nombre: 'Colegio Norte', codigoDane: '105001001234', primaryColor: null },
+    colegio: {
+      id: 'c1',
+      nombre: 'Colegio Norte',
+      codigoDane: '105001001234',
+      primaryColor: null,
+      secondaryColor: null,
+      tertiaryColor: null,
+      palette: null,
+    },
     sessionToken: 'token-de-prueba',
   };
 }

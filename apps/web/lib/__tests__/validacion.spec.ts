@@ -79,6 +79,8 @@ describe('esUsuarioValido', () => {
     'cc1088123456',
     'abc',
     'Admin@Juana',
+    'muñoz@juanaarias',
+    'mmuñoz',
   ])('acepta %s', (valor) => {
     expect(esUsuarioValido(valor)).toBe(true);
   });

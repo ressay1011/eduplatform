@@ -124,6 +124,11 @@ export function getContextoColegio(codigo: string): Promise<ContextoConSede> {
   return request(`/auth/contexto-colegio?codigo=${encodeURIComponent(codigo)}`);
 }
 
+/** Clave de caché del contexto por código: la comparten login y branding. */
+export function claveCodigo(codigo: string): readonly ['contexto-colegio', string] {
+  return ['contexto-colegio', `cod:${codigo.toLowerCase()}`] as const;
+}
+
 /** Login de usuario de colegio (guarda la cookie httpOnly). */
 export function iniciarSesion(dto: LoginRequest): Promise<LoginResponse> {
   return request('/auth/login', { method: 'POST', body: dto });
@@ -289,6 +294,11 @@ export function guardarColegioOnboarding(dto: ColegioOnboardingRequest): Promise
 
 export function guardarSedeOnboarding(dto: SedeOnboardingRequest): Promise<EstadoOnboarding> {
   return request('/onboarding/sedes', { method: 'PUT', body: dto });
+}
+
+/** Quita una sede (la API rechaza la última y las que ya tienen cursos). */
+export function eliminarSedeOnboarding(id: string): Promise<EstadoOnboarding> {
+  return request(`/onboarding/sedes/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
 export function generarEstructuraOnboarding(

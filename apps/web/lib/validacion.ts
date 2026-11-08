@@ -41,7 +41,7 @@ export { digitoVerificadorNit, esNitValido, normalizarNit } from '@eduplatform/t
  */
 export function esUsuarioValido(valor: string): boolean {
   return (
-    /^[A-Za-z0-9](?:[A-Za-z0-9._@-]*[A-Za-z0-9])$/.test(valor) &&
+    /^[A-Za-z0-9Ññ](?:[A-Za-z0-9Ññ._@-]*[A-Za-z0-9Ññ])$/.test(valor) &&
     valor.length >= 3 &&
     valor.length <= 64
   );

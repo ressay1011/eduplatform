@@ -402,6 +402,26 @@ body {
 .m3-textfield.error .m3-tf-helper {
   color: var(--md-sys-color-error);
 }
+/* Campo deshabilitado (p. ej. Municipio sin departamento): tiene que notarse
+   sin leer nada. Relleno atenuado, borde y texto apagados, cursor bloqueado y
+   la etiqueta flotante sin su parche blanco encima del gris. */
+.m3-textfield .m3-tf:disabled {
+  cursor: not-allowed;
+  /* El borde discontinuo es la señal que se lee de un vistazo, en claro y en
+     oscuro: el gris solo no basta cuando la superficie ya es oscura. */
+  border-style: dashed;
+  border-color: var(--md-sys-color-outline-variant);
+  background: var(--md-sys-color-surface-container-highest);
+  color: var(--md-sys-color-on-surface-disabled);
+  opacity: 1;
+}
+.m3-textfield .m3-tf:disabled + .m3-tf-label {
+  color: var(--md-sys-color-on-surface-disabled);
+  background: var(--md-sys-color-surface-container-highest);
+}
+.m3-textfield .m3-tf:disabled ~ .m3-tf-caret {
+  color: var(--md-sys-color-on-surface-disabled);
+}
 .m3-textfield .m3-tf-trailing {
   position: absolute;
   right: 8px;
@@ -500,6 +520,14 @@ body {
   height: 56px;
   padding: 0 32px;
 }
+/* Icono y etiqueta por encima del state layer (antes iban inline). */
+.m3-btn .m3-btn-icono {
+  font-size: 20px;
+  position: relative;
+}
+.m3-btn .m3-btn-etiqueta {
+  position: relative;
+}
 .full-width {
   width: 100%;
 }
@@ -596,6 +624,15 @@ body {
 .m3-banner .banner-mensaje {
   margin: 4px 0 0 0;
   opacity: 0.85;
+}
+/* Tono del banner: el color lo hereda el icono, sin estilos inline. */
+.m3-banner--error {
+  background: var(--md-sys-color-error-container);
+  color: var(--md-sys-color-error);
+}
+.m3-banner--aviso {
+  background: var(--md-sys-color-tertiary-container);
+  color: var(--md-sys-color-on-tertiary-container);
 }
 
 /* === Branding === */
@@ -808,6 +845,17 @@ body {
   padding: 16px;
   border-radius: var(--md-sys-shape-corner-medium);
   margin: 0 0 24px 0;
+}
+/* Texto de la tarjeta de bloqueo (antes con estilos inline). */
+.locked-titulo {
+  margin: 0 0 8px 0;
+}
+.locked-bajada {
+  color: var(--md-sys-color-on-surface-variant);
+  margin: 0 0 24px 0;
+}
+.locked-info .locked-nota {
+  margin: 0;
 }
 
 /* === Cambio de contraseña: reglas en vivo === */
@@ -2837,6 +2885,7 @@ body {
   gap: 12px;
 }
 .onb-periodo {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -2844,6 +2893,10 @@ body {
   border-radius: 8px;
   background: var(--md-sys-color-surface-container-lowest);
   font: 500 13px/18px var(--md-ref-typeface-plain);
+}
+/* Deja sitio al «Quitar» de la esquina en títulos largos. */
+.onb-periodo strong {
+  padding-right: 72px;
 }
 .onb-periodo label {
   display: flex;
@@ -2862,20 +2915,28 @@ body {
   color: var(--md-sys-color-on-surface);
   font: 400 13px/20px var(--md-ref-typeface-plain);
 }
+/* Campo con error: mismo rojo que los TextField, también para los date. */
+.onb-periodo input.onb-input--error {
+  border-color: var(--md-sys-color-error);
+  box-shadow: 0 0 0 1px var(--md-sys-color-error);
+  color: var(--md-sys-color-error);
+}
 
-/* Quitar un período: acción secundaria dentro de la tarjeta del período. */
+/* Quitar un período: esquina superior derecha, en color de error. */
 .onb-periodo-quitar {
-  align-self: flex-start;
-  margin-top: 2px;
-  padding: 2px 0;
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 4px 8px;
   border: 0;
+  border-radius: 6px;
   background: none;
-  color: var(--md-sys-color-primary);
+  color: var(--md-sys-color-error);
   font: 500 12px/16px var(--md-ref-typeface-plain);
   cursor: pointer;
 }
 .onb-periodo-quitar:hover:not(:disabled) {
-  text-decoration: underline;
+  background: var(--md-sys-color-error-container);
 }
 .onb-periodo-quitar:disabled {
   color: var(--md-sys-color-on-surface-variant);
@@ -2910,6 +2971,81 @@ body {
   border-color: var(--md-sys-color-outline-variant);
   opacity: 0.6;
   cursor: not-allowed;
+}
+/* Paso 3: sedes guardadas, agregar y eliminar. */
+.onb-sedes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.onb-sedes-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.onb-eliminar-sede {
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--md-sys-color-error);
+  font: 500 13px/18px var(--md-ref-typeface-plain);
+  cursor: pointer;
+}
+.onb-eliminar-sede:hover:not(:disabled) {
+  background: var(--md-sys-color-error-container);
+}
+.onb-eliminar-sede:disabled {
+  color: var(--md-sys-color-on-surface-variant);
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.onb-eliminar-sede--confirmar {
+  background: var(--md-sys-color-error-container);
+  font-weight: 600;
+}
+/* Paso 2 en el teléfono: calendario y año a todo el ancho, y el contador con
+   sitio para leerse (antes iba apretado junto al botón). */
+@media (max-width: 600px) {
+  .onb-fila-calendario {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+  }
+  .onb-fila-calendario > div {
+    width: 100%;
+  }
+  .onb-fila-calendario .onb-opciones {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .onb-fila-calendario .onb-anio {
+    width: 100%;
+  }
+  .onb-periodos-acciones {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  /* Paso 3: agregar y eliminar sede, uno debajo del otro. */
+  .onb-sedes-acciones {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .onb-sedes-acciones .onb-agregar-periodo {
+    width: 100%;
+    justify-content: center;
+  }
+  .onb-agregar-periodo {
+    width: 100%;
+    justify-content: center;
+  }
+  .onb-periodos-acciones .onb-nota {
+    text-align: center;
+  }
 }
 .onb-campo {
   display: flex;
@@ -3119,13 +3255,115 @@ body {
 }
 
 /* Pasos 4 y 5: personal y CSV de matrículas */
-.onb-ok {
-  margin: 0 0 16px;
-  padding: 12px 16px;
-  border-radius: 8px;
-  background: var(--md-sys-color-success-container);
-  color: var(--edu-on-exito);
+/* Aviso flotante (toast). Vive fuera del flujo: el banner de antes quedaba
+   arriba, dentro del contenido, y con la página desplazada no se veía. */
+.m3-toast {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 25;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: min(420px, calc(100vw - 32px));
+  padding: 14px 8px 14px 16px;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 12px;
+  background: var(--md-sys-color-surface-container-highest);
+  color: var(--md-sys-color-on-surface);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.24);
+  animation: toast-entra 180ms cubic-bezier(0.2, 0, 0, 1);
+}
+/* Varios avisos a la vez: se apilan y el más nuevo queda al frente (abajo),
+   en vez de quedar tapado por el anterior. */
+.m3-toast-pila {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 25;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(420px, calc(100vw - 32px));
+}
+.m3-toast-pila .m3-toast {
+  position: static;
+  width: 100%;
+}
+.m3-toast-icono {
+  flex: none;
+  font-size: 22px;
+  line-height: 20px;
+}
+.m3-toast--error .m3-toast-icono {
+  color: var(--md-sys-color-error);
+}
+.m3-toast--exito .m3-toast-icono {
+  color: var(--md-sys-color-success);
+}
+.m3-toast-texto {
+  flex: 1;
+  margin: 0;
   font: 500 13px/20px var(--md-ref-typeface-plain);
+}
+.m3-toast-cerrar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin-top: -6px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--md-sys-color-on-surface-variant);
+  cursor: pointer;
+}
+.m3-toast-cerrar:hover {
+  background: var(--edu-hover);
+}
+.m3-toast-cerrar .material-symbols-outlined {
+  font-size: 18px;
+}
+@keyframes toast-entra {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (max-width: 600px) {
+  /* En el teléfono el CTA vive en el pie fijo: un toast abajo lo taparía. Se
+     sube justo debajo de la cabecera (56 px de fila + 4 de barra). */
+  .m3-toast {
+    top: calc(60px + 12px);
+    bottom: auto;
+    left: 16px;
+    right: 16px;
+    width: auto;
+    animation-name: toast-entra-arriba;
+  }
+  /* La pila ocupa el mismo hueco; sus avisos van uno debajo del otro. */
+  .m3-toast-pila {
+    top: calc(60px + 12px);
+    bottom: auto;
+    left: 16px;
+    right: 16px;
+    width: auto;
+  }
+}
+@keyframes toast-entra-arriba {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 .onb-card-cabecera {
   display: flex;

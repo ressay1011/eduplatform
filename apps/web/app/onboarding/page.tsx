@@ -28,11 +28,13 @@ import {
   type CursoMatricula,
   type EstadoOnboarding,
   type ResultadoImportacionMatriculas,
+  type SedeOnboarding,
   type TipoDocumento,
 } from '@eduplatform/types';
 import { M3Button } from '@/components/M3Button';
 import { SelectField } from '@/components/SelectField';
 import { TextField } from '@/components/TextField';
+import { Toast } from '@/components/Toast';
 import { esEmailValido, esNitValido, esTelefonoValido } from '@/lib/validacion';
 import { useEmpleados, useRoles, useSedes } from '@/hooks/usePersonas';
 import { SESION_KEY } from '@/hooks/useSesion';
@@ -43,6 +45,7 @@ import {
   buscarColegioDane,
   cerrarSesion,
   crearUsuario,
+  eliminarSedeOnboarding,
   finalizarOnboarding,
   generarEstructuraOnboarding,
   getOnboarding,
@@ -75,9 +78,10 @@ const PASOS = [
 const JORNADAS: { valor: Jornada; texto: string }[] = [
   { valor: Jornada.MANANA, texto: 'Mañana' },
   { valor: Jornada.TARDE, texto: 'Tarde' },
-  { valor: Jornada.NOCTURNA, texto: 'Noche' },
+  { valor: Jornada.COMPLETA, texto: 'Completa' },
   { valor: Jornada.UNICA, texto: 'Única' },
-  { valor: Jornada.FIN_SEMANA, texto: 'Sabatina' },
+  { valor: Jornada.NOCTURNA, texto: 'Noche' },
+  { valor: Jornada.FIN_SEMANA, texto: 'Fin de semana' },
 ];
 
 const NIVELES: { id: string; texto: string; grados: number[] }[] = [
@@ -98,7 +102,15 @@ const ZONAS_SIN_GESTO = 'input, textarea, select, [role="dialog"], .onb-tabla-en
  * Campos del paso 1 con regla propia: se validan al perder el foco y otra vez al
  * continuar. El calendario y los períodos van aparte (no son campos de texto).
  */
-const CAMPOS_PASO_1 = ['nombre', 'nit', 'telefono', 'email', 'departamento', 'municipio'] as const;
+const CAMPOS_PASO_1 = [
+  'nombre',
+  'nombreOficial',
+  'nit',
+  'telefono',
+  'email',
+  'departamento',
+  'municipio',
+] as const;
 
 type CampoPaso1 = (typeof CAMPOS_PASO_1)[number];
 
@@ -175,6 +187,23 @@ function periodosBase(calendario: 'A' | 'B', anio: number): PeriodoForm[] {
   ];
 }
 
+/**
+ * Identidad del colegio sin datos. El MEN la prellena al encontrar el código
+ * DANE o la escribe el admin a mano; el código y el año lectivo no se tocan.
+ */
+const IDENTIDAD_VACIA = {
+  nombre: '',
+  nombreOficial: '',
+  nit: '',
+  municipio: '',
+  departamento: '',
+  direccion: '',
+  telefono: '',
+  email: '',
+  calendario: '' as 'A' | 'B' | '',
+  jornadasMen: [] as Jornada[],
+};
+
 export default function OnboardingPage() {
   const router = useRouter();
   const qc = useQueryClient();
@@ -215,12 +244,28 @@ export default function OnboardingPage() {
     email: '',
     // '' = todavía no elige: sin calendario no se muestran los períodos.
     calendario: '' as 'A' | 'B' | '',
+    // Jornadas que publica el MEN: sugerencia para el paso de sedes.
+    jornadasMen: [] as Jornada[],
     // 0 hasta que carga el estado: el año lo propone el servidor (`anioActual`).
     anioLectivo: 0,
   });
   /** Errores de validación por campo; se pintan bajo cada campo y se limpian al escribir. */
   const [errores, setErrores] = useState<Record<string, string>>({});
   const [periodos, setPeriodos] = useState<PeriodoForm[]>([]);
+  /**
+   * Último calendario que el servidor aceptó (o el que trajo la carga).
+   *
+   * El guardado del paso 1 comparte el mismo PATCH que el del paso 2, y ese
+   * PATCH siempre manda períodos. Si el admin deja un período inválido en el
+   * paso 2 y vuelve atrás, el paso 1 enviaba esos períodos a medio editar y la
+   * API respondía «Datos inválidos en la solicitud», dejándolo sin poder
+   * avanzar. El paso 1 guarda esta foto; el 2 guarda lo que se ve.
+   */
+  const guardadoRef = useRef<{
+    calendario: 'A' | 'B';
+    anioLectivo: number;
+    periodos: PeriodoForm[];
+  }>({ calendario: 'A', anioLectivo: 0, periodos: [] });
 
   // Paso 1 · consulta del código DANE en los datos abiertos del MEN.
   const [buscandoDane, setBuscandoDane] = useState(false);
@@ -234,19 +279,41 @@ export default function OnboardingPage() {
   const sedeInicializadaRef = useRef(false);
   /** La bienvenida ya se evaluó: los refrescos de datos no la vuelven a abrir. */
   const bienvenidaRef = useRef(false);
+  /**
+   * La dirección ya es «propia» (la escribió el admin o es una sede nueva): no
+   * se vuelve a heredar la del colegio.
+   */
+  const direccionPropiaRef = useRef(false);
+  /** Mensaje que puso la revisión de fechas: se retira cuando ya no aplica. */
+  const avisoPeriodosRef = useRef<string | null>(null);
+  /** Última sede abierta, legible desde el efecto de datos (sin re-suscribirlo). */
+  const sedeIdRef = useRef('');
   /** Origen del dedo mientras dura un toque; null si el gesto no aplica. */
   const toqueRef = useRef<{ x: number; y: number } | null>(null);
   const dialogoRef = useRef<HTMLDivElement>(null);
 
   // Paso 2
   const [sede, setSede] = useState({
-    nombre: 'Sede Principal',
+    nombre: 'Principal',
     direccion: '',
+    // Ubicación de la sede: por defecto la del colegio, pero una IE puede tener
+    // sedes en otro municipio.
+    municipio: '',
+    departamento: '',
     jornadas: [] as Jornada[],
   });
 
   // Paso 3
   const [sedeId, setSedeId] = useState('');
+  useEffect(() => {
+    sedeIdRef.current = sedeId;
+  }, [sedeId]);
+  /**
+   * Borrar una sede es irreversible: el primer clic pide confirmación y la
+   * petición sale con el segundo.
+   */
+  const [confirmandoBorrado, setConfirmandoBorrado] = useState(false);
+  const borradoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [jornada, setJornada] = useState<Jornada>(Jornada.MANANA);
   const [grados, setGrados] = useState<number[]>([6, 7]);
   const [letras, setLetras] = useState<string[]>(['A', 'B']);
@@ -288,33 +355,75 @@ export default function OnboardingPage() {
       telefono: data.colegio.telefono ?? '',
       email: data.colegio.email,
       calendario: data.colegio.calendario,
+      jornadasMen: data.colegio.jornadasMen ?? [],
       anioLectivo: data.anioLectivo?.anio ?? data.anioActual,
     });
-    setPeriodos(
+    const periodosServidor =
       data.periodos.length > 0
         ? data.periodos
-        : periodosBase(data.colegio.calendario, data.anioActual),
-    );
-    setPaso(Math.min(PASOS.length, Math.max(1, data.paso)));
-    // La bienvenida depende del estado de la PRIMERA carga: después de guardar
-    // el paso 1 llegan datos nuevos y el wizard ya no debe volver a mostrarla.
+        : periodosBase(data.colegio.calendario, data.anioActual);
+    setPeriodos(periodosServidor);
+    // Foto de lo que el servidor aceptó: es lo que manda el paso 1.
+    guardadoRef.current = {
+      calendario: data.colegio.calendario === 'B' ? 'B' : 'A',
+      anioLectivo: data.anioLectivo?.anio ?? data.anioActual,
+      periodos: periodosServidor.map(({ numero, nombre, fechaInicio, fechaFin }) => ({
+        numero,
+        nombre,
+        fechaInicio,
+        fechaFin,
+      })),
+    };
+    // El paso es estado del wizard: el servidor solo lo siembra en la PRIMERA
+    // carga. Si se aplicara en cada refresco, guardar el calendario (la API
+    // deja onboarding_paso en 2) devolvía al usuario al paso 2 justo después de
+    // pulsar «Continuar», a veces sí y a veces no según el orden de los renders.
     if (!bienvenidaRef.current) {
       bienvenidaRef.current = true;
       setBienvenida(necesitaBienvenida(data));
     }
-    if (data.sedes[0] !== undefined) {
+    if (data.sedes[0] !== undefined && !sedeInicializadaRef.current) {
+      // La sede abierta solo se siembra la primera vez: los refrescos (guardar,
+      // borrar, agregar) no deben devolver el formulario a la primera sede.
+      sedeInicializadaRef.current = true;
+      sedeIdRef.current = data.sedes[0].id;
       setSedeId(data.sedes[0].id);
       setJornada(data.sedes[0].jornadas[0] ?? Jornada.MANANA);
-      // El paso 2 edita UNA sede: se carga la existente una sola vez, para que
-      // el formulario no aparezca vacío ni se pise lo que el admin escriba.
-      if (!sedeInicializadaRef.current) {
-        sedeInicializadaRef.current = true;
-        setSede({
-          nombre: data.sedes[0].nombre,
-          direccion: data.sedes[0].direccion ?? '',
-          jornadas: [...data.sedes[0].jornadas],
-        });
-      }
+      setSede({
+        nombre: data.sedes[0].nombre,
+        // Una sede vieja sin dirección se completa con la del colegio.
+        direccion: data.sedes[0].direccion ?? data.colegio.direccion ?? '',
+        // Una sede guardada sin ubicación hereda la del colegio.
+        municipio: data.sedes[0].municipio || data.colegio.municipio,
+        departamento: data.sedes[0].departamento || data.colegio.departamento,
+        jornadas: [...data.sedes[0].jornadas],
+      });
+    } else if (data.sedes.length === 0 && !sedeInicializadaRef.current) {
+      // Colegio todavía sin sedes: se propone «Principal» con la dirección del
+      // paso 1 (la que el admin dejó escrita) y las jornadas del MEN que ya se
+      // hubieran marcado al buscar el código.
+      sedeInicializadaRef.current = true;
+      setSede((actual) => ({
+        nombre: 'Principal',
+        direccion: data.colegio.direccion ?? '',
+        municipio: data.colegio.municipio,
+        departamento: data.colegio.departamento,
+        // Las marcadas al buscar el código mandan; si no, las que el MEN dejó
+        // guardadas en el colegio.
+        jornadas:
+          actual.jornadas.length > 0 ? actual.jornadas : [...(data.colegio.jornadasMen ?? [])],
+      }));
+    }
+    // La primera carga de un colegio nuevo llega sin dirección (el paso 1 aún
+    // no se ha guardado) y una sede vieja puede tenerla vacía: mientras el admin
+    // no escriba en el campo, la sede abierta sigue la dirección del colegio.
+    // Nunca en una sede nueva: ahí la dirección arranca vacía a propósito.
+    const primera = data.sedes[0];
+    const heredable =
+      primera === undefined ||
+      (primera.id === sedeIdRef.current && (primera.direccion ?? '') === '');
+    if (heredable && (data.colegio.direccion ?? '') !== '' && !direccionPropiaRef.current) {
+      setSede((actual) => ({ ...actual, direccion: data.colegio.direccion ?? '' }));
     }
     // Solo la primera carga decide el estado del formulario: si el colegio ya
     // tiene un código completo se habilita SIN repetir la búsqueda, para no
@@ -325,6 +434,7 @@ export default function OnboardingPage() {
       const completo = /^\d{12}$/.test(codigo);
       setFormHabilitado(completo);
       setCodigoBuscado(completo ? codigo : null);
+      setPaso(Math.min(PASOS.length, Math.max(1, data.paso)));
     }
   }, [data]);
 
@@ -350,6 +460,14 @@ export default function OnboardingPage() {
   /** Ancho de la barra de progreso: el paso 1 ya deja un séptimo pintado. */
   const progreso = `${Math.round((paso / PASOS.length) * 100)}%`;
 
+  /**
+   * Ventana de fechas de los períodos, la misma que comprueba `revisarPeriodos`.
+   * Se pasa como `min`/`max` al input nativo: el calendario del navegador deja
+   * de ofrecer años fuera del lectivo en vez de aceptarlos y rechazarlos luego.
+   */
+  const fechaMinima = `${colegio.anioLectivo}-01-01`;
+  const fechaMaxima = `${colegio.anioLectivo + 1}-12-31`;
+
   // Paso 5: roles asignables a personal, sedes para el alcance y listado real.
   const rolesEmpleado = (rolesQ.data?.items ?? []).filter(
     (rol) => rol.tipoPersona === 'EMPLEADO' && rol.activo,
@@ -367,8 +485,16 @@ export default function OnboardingPage() {
 
   function aplicar(estado: EstadoOnboarding, siguiente?: number): void {
     qc.setQueryData(['onboarding'], estado);
-    if (siguiente !== undefined) setPaso(siguiente);
+    if (siguiente !== undefined) {
+      setPaso(siguiente);
+      // El PATCH del colegio deja `onboarding_paso` en 2 (sirve igual al paso 1
+      // y al 2), así que el avance se registra aparte: sin esto, recargar
+      // después de guardar el calendario devolvía al paso 2.
+      void Promise.resolve(guardarPasoOnboarding(siguiente)).catch(() => undefined);
+    }
     setAviso(null);
+    // El «Datos del MEN cargados» es del paso 1: al avanzar ya no aplica.
+    setExito(null);
   }
 
   async function ejecutar(
@@ -387,15 +513,21 @@ export default function OnboardingPage() {
   }
 
   const mutColegio = useMutation({
-    mutationFn: () =>
+    mutationFn: (datos: { calendario: 'A' | 'B'; anioLectivo: number; periodos: PeriodoForm[] }) =>
       guardarColegioOnboarding({
         ...colegio,
-        calendario: calendarioValido(),
+        calendario: datos.calendario,
+        anioLectivo: datos.anioLectivo,
+        // La API exige dos períodos como mínimo. Si la foto viniera vacía (un
+        // colegio recién creado), se generan los del calendario elegido.
+        periodos:
+          datos.periodos.length >= 2
+            ? datos.periodos
+            : periodosBase(datos.calendario, datos.anioLectivo),
         nit: colegio.nit === '' ? undefined : colegio.nit,
-        nombreOficial: colegio.nombreOficial === '' ? undefined : colegio.nombreOficial,
+        nombreOficial: colegio.nombreOficial,
         direccion: colegio.direccion === '' ? undefined : colegio.direccion,
         telefono: colegio.telefono === '' ? undefined : colegio.telefono,
-        periodos,
       }),
   });
 
@@ -406,11 +538,73 @@ export default function OnboardingPage() {
 
   /** Borra el error de un campo en cuanto se corrige. */
   function limpiarError(campo: string): void {
+    // El aviso de arriba habla del último intento de guardar: si el usuario ya
+    // está corrigiendo, deja de aplicar.
+    setAviso(null);
     setErrores((actual) => {
       if (actual[campo] === undefined) return actual;
       const copia = { ...actual };
       delete copia[campo];
       return copia;
+    });
+  }
+
+  /** Borra los errores de fechas de los períodos (claves `periodo-*` y el resumen). */
+  function olvidarErroresPeriodos(): void {
+    setErrores((actual) => {
+      const restantes = Object.entries(actual).filter(
+        ([clave]) => clave !== 'periodos' && !clave.startsWith('periodo-'),
+      );
+      if (restantes.length === Object.keys(actual).length) return actual;
+      return Object.fromEntries(restantes);
+    });
+  }
+
+  /**
+   * Revalida las fechas en cuanto se elige una, sin esperar a «Continuar»: el
+   * campo culpable se marca al momento. El motivo se anuncia con `title` y un
+   * texto solo para lectores de pantalla; el aviso flotante sale al continuar.
+   */
+  function revisarFechasAlCambiar(lista: PeriodoForm[]): void {
+    if (colegio.calendario === '') return;
+    const revision = revisarPeriodos(lista);
+    setErrores((actual) => {
+      const limpio = Object.fromEntries(
+        Object.entries(actual).filter(
+          ([clave]) => clave !== 'periodos' && !clave.startsWith('periodo-'),
+        ),
+      );
+      if (revision.mensaje === null) return limpio;
+      return { ...limpio, ['periodos']: revision.mensaje, ...revision.campos };
+    });
+    // El motivo se anuncia en el aviso flotante, igual que al continuar; si la
+    // fecha queda bien, se retira el aviso que puso esta misma revisión.
+    if (revision.mensaje !== null) {
+      avisoPeriodosRef.current = revision.mensaje;
+      setAviso(revision.mensaje);
+    } else if (avisoPeriodosRef.current !== null) {
+      avisoPeriodosRef.current = null;
+      setAviso(null);
+    }
+  }
+
+  /**
+   * Olvida los errores de varios campos a la vez. Se usa cuando el MEN
+   * reemplaza sus valores: el mensaje hablaba de lo que había antes y ya no
+   * describe el campo. Si el valor del MEN tampoco pasara la validación, el
+   * siguiente «Continuar» (o el blur) lo vuelve a marcar con el texto nuevo.
+   */
+  function olvidarErrores(campos: readonly string[]): void {
+    setErrores((actual) => {
+      const copia = { ...actual };
+      let cambio = false;
+      for (const campo of campos) {
+        if (copia[campo] !== undefined) {
+          delete copia[campo];
+          cambio = true;
+        }
+      }
+      return cambio ? copia : actual;
     });
   }
 
@@ -426,11 +620,26 @@ export default function OnboardingPage() {
     limpiarError('municipio');
   }
 
+  /** Ubicación de la sede: al cambiar el departamento, el municipio se re-elige. */
+  function conDepartamentoSede(valor: string): void {
+    setSede((actual) => ({ ...actual, departamento: valor, municipio: '' }));
+    limpiarError('departamento');
+    limpiarError('municipio');
+  }
+
+  function conMunicipioSede(valor: string): void {
+    setSede((actual) => ({ ...actual, municipio: valor }));
+    limpiarError('municipio');
+  }
+
   /** Sin calendario no hay fechas base que precargar, y sin él no hay períodos. */
   function conCalendario(c: 'A' | 'B'): void {
     setColegio((actual) => ({ ...actual, calendario: c }));
     setPeriodos(periodosBase(c, colegio.anioLectivo));
     limpiarError('calendario');
+    // Con las fechas nuevas, la marca roja y el aviso del calendario anterior sobran.
+    olvidarErroresPeriodos();
+    setAviso(null);
   }
 
   /** Año lectivo del select: al cambiarlo se recalculan los períodos base. */
@@ -438,40 +647,62 @@ export default function OnboardingPage() {
     const anio = Number(valor.replace(/\D/g, '').slice(0, 4)) || colegio.anioLectivo;
     setColegio((actual) => ({ ...actual, anioLectivo: anio }));
     if (colegio.calendario !== '') setPeriodos(periodosBase(colegio.calendario, anio));
+    // Las fechas viejas ya no existen: su marca roja tampoco.
+    olvidarErroresPeriodos();
+    setAviso(null);
   }
 
   /**
-   * Fechas de los períodos: completas, dentro del año lectivo (el calendario B
-   * termina en el año siguiente), en orden y sin solapes. Devuelve el primer
-   * problema o null.
+   * Revisa los períodos y devuelve el primer problema junto con los campos que
+   * hay que marcar en rojo (`periodo-<n>-inicio`, `periodo-<n>-fin`), para que
+   * el error se vea en el propio campo y no solo en el aviso.
    */
-  function revisarPeriodos(): string | null {
-    if (colegio.calendario === '') return null;
-    if (periodos.length < 2) return 'Necesitas al menos dos períodos académicos.';
+  function revisarPeriodos(lista: PeriodoForm[] = periodos): {
+    mensaje: string | null;
+    campos: Record<string, string>;
+  } {
+    const campos: Record<string, string> = {};
+    const fallo = (mensaje: string, ...claves: string[]) => {
+      for (const clave of claves) campos[clave] = mensaje;
+      return { mensaje, campos };
+    };
+    if (colegio.calendario === '') return { mensaje: null, campos };
+    if (lista.length < 2) {
+      return fallo('Necesitas al menos dos períodos académicos.', 'periodos');
+    }
     const primerDia = `${colegio.anioLectivo}-01-01`;
     // El calendario B arranca en septiembre y cierra en junio del año siguiente.
     const ultimoDia = `${colegio.anioLectivo + 1}-12-31`;
     let finAnterior: string | null = null;
-    for (const p of periodos) {
+    for (const p of lista) {
+      const inicio = `periodo-${p.numero}-inicio`;
+      const fin = `periodo-${p.numero}-fin`;
       if (p.fechaInicio === '' || p.fechaFin === '') {
-        return `${p.nombre}: completa las dos fechas.`;
+        return fallo(
+          `${p.nombre}: completa las dos fechas.`,
+          ...(p.fechaInicio === '' ? [inicio] : []),
+          ...(p.fechaFin === '' ? [fin] : []),
+        );
       }
       // Ni antes del año lectivo ni más allá del siguiente.
       if (p.fechaInicio < primerDia) {
-        return `${p.nombre}: no puede empezar antes del año lectivo (${colegio.anioLectivo}).`;
+        return fallo(
+          `${p.nombre}: no puede empezar antes del año lectivo (${colegio.anioLectivo}).`,
+          inicio,
+        );
       }
       if (p.fechaFin > ultimoDia) {
-        return `${p.nombre}: no puede terminar después de ${colegio.anioLectivo + 1}.`;
+        return fallo(`${p.nombre}: no puede terminar después de ${colegio.anioLectivo + 1}.`, fin);
       }
       if (p.fechaInicio >= p.fechaFin) {
-        return `${p.nombre}: el inicio debe ser anterior al fin.`;
+        return fallo(`${p.nombre}: el inicio debe ser anterior al fin.`, inicio, fin);
       }
       if (finAnterior !== null && p.fechaInicio <= finAnterior) {
-        return `${p.nombre}: se cruza con el período anterior.`;
+        return fallo(`${p.nombre}: se cruza con el período anterior.`, inicio);
       }
       finAnterior = p.fechaFin;
     }
-    return null;
+    return { mensaje: null, campos };
   }
 
   /** Suma días a una fecha ISO (YYYY-MM-DD) sin depender de la zona horaria. */
@@ -497,6 +728,7 @@ export default function OnboardingPage() {
       { numero, nombre: `Período ${numero}`, fechaInicio: inicio, fechaFin: sumarDias(inicio, 75) },
     ]);
     limpiarError('periodos');
+    olvidarErroresPeriodos();
   }
 
   /**
@@ -517,6 +749,7 @@ export default function OnboardingPage() {
         })),
     );
     limpiarError('periodos');
+    olvidarErroresPeriodos();
   }
 
   /**
@@ -527,6 +760,10 @@ export default function OnboardingPage() {
     switch (campo) {
       case 'nombre':
         return colegio.nombre.trim().length < 3 ? 'Escribe el nombre del colegio.' : null;
+      case 'nombreOficial':
+        return colegio.nombreOficial.trim().length < 3
+          ? 'Escribe el nombre oficial: es el que va en certificados y actas.'
+          : null;
       case 'nit':
         return colegio.nit.trim() !== '' && !esNitValido(colegio.nit)
           ? 'NIT inválido: de 8 a 15 dígitos con el de verificación opcional, p. ej. 900123456-7'
@@ -581,14 +818,26 @@ export default function OnboardingPage() {
     return e;
   }
 
+  /** Paso 3: la sede necesita nombre, ubicación y al menos una jornada. */
+  function validarSede(): Record<string, string> {
+    const e: Record<string, string> = {};
+    if (sede.nombre.trim() === '') e['nombre'] = 'Escribe el nombre de la sede.';
+    if (sede.departamento === '') e['departamento'] = 'Elige el departamento.';
+    if (sede.municipio === '') e['municipio'] = 'Elige el municipio.';
+    if (sede.jornadas.length === 0) e['jornadas'] = 'Elige al menos una jornada.';
+    return e;
+  }
+
   /** Paso 2: calendario escolar, año lectivo y períodos. */
   function validarCalendario(): Record<string, string> {
     const e: Record<string, string> = {};
     if (colegio.calendario === '') {
       e['calendario'] = 'Elige el calendario escolar.';
     }
-    const problemas = revisarPeriodos();
-    if (problemas !== null) e['periodos'] = problemas;
+    const revision = revisarPeriodos();
+    if (revision.mensaje !== null) e['periodos'] = revision.mensaje;
+    // Cada campo con su marca, además del resumen.
+    Object.assign(e, revision.campos);
     return e;
   }
 
@@ -628,15 +877,48 @@ export default function OnboardingPage() {
           telefono: datos.telefono ?? '',
           email: datos.email ?? actual.email,
           calendario: datos.calendario,
+          // Se guardan en el colegio: al recargar se siguen proponiendo aunque
+          // el MEN no vuelva a consultarse.
+          jornadasMen: datos.jornadas,
         };
       });
       if (datos.calendario !== colegio.calendario) {
         setPeriodos(periodosBase(datos.calendario, colegio.anioLectivo));
+        olvidarErroresPeriodos();
       }
+      // Las jornadas que el MEN publica para este colegio se proponen en el
+      // paso 2. Si el admin ya marcó alguna, no se pisan.
+      if (datos.jornadas.length > 0) {
+        setSede((actual) =>
+          actual.jornadas.length > 0 ? actual : { ...actual, jornadas: [...datos.jornadas] },
+        );
+      }
+      // Los errores que hubiera bajo los campos hablaban de los valores
+      // anteriores; el MEN acaba de sustituirlos.
+      olvidarErrores(
+        datos.email === null || datos.email === undefined
+          ? ['nombre', 'nombreOficial', 'departamento', 'municipio']
+          : ['nombre', 'nombreOficial', 'departamento', 'municipio', 'email'],
+      );
       setExito(`Datos del MEN de ${datos.anio} cargados. Revísalos y ajusta lo que haga falta.`);
     } catch (e) {
       if (id !== busquedaRef.current) return;
       setDaneError(mensajeDeError(e, 'No pudimos consultar los datos del MEN.'));
+      // El código no existe en el MEN y en pantalla había datos de OTRO código
+      // (de una búsqueda anterior o los guardados): se vacían, o el admin
+      // acabaría guardando el nombre de un colegio con el DANE de otro. Si los
+      // datos los escribió él a mano tras un 404, `codigoBuscado` es null y no
+      // se toca nada.
+      if (e instanceof ApiError && e.status === 404 && codigoBuscado !== null) {
+        setColegio((actual) => ({
+          ...IDENTIDAD_VACIA,
+          codigoDane: actual.codigoDane,
+          anioLectivo: actual.anioLectivo,
+        }));
+        setPeriodos([]);
+        setErrores({});
+        setCodigoBuscado(null);
+      }
     } finally {
       if (id === busquedaRef.current) {
         setBuscandoDane(false);
@@ -673,7 +955,10 @@ export default function OnboardingPage() {
     setGuardando(true);
     setAviso(null);
     try {
-      aplicar(await mutColegio.mutateAsync(), siguiente);
+      // Paso 1: se manda la foto del servidor, no los períodos a medio editar
+      // del paso 2 (si el admin volvió atrás con un período inválido, el PATCH
+      // fallaba con «Datos inválidos en la solicitud»).
+      aplicar(await mutColegio.mutateAsync(guardadoRef.current), siguiente);
     } catch (e) {
       setAviso(e instanceof ApiError ? e.message : 'No se pudo guardar el colegio.');
     } finally {
@@ -686,13 +971,28 @@ export default function OnboardingPage() {
     const problemas = validarCalendario();
     setErrores(problemas);
     if (Object.keys(problemas).length > 0) {
-      setAviso('Revisa el calendario y los períodos antes de continuar.');
+      // El detalle (qué período y por qué) va al aviso de arriba, que es donde
+      // se mira; antes quedaba en un texto suelto al final de la lista y pasaba
+      // desapercibido.
+      const detalle = problemas['periodos'];
+      setAviso(
+        detalle === undefined
+          ? 'Revisa el calendario y los períodos antes de continuar.'
+          : `Revisa el calendario y los períodos antes de continuar. ${detalle}`,
+      );
       return;
     }
     setGuardando(true);
     setAviso(null);
     try {
-      aplicar(await mutColegio.mutateAsync(), siguiente);
+      aplicar(
+        await mutColegio.mutateAsync({
+          calendario: calendarioValido(),
+          anioLectivo: colegio.anioLectivo,
+          periodos,
+        }),
+        siguiente,
+      );
     } catch (e) {
       setAviso(e instanceof ApiError ? e.message : 'No se pudo guardar el calendario.');
     } finally {
@@ -700,21 +1000,151 @@ export default function OnboardingPage() {
     }
   }
 
-  async function guardarSedes(siguiente: number): Promise<void> {
-    if (sede.jornadas.length === 0) {
-      setAviso('Elige al menos una jornada para la sede.');
+  /** Deja el aviso de borrado en reposo y cancela su cuenta atrás. */
+  function reiniciarBorrado(): void {
+    if (borradoTimerRef.current !== null) clearTimeout(borradoTimerRef.current);
+    borradoTimerRef.current = null;
+    setConfirmandoBorrado(false);
+  }
+
+  /** Abre en el formulario una de las sedes ya guardadas. */
+  function elegirSede(s: SedeOnboarding): void {
+    reiniciarBorrado();
+    setErrores({});
+    // Una sede guardada sin dirección puede heredar la del colegio.
+    direccionPropiaRef.current = false;
+    setSedeId(s.id);
+    setSede({
+      nombre: s.nombre,
+      direccion: s.direccion ?? data?.colegio.direccion ?? '',
+      municipio: s.municipio || data?.colegio.municipio || '',
+      departamento: s.departamento || data?.colegio.departamento || '',
+      jornadas: [...s.jornadas],
+    });
+  }
+
+  /** Formulario en blanco para una sede nueva. */
+  function nuevaSede(): void {
+    reiniciarBorrado();
+    setErrores({});
+    // Sede nueva = otra sede del colegio, casi siempre en otro sitio: la
+    // dirección arranca vacía en vez de copiar la del colegio.
+    direccionPropiaRef.current = true;
+    setSedeId('');
+    setSede({
+      nombre: '',
+      direccion: '',
+      municipio: data?.colegio.municipio ?? '',
+      departamento: data?.colegio.departamento ?? '',
+      jornadas: [],
+    });
+  }
+
+  /**
+   * «Agregar sede» guarda lo que haya escrito y abre otra en blanco SIN salir
+   * del paso: así se pueden crear varias seguidas. Si faltan campos se marcan
+   * en el formulario y NO se vacía nada, para no perder lo escrito.
+   */
+  async function agregarSede(): Promise<void> {
+    // Formulario en blanco: no hay nada que guardar ni que perder.
+    if (sede.nombre.trim() === '' && sede.jornadas.length === 0) return;
+
+    const problemas = validarSede();
+    setErrores(problemas);
+    if (Object.keys(problemas).length > 0) {
+      // Se queda lo escrito: antes se vaciaba el formulario y se perdía.
+      setAviso('Revisa los campos marcados antes de continuar.');
       return;
     }
-    await ejecutar(
-      () =>
-        guardarSedeOnboarding({
-          id: sedeActual?.id,
-          nombre: sede.nombre,
+
+    setGuardando(true);
+    try {
+      aplicar(
+        await guardarSedeOnboarding({
+          id: sedeId === '' ? undefined : sedeId,
+          nombre: sede.nombre.trim(),
           direccion: sede.direccion === '' ? undefined : sede.direccion,
+          municipio: sede.municipio === '' ? undefined : sede.municipio,
+          departamento: sede.departamento === '' ? undefined : sede.departamento,
           jornadas: sede.jornadas,
         }),
-      siguiente,
-    );
+      );
+      setExito('Sede guardada. Escribe los datos de la siguiente.');
+    } catch (e) {
+      setAviso(e instanceof ApiError ? e.message : 'No se pudo guardar la sede.');
+      setGuardando(false);
+      return;
+    } finally {
+      setGuardando(false);
+    }
+    nuevaSede();
+  }
+
+  /** Elimina la sede abierta: el primer clic pide confirmación. */
+  async function eliminarSedeActual(): Promise<void> {
+    if (sedeId === '') return;
+    if (!confirmandoBorrado) {
+      setConfirmandoBorrado(true);
+      if (borradoTimerRef.current !== null) clearTimeout(borradoTimerRef.current);
+      borradoTimerRef.current = setTimeout(() => setConfirmandoBorrado(false), 6000);
+      return;
+    }
+    reiniciarBorrado();
+    setGuardando(true);
+    try {
+      const estado = await eliminarSedeOnboarding(sedeId);
+      aplicar(estado);
+      const resto = estado.sedes[0];
+      if (resto === undefined) {
+        nuevaSede();
+      } else {
+        setSedeId(resto.id);
+        setSede({
+          nombre: resto.nombre,
+          direccion: resto.direccion ?? estado.colegio.direccion ?? '',
+          municipio: resto.municipio || estado.colegio.municipio,
+          departamento: resto.departamento || estado.colegio.departamento,
+          jornadas: [...resto.jornadas],
+        });
+      }
+      setExito('Sede eliminada.');
+    } catch (e) {
+      setAviso(e instanceof ApiError ? e.message : 'No se pudo eliminar la sede.');
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  async function guardarSedes(siguiente: number): Promise<void> {
+    const problemas = validarSede();
+    setErrores(problemas);
+    if (Object.keys(problemas).length > 0) {
+      setAviso('Revisa los campos marcados antes de continuar.');
+      return;
+    }
+    const creando = sedeId === '';
+    setGuardando(true);
+    setAviso(null);
+    try {
+      const estado = await guardarSedeOnboarding({
+        id: creando ? undefined : sedeId,
+        nombre: sede.nombre.trim(),
+        direccion: sede.direccion === '' ? undefined : sede.direccion,
+        municipio: sede.municipio === '' ? undefined : sede.municipio,
+        departamento: sede.departamento === '' ? undefined : sede.departamento,
+        jornadas: sede.jornadas,
+      });
+      aplicar(estado, siguiente);
+      if (creando) {
+        // Las sedes llegan ordenadas por creación: la recién hecha es la última.
+        const nueva = estado.sedes.at(-1);
+        if (nueva !== undefined) setSedeId(nueva.id);
+      }
+    } catch (e) {
+      setAviso(e instanceof ApiError ? e.message : 'No se pudo guardar. Intenta de nuevo.');
+    } finally {
+      setGuardando(false);
+    }
   }
 
   async function generar(siguiente: number): Promise<void> {
@@ -751,7 +1181,7 @@ export default function OnboardingPage() {
           setAviso('Revisa los campos marcados: no se guardó nada.');
           return;
         }
-        aplicar(await mutColegio.mutateAsync(), 1);
+        aplicar(await mutColegio.mutateAsync(guardadoRef.current), 1);
       } else if (paso === 2) {
         const problemas = validarCalendario();
         setErrores(problemas);
@@ -759,7 +1189,14 @@ export default function OnboardingPage() {
           setAviso('Revisa el calendario y los períodos: no se guardó nada.');
           return;
         }
-        aplicar(await mutColegio.mutateAsync(), 2);
+        aplicar(
+          await mutColegio.mutateAsync({
+            calendario: calendarioValido(),
+            anioLectivo: colegio.anioLectivo,
+            periodos,
+          }),
+          2,
+        );
       } else if (paso === 3) {
         if (sede.jornadas.length === 0) {
           setAviso('Elige al menos una jornada para la sede.');
@@ -805,7 +1242,25 @@ export default function OnboardingPage() {
 
   /** Vuelve un paso sin guardar: guardan el CTA, el gesto y las flechas. */
   function volver(): void {
-    if (paso > 1) setPaso(paso - 1);
+    if (paso > 1) {
+      setPaso(paso - 1);
+      // Los avisos hablan del paso que se deja; no deben seguir en el anterior.
+      setAviso(null);
+      setExito(null);
+    }
+  }
+
+  /** Avanza y persiste el paso (el progreso es cosmético: no bloquea). */
+  async function avanzar(destino: number): Promise<void> {
+    try {
+      const estado = await guardarPasoOnboarding(destino);
+      qc.setQueryData(['onboarding'], estado);
+    } catch {
+      // Sin conexión el wizard sigue: el paso se guarda al finalizar.
+    }
+    setPaso(destino);
+    setAviso(null);
+    setExito(null);
   }
 
   /** Avanza con el mismo guardado que el CTA: lo comparten el gesto y el teclado. */
@@ -1002,19 +1457,6 @@ export default function OnboardingPage() {
     }
   }
 
-  /** Avanza y persiste el paso (el progreso es cosmético: no bloquea). */
-  async function avanzar(destino: number): Promise<void> {
-    try {
-      const estado = await guardarPasoOnboarding(destino);
-      qc.setQueryData(['onboarding'], estado);
-    } catch {
-      // Sin conexión el wizard sigue: el paso se guarda al finalizar.
-    }
-    setPaso(destino);
-    setAviso(null);
-    setExito(null);
-  }
-
   /** Paso 5: lee el CSV en el cliente y arma la vista previa. */
   async function leerCsv(evento: ChangeEvent<HTMLInputElement>): Promise<void> {
     const archivo = evento.target.files?.[0];
@@ -1083,6 +1525,21 @@ export default function OnboardingPage() {
       : base;
   }, [colegio.departamento, colegio.municipio]);
 
+  // Los mismos catálogos para la sede: puede estar en otro municipio.
+  const opcionesDepartamentoSede = useMemo(() => {
+    const base = NOMBRES_DEPARTAMENTOS;
+    return sede.departamento !== '' && !base.includes(sede.departamento)
+      ? [sede.departamento, ...base]
+      : base;
+  }, [sede.departamento]);
+
+  const opcionesMunicipioSede = useMemo(() => {
+    const base = municipiosDe(sede.departamento);
+    return sede.municipio !== '' && !base.includes(sede.municipio)
+      ? [sede.municipio, ...base]
+      : base;
+  }, [sede.departamento, sede.municipio]);
+
   /**
    * Años lectivos seleccionables: el anterior, el actual y el próximo. El campo
    * es un select, no texto libre, así que no se puede pedir un año lejano. Un
@@ -1095,6 +1552,47 @@ export default function OnboardingPage() {
     const anio = colegio.anioLectivo;
     return (base.includes(anio) ? base : [...base, anio]).sort((a, b) => a - b);
   }, [anioServidor, colegio.anioLectivo]);
+
+  /**
+   * Recencia de cada aviso. Si hay dos a la vez, el más nuevo se pinta al
+   * frente (abajo en la pila); antes quedaba detrás del anterior.
+   */
+  const selloRef = useRef(0);
+  const [selloAviso, setSelloAviso] = useState(0);
+  const [selloExito, setSelloExito] = useState(0);
+  useEffect(() => {
+    if (aviso !== null) setSelloAviso(++selloRef.current);
+  }, [aviso]);
+  useEffect(() => {
+    if (exito !== null) setSelloExito(++selloRef.current);
+  }, [exito]);
+
+  const toasts = [
+    ...(aviso === null
+      ? []
+      : [
+          {
+            id: 'aviso',
+            mensaje: aviso,
+            tono: 'error' as const,
+            duracion: 10_000,
+            sello: selloAviso,
+            cerrar: () => setAviso(null),
+          },
+        ]),
+    ...(exito === null
+      ? []
+      : [
+          {
+            id: 'exito',
+            mensaje: exito,
+            tono: 'exito' as const,
+            duracion: 5_000,
+            sello: selloExito,
+            cerrar: () => setExito(null),
+          },
+        ]),
+  ].sort((a, b) => a.sello - b.sello);
 
   if (isLoading) {
     return (
@@ -1253,16 +1751,18 @@ export default function OnboardingPage() {
           <h1 className="onb-titulo">{tituloDe(paso)}</h1>
           <p className="onb-bajada">{bajadaDe(paso)}</p>
 
-          {aviso !== null && (
-            <p className="onb-aviso" role="alert">
-              {aviso}
-            </p>
-          )}
-
-          {exito !== null && (
-            <p className="onb-ok" role="status">
-              {exito}
-            </p>
+          {toasts.length > 0 && (
+            <div className="m3-toast-pila">
+              {toasts.map((t) => (
+                <Toast
+                  key={t.id}
+                  mensaje={t.mensaje}
+                  tono={t.tono}
+                  duracion={t.duracion}
+                  onCerrar={t.cerrar}
+                />
+              ))}
+            </div>
           )}
 
           {paso === 1 && (
@@ -1313,8 +1813,13 @@ export default function OnboardingPage() {
                         id="onb-nombre-oficial"
                         label="Nombre oficial (documentos)"
                         value={colegio.nombreOficial}
-                        onChange={(v) => setColegio({ ...colegio, nombreOficial: v })}
-                        ayuda="Como lo registra el MEN; se imprime en certificados y actas."
+                        onChange={(v) => {
+                          setColegio({ ...colegio, nombreOficial: v });
+                          limpiarError('nombreOficial');
+                        }}
+                        error={errores['nombreOficial']}
+                        onBlur={() => validarAlSalir('nombreOficial')}
+                        ayuda="Obligatorio: como lo registra el MEN; se imprime en certificados y actas."
                       />
                     </div>
                     <SelectField
@@ -1333,17 +1838,10 @@ export default function OnboardingPage() {
                       value={colegio.municipio}
                       onChange={conMunicipio}
                       opciones={opcionesMunicipio.map((m) => ({ valor: m, texto: m }))}
-                      placeholder={
-                        colegio.departamento === '' ? 'Primero el departamento' : 'Elige…'
-                      }
+                      placeholder="Elige…"
                       error={errores['municipio']}
                       disabled={colegio.departamento === ''}
                       onBlur={() => validarAlSalir('municipio')}
-                      ayuda={
-                        colegio.departamento === ''
-                          ? 'Se habilita al elegir el departamento.'
-                          : undefined
-                      }
                     />
                     <TextField
                       id="onb-direccion"
@@ -1382,7 +1880,6 @@ export default function OnboardingPage() {
 
           {paso === 2 && (
             <section className="onb-card">
-              <h2 className="onb-card-titulo">Calendario y períodos</h2>
               <div className="onb-form">
                 <div className="onb-fila-calendario">
                   <div>
@@ -1437,55 +1934,94 @@ export default function OnboardingPage() {
                       Puedes ajustar las fechas.
                     </p>
                     <div className="onb-periodos">
-                      {periodos.map((p, i) => (
-                        <div key={p.numero} className="onb-periodo">
-                          <strong>{p.nombre}</strong>
-                          <label htmlFor={`onb-periodo-${p.numero}-inicio`}>
-                            Inicio
-                            <input
-                              id={`onb-periodo-${p.numero}-inicio`}
-                              name={`periodo-${p.numero}-inicio`}
-                              type="date"
-                              value={p.fechaInicio}
-                              onChange={(e) => {
-                                const copia = [...periodos];
-                                copia[i] = { ...p, fechaInicio: e.target.value };
-                                setPeriodos(copia);
-                                limpiarError('periodos');
-                              }}
-                            />
-                          </label>
-                          <label htmlFor={`onb-periodo-${p.numero}-fin`}>
-                            Fin
-                            <input
-                              id={`onb-periodo-${p.numero}-fin`}
-                              name={`periodo-${p.numero}-fin`}
-                              type="date"
-                              value={p.fechaFin}
-                              onChange={(e) => {
-                                const copia = [...periodos];
-                                copia[i] = { ...p, fechaFin: e.target.value };
-                                setPeriodos(copia);
-                                limpiarError('periodos');
-                              }}
-                            />
-                          </label>
-                          <button
-                            type="button"
-                            className="onb-periodo-quitar"
-                            onClick={() => quitarPeriodo(p.numero)}
-                            disabled={periodos.length <= 2}
-                            aria-label={`Quitar el ${p.nombre}`}
-                            title={
-                              periodos.length <= 2
-                                ? 'El colegio necesita al menos dos períodos'
-                                : undefined
-                            }
-                          >
-                            Quitar
-                          </button>
-                        </div>
-                      ))}
+                      {periodos.map((p, i) => {
+                        const errorInicio = errores[`periodo-${p.numero}-inicio`];
+                        const errorFin = errores[`periodo-${p.numero}-fin`];
+                        const cambiar = (cambio: Partial<PeriodoForm>): void => {
+                          const copia = [...periodos];
+                          copia[i] = { ...p, ...cambio };
+                          setPeriodos(copia);
+                          // Se valida al elegir la fecha, no al pulsar «Continuar».
+                          revisarFechasAlCambiar(copia);
+                        };
+                        return (
+                          <div key={p.numero} className="onb-periodo">
+                            <strong>{p.nombre}</strong>
+                            <label htmlFor={`onb-periodo-${p.numero}-inicio`}>
+                              Inicio
+                              <input
+                                id={`onb-periodo-${p.numero}-inicio`}
+                                name={`periodo-${p.numero}-inicio`}
+                                type="date"
+                                min={fechaMinima}
+                                max={fechaMaxima}
+                                value={p.fechaInicio}
+                                className={
+                                  errorInicio !== undefined ? 'onb-input--error' : undefined
+                                }
+                                aria-invalid={errorInicio !== undefined ? true : undefined}
+                                aria-describedby={
+                                  errorInicio === undefined
+                                    ? undefined
+                                    : `onb-periodo-${p.numero}-inicio-error`
+                                }
+                                title={errorInicio}
+                                onChange={(e) => cambiar({ fechaInicio: e.target.value })}
+                              />
+                            </label>
+                            {errorInicio !== undefined && (
+                              <span
+                                id={`onb-periodo-${p.numero}-inicio-error`}
+                                className="visually-hidden"
+                              >
+                                {errorInicio}
+                              </span>
+                            )}
+                            <label htmlFor={`onb-periodo-${p.numero}-fin`}>
+                              Fin
+                              <input
+                                id={`onb-periodo-${p.numero}-fin`}
+                                name={`periodo-${p.numero}-fin`}
+                                type="date"
+                                min={fechaMinima}
+                                max={fechaMaxima}
+                                value={p.fechaFin}
+                                className={errorFin !== undefined ? 'onb-input--error' : undefined}
+                                aria-invalid={errorFin !== undefined ? true : undefined}
+                                aria-describedby={
+                                  errorFin === undefined
+                                    ? undefined
+                                    : `onb-periodo-${p.numero}-fin-error`
+                                }
+                                title={errorFin}
+                                onChange={(e) => cambiar({ fechaFin: e.target.value })}
+                              />
+                            </label>
+                            {errorFin !== undefined && (
+                              <span
+                                id={`onb-periodo-${p.numero}-fin-error`}
+                                className="visually-hidden"
+                              >
+                                {errorFin}
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              className="onb-periodo-quitar"
+                              onClick={() => quitarPeriodo(p.numero)}
+                              disabled={periodos.length <= 2}
+                              aria-label={`Quitar el ${p.nombre}`}
+                              title={
+                                periodos.length <= 2
+                                  ? 'El colegio necesita al menos dos períodos'
+                                  : undefined
+                              }
+                            >
+                              Quitar
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
                     <div className="onb-periodos-acciones">
                       <button
@@ -1498,11 +2034,6 @@ export default function OnboardingPage() {
                       </button>
                       <span className="onb-nota">{periodos.length} de 4 · mínimo dos períodos</span>
                     </div>
-                    {errores['periodos'] !== undefined && (
-                      <p className="onb-error m3-body-small" role="alert">
-                        {errores['periodos']}
-                      </p>
-                    )}
                   </>
                 )}
               </div>
@@ -1512,18 +2043,83 @@ export default function OnboardingPage() {
           {paso === 3 && (
             <section className="onb-card">
               <p className="onb-nota">Cada curso pertenecerá a una sede y a una de sus jornadas.</p>
+              <div className="onb-sedes">
+                {data.sedes.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    className={`onb-chip${sedeId === s.id ? ' onb-chip--on' : ''}`}
+                    aria-pressed={sedeId === s.id}
+                    onClick={() => elegirSede(s)}
+                  >
+                    {s.nombre}
+                  </button>
+                ))}
+                {sedeId === '' && <span className="onb-chip onb-chip--on">Sede nueva</span>}
+              </div>
+              <div className="onb-sedes-acciones">
+                <button
+                  type="button"
+                  className="onb-agregar-periodo"
+                  onClick={() => void agregarSede()}
+                  disabled={guardando}
+                >
+                  <span aria-hidden="true">+</span> Agregar sede
+                </button>
+                {sedeId !== '' && (
+                  <button
+                    type="button"
+                    className={`onb-eliminar-sede${confirmandoBorrado ? ' onb-eliminar-sede--confirmar' : ''}`}
+                    onClick={() => void eliminarSedeActual()}
+                    disabled={guardando || data.sedes.length <= 1}
+                    title={
+                      data.sedes.length <= 1
+                        ? 'El colegio necesita al menos una sede'
+                        : 'Eliminar esta sede'
+                    }
+                  >
+                    {confirmandoBorrado ? '¿Eliminar esta sede?' : 'Eliminar sede'}
+                  </button>
+                )}
+              </div>
               <div className="onb-grid">
                 <TextField
                   id="onb-sede-nombre"
                   label="Nombre de la sede"
                   value={sede.nombre}
-                  onChange={(v) => setSede({ ...sede, nombre: v })}
+                  error={errores['nombre']}
+                  onChange={(v) => {
+                    setSede({ ...sede, nombre: v });
+                    olvidarErrores(['nombre']);
+                  }}
                 />
                 <TextField
                   id="onb-sede-dir"
                   label="Dirección"
                   value={sede.direccion}
-                  onChange={(v) => setSede({ ...sede, direccion: v })}
+                  onChange={(v) => {
+                    direccionPropiaRef.current = true;
+                    setSede({ ...sede, direccion: v });
+                  }}
+                />
+                <SelectField
+                  id="onb-sede-departamento"
+                  label="Departamento"
+                  value={sede.departamento}
+                  onChange={conDepartamentoSede}
+                  opciones={opcionesDepartamentoSede.map((d) => ({ valor: d, texto: d }))}
+                  placeholder="Elige…"
+                  error={errores['departamento']}
+                />
+                <SelectField
+                  id="onb-sede-municipio"
+                  label="Municipio"
+                  value={sede.municipio}
+                  onChange={conMunicipioSede}
+                  opciones={opcionesMunicipioSede.map((m) => ({ valor: m, texto: m }))}
+                  placeholder="Elige…"
+                  error={errores['municipio']}
+                  disabled={sede.departamento === ''}
                 />
               </div>
               <h2 className="onb-card-titulo">Jornadas que ofrece</h2>
@@ -1537,26 +2133,23 @@ export default function OnboardingPage() {
                         name="jornadas"
                         type="checkbox"
                         checked={on}
-                        onChange={() =>
+                        onChange={() => {
+                          olvidarErrores(['jornadas']);
                           setSede({
                             ...sede,
                             jornadas: on
                               ? sede.jornadas.filter((x) => x !== j.valor)
                               : [...sede.jornadas, j.valor],
-                          })
-                        }
+                          });
+                        }}
                       />
                       {j.texto}
                     </label>
                   );
                 })}
               </div>
-              {data.sedes.length > 0 && (
-                <p className="onb-nota">
-                  Ya tienes {data.sedes.length} sede(s):{' '}
-                  {data.sedes.map((s) => s.nombre).join(', ')}. Al guardar se actualiza{' '}
-                  {sedeActual?.nombre ?? 'la sede'}.
-                </p>
+              {errores['jornadas'] !== undefined && (
+                <p className="onb-error">{errores['jornadas']}</p>
               )}
             </section>
           )}
