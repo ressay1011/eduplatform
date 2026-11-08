@@ -177,6 +177,8 @@ const JORNADAS: Record<string, string> = {
   noche: 'NOCTURNA',
   nocturna: 'NOCTURNA',
   unica: 'UNICA',
+  completa: 'COMPLETA',
+  completo: 'COMPLETA',
   sabado: 'FIN_SEMANA',
   sabados: 'FIN_SEMANA',
   sabatina: 'FIN_SEMANA',

@@ -59,6 +59,8 @@ describe('jornadaDeTexto', () => {
     expect(jornadaDeTexto('MANANA')).toBe('MANANA');
     expect(jornadaDeTexto('Única')).toBe('UNICA');
     expect(jornadaDeTexto('Sabatina')).toBe('FIN_SEMANA');
+    // La jornada que más publica el MEN: sin ella no se importa a su curso.
+    expect(jornadaDeTexto('Completa')).toBe('COMPLETA');
   });
 
   it('devuelve null con texto desconocido', () => {

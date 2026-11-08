@@ -33,6 +33,8 @@ const JORNADAS_POR_TEXTO: Record<string, Jornada> = {
   noche: Jornadas.NOCTURNA,
   nocturna: Jornadas.NOCTURNA,
   unica: Jornadas.UNICA,
+  completa: Jornadas.COMPLETA,
+  completo: Jornadas.COMPLETA,
   sabado: Jornadas.FIN_SEMANA,
   sabados: Jornadas.FIN_SEMANA,
   sabatina: Jornadas.FIN_SEMANA,
