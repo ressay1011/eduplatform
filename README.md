@@ -3,14 +3,6 @@
 SaaS multi-tenant de gestión escolar para colegios públicos colombianos
 (práctica profesional — I.E.T.D. Juana Arias de Benavides, Plato, Magdalena).
 
-> **Este repositorio es la fuente de despliegue.** Contiene solo lo necesario
-> para compilar y ejecutar: `apps/`, `packages/`, lockfile y configuración de
-> infraestructura. La documentación, el diseño (Figma/exports), las utilidades de
-> arranque local y las reglas para agentes se mantienen fuera del repositorio.
-
-Regla de trabajo: **cada módulo nace compilando, con tests y verificado** antes
-de avanzar.
-
 ## Arquitectura
 
 ```
@@ -57,8 +49,7 @@ del MEN vienen sucios a veces: si el teléfono trae dos (`7422210/7422215`) se
 queda el primero, y del campo de correo se toma la primera dirección válida. El
 código inexistente **no bloquea**: se puede escribir el colegio a mano.
 
-El login es **`usuario@codigo`** (por ejemplo `admin@juanaarias`); el dominio del
-correo no identifica al colegio y no se edita en el wizard (ADR-006).
+El login es **`usuario@codigo`** (por ejemplo `admin@juanaarias`).
 
 En el paso 3 se pueden **crear y eliminar sedes**: cada una lleva nombre,
 dirección, municipio y departamento propios (una IE puede tener una sede en el
@@ -107,7 +98,7 @@ documento,nombres,apellidos,correo,sede,grado,letra,jornada,fechaNacimiento
 
 ## Requisitos
 
-- Node.js 22 y pnpm 9.12 (`corepack enable`)
+- Node.js 24 y pnpm 9.12 (`corepack enable`)
 - PostgreSQL 16+ (local con Docker, o Neon en la nube)
 
 ## Configuración
@@ -154,8 +145,9 @@ tocar datos reales:
 | Colegio | `prueba`                         |
 | Usuario | `admin@prueba`                   |
 
-La contraseña temporal **no vive en el repositorio**: se entrega aparte y el
-primer ingreso obliga a cambiarla. Para crear otro colegio de prueba:
+El primer ingreso obliga a cambiar la contraseña temporal.
+
+Para crear otro colegio de prueba:
 
 ```bash
 MIGRATOR_URL='postgresql://...' \
@@ -250,7 +242,3 @@ varias sedes con su ubicación, estructura, personal y CSV de estudiantes) y
 **matrículas** (API + importación CSV; el curso de cada estudiante se ve en
 Personas). La marca del colegio se genera en CIELAB a partir de sus tres colores
 semilla y se aplica antes del primer pintado (14 roles M3), con favicon propio.
-
-Pendiente: dashboards por rol (docente, estudiante, acudiente), alta masiva de
-cuentas de estudiante/acudiente y el resto de las mejoras de rendimiento del
-informe interno.
