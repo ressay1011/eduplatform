@@ -4,7 +4,7 @@
  * controllers (vía `@CurrentAuth()`).
  */
 import type { Request } from 'express';
-import type { ContextoColegioPublico } from '@eduplatform/types';
+import type { ContextoColegioPublico, PaletaColegio } from '@eduplatform/types';
 
 /**
  * Contexto público que se guarda en el caché del login. El colegio se identifica
@@ -30,6 +30,9 @@ export interface ColegioAuth {
   readonly nombre: string;
   readonly codigoDane: string | null;
   readonly primaryColor: string | null;
+  readonly secondaryColor: string | null;
+  readonly tertiaryColor: string | null;
+  readonly palette: PaletaColegio | null;
 }
 
 /** Sesión de un usuario de colegio (tenant-scoped). */

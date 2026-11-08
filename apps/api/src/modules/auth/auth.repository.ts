@@ -8,6 +8,7 @@
  * corre dentro de `withTenant` con filtro explícito por colegio_id.
  */
 import { Injectable } from '@nestjs/common';
+import type { PaletaColegio } from '@eduplatform/types';
 import type { TenantContext } from '@eduplatform/database';
 import { and, eq, isNull, ne, sql } from 'drizzle-orm';
 import {
@@ -29,6 +30,9 @@ export interface ColegioPublicoRow {
   codigo: string;
   logoUrl: string | null;
   primaryColor: string | null;
+  secondaryColor: string | null;
+  tertiaryColor: string | null;
+  palette: PaletaColegio | null;
   estado: string;
   municipio: string;
   departamento: string;
@@ -66,6 +70,9 @@ export interface ColegioAuthRow {
   nombre: string;
   codigoDane: string | null;
   primaryColor: string | null;
+  secondaryColor: string | null;
+  tertiaryColor: string | null;
+  palette: PaletaColegio | null;
   estado: string;
 }
 
@@ -118,6 +125,9 @@ const COLEGIO_COLUMNS = {
   codigoDane: colegios.codigoDane,
   codigo: colegios.codigo,
   primaryColor: colegios.primaryColor,
+  secondaryColor: colegios.secondaryColor,
+  tertiaryColor: colegios.tertiaryColor,
+  palette: colegios.palette,
   estado: colegios.estado,
 } as const;
 
@@ -151,7 +161,7 @@ export class AuthRepository extends BaseRepository {
   /** Colegio por **código** (sin caja), con solo los datos públicos del login. */
   async findColegioPublico(codigo: string): Promise<ColegioPublicoRow | null> {
     const filas = await this.db.execute(
-      sql`SELECT id, nombre, codigo, codigo_dane, logo_url, primary_color, estado, municipio, departamento
+      sql`SELECT id, nombre, codigo, codigo_dane, logo_url, primary_color, secondary_color, tertiary_color, palette, estado, municipio, departamento
           FROM colegios_publico WHERE lower(codigo) = ${codigo.trim().toLowerCase()} LIMIT 1`,
     );
     return this.mapearColegioPublico(filas[0]);
@@ -164,6 +174,9 @@ export class AuthRepository extends BaseRepository {
     if (fila === undefined) return null;
     const logo = fila['logo_url'];
     const color = fila['primary_color'];
+    const secundario = fila['secondary_color'];
+    const terciario = fila['tertiary_color'];
+    const paleta = fila['palette'];
     const dane = fila['codigo_dane'];
     return {
       id: String(fila['id']),
@@ -173,6 +186,10 @@ export class AuthRepository extends BaseRepository {
       codigo: String(fila['codigo']),
       logoUrl: logo === null || logo === undefined ? null : String(logo),
       primaryColor: color === null || color === undefined ? null : String(color),
+      secondaryColor: secundario === null || secundario === undefined ? null : String(secundario),
+      tertiaryColor: terciario === null || terciario === undefined ? null : String(terciario),
+      // JSONB: el driver ya entrega el objeto; si no es uno, se ignora.
+      palette: paleta !== null && typeof paleta === 'object' ? (paleta as PaletaColegio) : null,
       estado: String(fila['estado']),
       municipio: String(fila['municipio']),
       departamento: String(fila['departamento']),

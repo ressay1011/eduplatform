@@ -14,6 +14,7 @@ import {
   type ColegioOnboardingRequest,
   type EstadoOnboarding,
   type EstructuraOnboardingRequest,
+  type Jornada,
   type SedeOnboardingRequest,
 } from '@eduplatform/types';
 import { apiError } from '../../shared/api-error';
@@ -82,6 +83,7 @@ export class OnboardingService {
         telefono: colegio.telefono,
         email: colegio.email,
         calendario: colegio.calendario,
+        jornadasMen: (colegio.jornadasMen ?? []) as Jornada[],
       },
       sedes: foto.sedes,
       anioLectivo: foto.anio,
@@ -208,6 +210,41 @@ export class OnboardingService {
 
     await this.audit.registrar({
       accion: datos.id === undefined ? 'CREATE' : 'UPDATE',
+      entidad: 'sedes',
+      entidadId: sedeId,
+      colegioId: actor.colegioId,
+      usuarioId: actor.usuarioId,
+      metadata: { motivo: 'onboarding paso 2 (sede y jornadas)' },
+    });
+
+    return this.estado(actor);
+  }
+
+  /** Paso 2: quitar una sede (nunca la última, nunca una con cursos). */
+  async eliminarSede(actor: ActorOnboarding, sedeId: string): Promise<EstadoOnboarding> {
+    this.asegurarAdmin(actor);
+    const hecho = await this.repo.eliminarSede(this.contexto(actor), sedeId);
+
+    if (hecho === 'no-existe') {
+      throw apiError(ErrorCodes.NOT_FOUND, 404, 'Esa sede ya no existe.');
+    }
+    if (hecho === 'ultima') {
+      throw apiError(
+        ErrorCodes.CONFLICT,
+        409,
+        'El colegio necesita al menos una sede: crea otra antes de eliminar esta.',
+      );
+    }
+    if (hecho === 'con-cursos') {
+      throw apiError(
+        ErrorCodes.CONFLICT,
+        409,
+        'Esa sede ya tiene cursos: elimínalos antes de borrarla.',
+      );
+    }
+
+    await this.audit.registrar({
+      accion: 'DELETE',
       entidad: 'sedes',
       entidadId: sedeId,
       colegioId: actor.colegioId,

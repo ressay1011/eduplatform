@@ -8,6 +8,7 @@ import type { TenantContext } from '@eduplatform/database';
 import {
   ErrorCodes,
   EstadoColegio,
+  paletaDelColegio,
   sufijoDeUsuario,
   type CambioPassword,
   type ContextoColegioPublico,
@@ -99,6 +100,9 @@ export class AuthService implements OnModuleInit {
       codigoDane: colegio.codigoDane ?? '',
       logoUrl: colegio.logoUrl,
       primaryColor: colegio.primaryColor,
+      secondaryColor: colegio.secondaryColor,
+      tertiaryColor: colegio.tertiaryColor,
+      palette: paletaDelColegio(colegio),
       municipio: colegio.municipio,
       departamento: colegio.departamento,
       estado: normalizarEstadoColegio(colegio.estado),

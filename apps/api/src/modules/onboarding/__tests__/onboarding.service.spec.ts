@@ -21,11 +21,23 @@ const ACTOR: ActorOnboarding = {
   esAdmin: true,
 };
 
+/** Cuerpo del error HTTP lanzado por el servicio (estrecha la unión ApiResponse). */
+function cuerpoDe(error: unknown): { error: { code: string; message: string } } {
+  const cuerpo = (error as HttpException).getResponse() as {
+    success: boolean;
+    error?: { code: string; message: string };
+  };
+  if (cuerpo.error === undefined)
+    throw new Error('Se esperaba un error y llegó una respuesta correcta');
+  return { error: cuerpo.error };
+}
+
 /** Año en curso: el schema solo acepta el anterior, el actual y el próximo. */
 const ANIO = new Date().getFullYear();
 
 const DATOS = {
   nombre: 'I.E.T.D. Juana Arias de Benavides',
+  nombreOficial: 'INSTITUCIÓN EDUCATIVA TÉCNICA DEPARTAMENTAL JUANA ARIAS DE BENAVIDES',
   codigoDane: '147555000295',
   municipio: 'Plato',
   departamento: 'Magdalena',
@@ -53,6 +65,7 @@ function foto(): FotoOnboarding {
       telefono: null,
       email: 'rectoria@juanaarias.edu.co',
       calendario: 'A',
+      jornadasMen: null,
       onboardingPaso: 2,
       onboardingCompletadoEn: null,
     },
@@ -67,6 +80,7 @@ function montar() {
   const repo = {
     contextoPublico: vi.fn(),
     guardarColegio: vi.fn().mockResolvedValue(undefined),
+    eliminarSede: vi.fn(),
     foto: vi.fn().mockResolvedValue(foto()),
   };
   const audit = { registrar: vi.fn().mockResolvedValue(undefined) };
@@ -122,6 +136,60 @@ describe('OnboardingService · paso 1', () => {
     const error = await servicio.guardarColegio(ACTOR, DATOS).catch((e: unknown) => e);
 
     expect((error as HttpException).getStatus()).toBe(409);
+  });
+});
+
+describe('OnboardingService · eliminar sede', () => {
+  it('borra la sede y deja rastro en la auditoría', async () => {
+    const { servicio, repo, audit } = montar();
+    repo.eliminarSede.mockResolvedValue('borrada');
+
+    await servicio.eliminarSede(ACTOR, 'sede-2');
+
+    expect(repo.eliminarSede).toHaveBeenCalledWith(expect.anything(), 'sede-2');
+    expect(audit.registrar).toHaveBeenCalledWith(
+      expect.objectContaining({ accion: 'DELETE', entidad: 'sedes', entidadId: 'sede-2' }),
+    );
+  });
+
+  it('no deja el colegio sin sedes (409)', async () => {
+    const { servicio, repo } = montar();
+    repo.eliminarSede.mockResolvedValue('ultima');
+
+    const error = await servicio.eliminarSede(ACTOR, 'sede-1').catch((e: unknown) => e);
+
+    expect((error as HttpException).getStatus()).toBe(409);
+    expect(cuerpoDe(error).error.message).toMatch(/al menos una sede/i);
+  });
+
+  it('no borra una sede que ya tiene cursos (409)', async () => {
+    const { servicio, repo } = montar();
+    repo.eliminarSede.mockResolvedValue('con-cursos');
+
+    const error = await servicio.eliminarSede(ACTOR, 'sede-1').catch((e: unknown) => e);
+
+    expect((error as HttpException).getStatus()).toBe(409);
+    expect(cuerpoDe(error).error.message).toMatch(/cursos/i);
+  });
+
+  it('404 si la sede no existe', async () => {
+    const { servicio, repo } = montar();
+    repo.eliminarSede.mockResolvedValue('no-existe');
+
+    const error = await servicio.eliminarSede(ACTOR, 'sede-9').catch((e: unknown) => e);
+
+    expect((error as HttpException).getStatus()).toBe(404);
+  });
+
+  it('403 a quien no es admin, sin tocar el repositorio', async () => {
+    const { servicio, repo } = montar();
+
+    const error = await servicio
+      .eliminarSede({ ...ACTOR, esAdmin: false }, 'sede-2')
+      .catch((e: unknown) => e);
+
+    expect((error as HttpException).getStatus()).toBe(403);
+    expect(repo.eliminarSede).not.toHaveBeenCalled();
   });
 });
 

@@ -202,6 +202,41 @@ describe('Onboarding (e2e)', () => {
     );
   });
 
+  it('el estado devuelve el año lectivo guardado al final, no el mayor', async () => {
+    const agente = await login(adminEmail);
+    const guardar = (anio: number) =>
+      agente.patch('/api/onboarding/colegio').send({
+        nombre: 'I.E.T.D. Onboarding',
+        nombreOficial: 'INSTITUCIÓN EDUCATIVA TÉCNICA DEPARTAMENTAL ONBOARDING',
+        codigoDane,
+        municipio: 'Plato',
+        departamento: 'Magdalena',
+        email: `rectoria@${codigo}.test`,
+        calendario: 'A',
+        anioLectivo: anio,
+        periodos: [
+          {
+            numero: 1,
+            nombre: 'Período 1',
+            fechaInicio: `${anio}-02-02`,
+            fechaFin: `${anio}-04-24`,
+          },
+          {
+            numero: 2,
+            nombre: 'Período 2',
+            fechaInicio: `${anio}-04-28`,
+            fechaFin: `${anio}-07-03`,
+          },
+        ],
+      });
+
+    // El wizard permite volver a un año anterior: el estado no puede quedarse
+    // con el mayor (el admin vería el año cambiar solo tras guardar).
+    expect((await guardar(ANIO).expect(200)).body.data.anioLectivo?.anio).toBe(ANIO);
+    expect((await guardar(ANIO + 1).expect(200)).body.data.anioLectivo?.anio).toBe(ANIO + 1);
+    expect((await guardar(ANIO).expect(200)).body.data.anioLectivo?.anio).toBe(ANIO);
+  });
+
   it('la consulta por código DANE es exclusiva del admin y valida el formato', async () => {
     const staff = await login(staffEmail);
     // 403 antes de salir a internet: la comprobación es de permisos.

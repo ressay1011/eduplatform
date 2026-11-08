@@ -550,4 +550,29 @@ describe('Usuarios (e2e)', () => {
       .send({ usuario: lectorEmail, password: reset.body.data.passwordTemporal as string });
     expect(nuevo.status).toBe(200);
   });
+
+  it('acepta la ñ en el identificador y en los apellidos', async () => {
+    const agente = await login(adminEmail, PASSWORD_ADMIN);
+    const usuarioÑ = `mmuñoz@${codigoA}`;
+    const res = await agente.post('/api/usuarios').send({
+      nombres: 'María',
+      apellidos: 'Muñoz Peña',
+      usuario: usuarioÑ,
+      tipoDocumento: 'CC',
+      numeroDocumento: `85${sufijo}1`,
+      permisos: ['calificaciones.editar'],
+    });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.usuario).toMatchObject({ usuario: usuarioÑ, apellidos: 'Muñoz Peña' });
+
+    // La ñ no rompe ni el formato del identificador ni la resolución del
+    // colegio por el sufijo: con la temporal entra sin tocar nada.
+    const temporal = res.body.data.passwordTemporal as string;
+    const suyo = request.agent(app.getHttpServer());
+    const entrada = await suyo
+      .post('/api/auth/login')
+      .send({ usuario: usuarioÑ, password: temporal });
+    expect(entrada.status).toBe(200);
+  });
 });

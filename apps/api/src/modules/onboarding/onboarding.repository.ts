@@ -41,6 +41,8 @@ export interface DatosColegio {
   telefono?: string | undefined;
   email: string;
   calendario: 'A' | 'B';
+  /** Jornadas que publica el MEN para el colegio (sugerencia del paso de sedes). */
+  jornadasMen?: Jornada[] | undefined;
   anioLectivo: number;
   periodos: PeriodoOnboardingRequest[];
 }
@@ -51,6 +53,8 @@ export interface DatosSede {
   nombre: string;
   codigoDaneSede?: string | undefined;
   direccion?: string | undefined;
+  municipio?: string | undefined;
+  departamento?: string | undefined;
   jornadas: Jornada[];
 }
 
@@ -76,6 +80,8 @@ export interface FotoOnboarding {
     telefono: string | null;
     email: string;
     calendario: 'A' | 'B';
+    /** Jornadas que publica el MEN (sugerencia del paso de sedes). */
+    jornadasMen: string[] | null;
     onboardingPaso: number;
     onboardingCompletadoEn: Date | null;
   } | null;
@@ -84,6 +90,8 @@ export interface FotoOnboarding {
     nombre: string;
     codigoDaneSede: string | null;
     direccion: string | null;
+    municipio: string;
+    departamento: string;
     jornadas: Jornada[];
   }[];
   anio: { id: string; anio: number; fechaInicio: string; fechaFin: string } | null;
@@ -110,6 +118,7 @@ const COLEGIO_COLUMNS = {
   telefono: colegios.telefono,
   email: colegios.email,
   calendario: colegios.calendario,
+  jornadasMen: colegios.jornadasMen,
   onboardingPaso: colegios.onboardingPaso,
   onboardingCompletadoEn: colegios.onboardingCompletadoEn,
 } as const;
@@ -131,6 +140,8 @@ export class OnboardingRepository extends BaseRepository {
           nombre: sedes.nombre,
           codigoDaneSede: sedes.codigoDaneSede,
           direccion: sedes.direccion,
+          municipio: sedes.municipio,
+          departamento: sedes.departamento,
           jornadas: sedes.jornadas,
         })
         .from(sedes)
@@ -146,7 +157,10 @@ export class OnboardingRepository extends BaseRepository {
         })
         .from(aniosLectivos)
         .where(eq(aniosLectivos.colegioId, ctx.colegioId))
-        .orderBy(desc(aniosLectivos.anio))
+        // El año que se está configurando es el último que se guardó, no el
+        // mayor: el wizard permite elegir 2026 después de 2027 y con
+        // «mayor primero» volvía a mostrar el 2027 tras guardar.
+        .orderBy(desc(aniosLectivos.updatedAt), desc(aniosLectivos.anio))
         .limit(1);
 
       const filasPeriodos =
@@ -236,6 +250,7 @@ export class OnboardingRepository extends BaseRepository {
           telefono: datos.telefono ?? null,
           email: datos.email,
           calendario: datos.calendario,
+          jornadasMen: datos.jornadasMen ?? null,
           onboardingPaso: sql`greatest(${colegios.onboardingPaso}, 2)`,
           updatedAt: new Date(),
         })
@@ -331,6 +346,8 @@ export class OnboardingRepository extends BaseRepository {
             nombre: datos.nombre,
             codigoDaneSede: datos.codigoDaneSede ?? null,
             direccion: datos.direccion ?? null,
+            municipio: datos.municipio ?? '',
+            departamento: datos.departamento ?? '',
             jornadas: datos.jornadas,
           })
           .returning({ id: sedes.id });
@@ -342,6 +359,8 @@ export class OnboardingRepository extends BaseRepository {
             nombre: datos.nombre,
             codigoDaneSede: datos.codigoDaneSede ?? null,
             direccion: datos.direccion ?? null,
+            municipio: datos.municipio ?? '',
+            departamento: datos.departamento ?? '',
             jornadas: datos.jornadas,
             updatedAt: new Date(),
           })
@@ -357,6 +376,39 @@ export class OnboardingRepository extends BaseRepository {
           .where(eq(colegios.id, ctx.colegioId));
       }
       return sedeId;
+    });
+  }
+
+  /**
+   * Borra (lógicamente) una sede del colegio. Devuelve el hecho para que el
+   * servicio decida el código: el colegio no puede quedarse sin sedes y una
+   * sede con cursos no se borra (los grupos quedarían huérfanos).
+   */
+  async eliminarSede(
+    ctx: TenantContext,
+    sedeId: string,
+  ): Promise<'borrada' | 'no-existe' | 'ultima' | 'con-cursos'> {
+    return this.withTenant(ctx, async (tx) => {
+      const activas = await tx
+        .select({ id: sedes.id })
+        .from(sedes)
+        .where(and(eq(sedes.colegioId, ctx.colegioId), isNull(sedes.deletedAt)));
+
+      if (!activas.some((s) => s.id === sedeId)) return 'no-existe';
+      if (activas.length <= 1) return 'ultima';
+
+      const [cursos] = await tx
+        .select({ n: count() })
+        .from(grupos)
+        .where(and(eq(grupos.colegioId, ctx.colegioId), eq(grupos.sedeId, sedeId)));
+      if (Number(cursos?.n ?? 0) > 0) return 'con-cursos';
+
+      await tx
+        .update(sedes)
+        .set({ deletedAt: new Date(), activa: false, updatedAt: new Date() })
+        .where(and(eq(sedes.id, sedeId), eq(sedes.colegioId, ctx.colegioId)));
+
+      return 'borrada';
     });
   }
 

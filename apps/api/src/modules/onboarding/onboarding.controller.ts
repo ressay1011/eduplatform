@@ -4,7 +4,7 @@
  * Todo exige `configuracion.editar` y, además, ser admin del colegio: el
  * wizard crea sedes y cursos, no es una pantalla operativa más.
  */
-import { Body, Controller, Get, HttpCode, Param, Patch, Post, Put } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put } from '@nestjs/common';
 import { z } from 'zod';
 import {
   CodigoDaneSchema,
@@ -84,6 +84,17 @@ export class OnboardingController {
   ): Promise<ApiResponse<EstadoOnboarding>> {
     const dto = SedeOnboardingSchema.parse(body);
     return { success: true, data: await this.onboarding.guardarSede(this.actor(auth), dto) };
+  }
+
+  /** Paso 2: quitar una sede (el colegio no puede quedarse sin ninguna). */
+  @Delete('sedes/:id')
+  @RequirePermission('configuracion.editar')
+  async eliminarSede(
+    @CurrentAuth() auth: AuthContext,
+    @Param('id') id: string,
+  ): Promise<ApiResponse<EstadoOnboarding>> {
+    const sedeId = z.uuid().parse(id);
+    return { success: true, data: await this.onboarding.eliminarSede(this.actor(auth), sedeId) };
   }
 
   /** Paso 3: genera los cursos (grados × letras) de una sede y jornada. */
