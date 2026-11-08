@@ -17,7 +17,8 @@ const bcrypt = require('bcrypt');
 const clave = process.env.E2E_ADMIN_PASSWORD ?? 'Demo2026!';
 const hash = await bcrypt.hash(clave, 4); // coste 4: es una base de pruebas
 
-console.log(`# sembrando colegio demo (clave: ${clave})`);
+// Nunca imprimir la clave: CodeQL marca el registro de secretos en claro.
+console.log('# sembrando colegio demo (clave: la de E2E_ADMIN_PASSWORD)');
 const r = spawnSync('pnpm', ['--filter', '@eduplatform/database', 'run', 'db:seed'], {
   stdio: 'inherit',
   shell: true,

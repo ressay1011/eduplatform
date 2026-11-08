@@ -10,7 +10,13 @@
  *   HASH=$(cd apps/api && node -e "require('bcrypt').hash(process.argv[1],12).then(console.log)" 'Clave')
  *   DEMO_HASH="$HASH" DATABASE_URL='postgresql://app_migrator:...' node packages/database/scripts/seed-demo.mjs
  */
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import postgres from 'postgres';
+
+/** Carpeta de este script: el SQL de al lado vive en `../sql`. */
+const here = dirname(fileURLToPath(import.meta.url));
 
 const URL = process.env.DATABASE_URL;
 const HASH = process.env.DEMO_HASH;
@@ -78,6 +84,15 @@ try {
 
   const [{ total }] = await sql`SELECT count(*)::int AS total FROM permisos`;
   console.log(`# permisos en catálogo: ${total}`);
+
+  // Roles base del colegio (0003 es idempotente): sin ellos el colegio demo no
+  // puede asignar personal y la verificación de RLS se queda en 0.
+  const rolesSql = readFileSync(join(here, '..', 'sql', '0003_roles_seed.sql'), 'utf8');
+  await sql.unsafe(rolesSql);
+  const [{ roles }] = await sql`
+    SELECT count(*)::int AS roles FROM roles WHERE colegio_id = ${colegioId}
+  `;
+  console.log(`# roles base del colegio: ${roles}`);
 } finally {
   await sql.end({ timeout: 5 });
 }
