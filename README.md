@@ -132,28 +132,27 @@ cp packages/database/.env.example packages/database/.env
 
 ## Entornos
 
-|            | Rama   | API                            | Web                            | Base de datos              |
-| ---------- | ------ | ------------------------------ | ------------------------------ | -------------------------- |
-| Producción | `main` | `eduplatform-api` (Render)     | `eduplatform-ivory.vercel.app` | Neon `main`                |
-| Pruebas    | `dev`  | `eduplatform-api-dev` (Render) | preview de Vercel de la rama   | rama `dev` de Neon (copia) |
+|            | Rama   | API                           | Web                       | Base de datos              |
+| ---------- | ------ | ----------------------------- | ------------------------- | -------------------------- |
+| Producción | `main` | `api.eduplatform.co` (Render) | `eduplatform.co` (Vercel) | Neon `main`                |
+| Pruebas    | `dev`  | `api-dev.eduplatform.co`      | `dev.eduplatform.co`      | rama `dev` de Neon (copia) |
 
 - **`main` solo se actualiza por PR desde `dev` y con autorización explícita**; un push a `main` despliega solo.
-- Cada push a `dev` despliega la API de pruebas y crea un preview de la web que apunta a esa API
-  (`NEXT_PUBLIC_API_URL` del entorno _Preview_). La web del preview exige sesión de Vercel.
-- `CORS_ORIGINS` de la API de pruebas acepta `https://eduplatform-*-<equipo>.vercel.app`, así que
-  cualquier preview funciona sin tocar la variable; en producción los orígenes son exactos.
+- Cada push a `dev` despliega la API de pruebas y la web de `dev.eduplatform.co` apuntando a esa API.
+  Cualquier preview de Vercel de la rama también funciona: `CORS_ORIGINS` de la API de pruebas
+  acepta los dominios de preview; en producción los orígenes son exactos.
 
 ## Probar la producción
 
 La base de `main` tiene un colegio de prueba para revisar la app desplegada sin
 tocar datos reales:
 
-| Qué     | Valor                                           |
-| ------- | ----------------------------------------------- |
-| Web     | `https://eduplatform-ivory.vercel.app`          |
-| API     | `https://eduplatform-api-0yrs.onrender.com/api` |
-| Colegio | `prueba`                                        |
-| Usuario | `admin@prueba`                                  |
+| Qué     | Valor                            |
+| ------- | -------------------------------- |
+| Web     | `https://eduplatform.co`         |
+| API     | `https://api.eduplatform.co/api` |
+| Colegio | `prueba`                         |
+| Usuario | `admin@prueba`                   |
 
 La contraseña temporal **no vive en el repositorio**: se entrega aparte y el
 primer ingreso obliga a cambiarla. Para crear otro colegio de prueba:
@@ -198,10 +197,11 @@ pnpm --filter @eduplatform/database run test
 
 ## Base de datos y despliegue
 
-**Producción actual:** web en `https://eduplatform-ivory.vercel.app` (Vercel,
-root `apps/web`, deploy automático desde `main`) y API en
-`https://eduplatform-api-0yrs.onrender.com` (Render free, Virginia, health
-`/api/health`) sobre PostgreSQL en Neon (`aws-us-east-1`).
+**Producción actual:** web en `https://eduplatform.co` (Vercel, root
+`apps/web`, deploy automático desde `main`) y API en `https://api.eduplatform.co`
+(Render free, Virginia, health `/api/health`) sobre PostgreSQL en Neon
+(`aws-us-east-1`). El entorno de pruebas vive en `https://dev.eduplatform.co`
+con la API en `https://api-dev.eduplatform.co`.
 
 ```bash
 # Bootstrap de Neon (crea app_migrator/app_user y la base; imprime las URLs)
