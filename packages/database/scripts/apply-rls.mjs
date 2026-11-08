@@ -11,9 +11,12 @@ import { fileURLToPath } from 'node:url';
 import postgres from 'postgres';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const url =
-  process.env.DATABASE_URL ??
-  'postgresql://app_migrator:app_migrator_dev@localhost:5432/eduplatform';
+const url = process.env.DATABASE_URL;
+if (url === undefined || url === '') {
+  // Sin credenciales en el código: la cadena llega por entorno (.env o CI).
+  console.error('Falta DATABASE_URL (rol app_migrator) para aplicar RLS.');
+  process.exit(1);
+}
 
 const sql = postgres(url, { max: 1 });
 

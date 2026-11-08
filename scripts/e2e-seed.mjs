@@ -10,18 +10,29 @@
  */
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const require = createRequire(new URL('../apps/api/package.json', import.meta.url));
 const bcrypt = require('bcrypt');
 
+const raiz = join(dirname(fileURLToPath(import.meta.url)), '..');
 const clave = process.env.E2E_ADMIN_PASSWORD ?? 'Demo2026!';
 const hash = await bcrypt.hash(clave, 4); // coste 4: es una base de pruebas
 
 // Nunca imprimir la clave: CodeQL marca el registro de secretos en claro.
 console.log('# sembrando colegio demo (clave: la de E2E_ADMIN_PASSWORD)');
-const r = spawnSync('pnpm', ['--filter', '@eduplatform/database', 'run', 'db:seed'], {
-  stdio: 'inherit',
-  shell: true,
-  env: { ...process.env, DEMO_HASH: hash },
-});
+// Se llama al script con `node` (sin shell): así el PATH no entra en juego.
+const r = spawnSync(
+  process.execPath,
+  [
+    '--env-file-if-exists=packages/database/.env',
+    join(raiz, 'packages/database/scripts/seed-demo.mjs'),
+  ],
+  {
+    stdio: 'inherit',
+    cwd: raiz,
+    env: { ...process.env, DEMO_HASH: hash },
+  },
+);
 process.exit(r.status ?? 1);
