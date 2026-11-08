@@ -11,7 +11,7 @@ import { OnboardingService } from './onboarding.service';
 
 @Module({
   // AuthModule aporta `AuthService.invalidarContextoColegio` (ADR-005): el paso 1
-  // cambia nombre/subdominio, que se pintan en el login, y no deben esperar el TTL.
+  // cambia nombre o color, que se pintan en el login, y no deben esperar el TTL.
   imports: [AuthModule],
   controllers: [OnboardingController],
   providers: [OnboardingService, OnboardingRepository, DaneService],

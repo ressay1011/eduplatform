@@ -11,6 +11,7 @@ import { apiError } from '../../../shared/api-error';
 import { AuthContextService } from '../auth-context.service';
 import { SESION_COOKIE } from '../auth.constants';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
+import { ALLOW_PENDING_PASSWORD_KEY } from '../decorators/allow-pending-password.decorator';
 import type { AuthenticatedRequest } from '../auth.types';
 
 @Injectable()
@@ -41,6 +42,29 @@ export class AuthGuard implements CanActivate {
     }
 
     req.auth = auth;
+
+    // Contraseña inicial sin cambiar: la conoce quien creó la cuenta, así que
+    // hasta que el dueño la reemplace solo puede consultar su sesión, cerrarla
+    // o cambiarla. El frontend ya redirige a /cambiar-password, pero la API no
+    // lo hacía cumplir y bastaba llamarla directamente.
+    const permiteCambioPendiente =
+      this.reflector.getAllAndOverride<boolean>(ALLOW_PENDING_PASSWORD_KEY, [
+        context.getHandler(),
+        context.getClass(),
+      ]) ?? false;
+    if (
+      !esPublico &&
+      !permiteCambioPendiente &&
+      auth.tipo === 'colegio' &&
+      auth.usuario.debeCambiarPassword
+    ) {
+      throw apiError(
+        ErrorCodes.PASSWORD_CHANGE_REQUIRED,
+        403,
+        'Debes cambiar tu contraseña antes de continuar',
+      );
+    }
+
     return true;
   }
 }

@@ -5,8 +5,9 @@
  */
 import { Injectable } from '@nestjs/common';
 import type { TenantContext } from '@eduplatform/database';
-import { and, asc, count, eq, ilike, inArray, isNull, ne, or } from 'drizzle-orm';
+import { and, asc, count, eq, ilike, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import {
+  colegios,
   permisos,
   roles,
   sesiones,
@@ -120,6 +121,18 @@ export class UsuariosRepository extends BaseRepository {
     });
   }
 
+  /** Código del colegio del tenant: con él se completan los identificadores. */
+  async codigoColegio(ctx: TenantContext): Promise<string | null> {
+    return this.withTenant(ctx, async (tx) => {
+      const [fila] = await tx
+        .select({ codigo: colegios.codigo })
+        .from(colegios)
+        .where(eq(colegios.id, ctx.colegioId))
+        .limit(1);
+      return fila?.codigo ?? null;
+    });
+  }
+
   async findPorId(ctx: TenantContext, id: string): Promise<UsuarioRow | null> {
     return this.withTenant(ctx, async (tx) => {
       const filas = await tx
@@ -128,23 +141,6 @@ export class UsuariosRepository extends BaseRepository {
         .where(
           and(
             eq(usuarios.id, id),
-            eq(usuarios.colegioId, ctx.colegioId),
-            isNull(usuarios.deletedAt),
-          ),
-        )
-        .limit(1);
-      return filas[0] ?? null;
-    });
-  }
-
-  async findPorUsuario(ctx: TenantContext, usuario: string): Promise<UsuarioRow | null> {
-    return this.withTenant(ctx, async (tx) => {
-      const filas = await tx
-        .select(USUARIO_COLUMNS)
-        .from(usuarios)
-        .where(
-          and(
-            eq(usuarios.usuario, usuario.toLowerCase()),
             eq(usuarios.colegioId, ctx.colegioId),
             isNull(usuarios.deletedAt),
           ),
@@ -181,7 +177,7 @@ export class UsuariosRepository extends BaseRepository {
     return this.withTenant(ctx, async (tx) => {
       const condiciones = [
         eq(usuarios.colegioId, ctx.colegioId),
-        eq(usuarios.usuario, usuario.toLowerCase()),
+        sql`lower(${usuarios.usuario}) = ${usuario.trim().toLowerCase()}`,
         isNull(usuarios.deletedAt),
       ];
       if (exceptoId !== undefined) condiciones.push(ne(usuarios.id, exceptoId));

@@ -7,13 +7,10 @@ import type { Request } from 'express';
 import type { ContextoColegioPublico } from '@eduplatform/types';
 
 /**
- * Contexto público + subdominio del colegio.
- * Lo devuelve el login unificado (resolución por dominio del correo) para que
- * la web pueda mostrar la sede y, si quiere, enlazar a la URL del colegio.
+ * Contexto público que se guarda en el caché del login. El colegio se identifica
+ * por su código (`ContextoColegioPublico.codigo`).
  */
-export interface ContextoPublicoConSede extends ContextoColegioPublico {
-  readonly subdominio: string;
-}
+export type ContextoPublicoConSede = ContextoColegioPublico;
 
 /** Datos del usuario de colegio disponibles con la sesión (sin passwordHash). */
 export interface UsuarioColegioAuth {
@@ -32,7 +29,6 @@ export interface ColegioAuth {
   readonly id: string;
   readonly nombre: string;
   readonly codigoDane: string | null;
-  readonly subdominio: string;
   readonly primaryColor: string | null;
 }
 

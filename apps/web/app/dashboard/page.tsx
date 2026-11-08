@@ -20,7 +20,7 @@ import { M3Button } from '@/components/M3Button';
 import { OnboardingChecklist } from '@/components/OnboardingChecklist';
 import { SESION_KEY, useSesion } from '@/hooks/useSesion';
 import { cerrarSesion } from '@/lib/api';
-import { inicialesDe } from '@/lib/subdominio';
+import { inicialesDe } from '@/lib/iniciales';
 import { inicialesVisible, nombreCorto } from '@/lib/nombre';
 
 /** Saludo según la hora local (el diseño dice «Buenos días»). */

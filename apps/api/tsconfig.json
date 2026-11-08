@@ -3,6 +3,7 @@
   "compilerOptions": {
     "module": "commonjs",
     "moduleResolution": "node10",
+    "lib": ["ES2024"],
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "rootDir": "src",

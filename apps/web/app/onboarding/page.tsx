@@ -1,16 +1,19 @@
 'use client';
 
 /**
- * Onboarding · configuración inicial del colegio (6 pasos).
+ * Onboarding · configuración inicial del colegio (7 pasos).
  *
- * Réplica del diseño aprobado (`diseno/Exports/Onboarding · *.json`): rail de
- * 320 px con los pasos, contenido con título Fraunces y tarjetas M3.
+ * Diseño aprobado en `docs/diseno/onboarding/onboarding-a-completo.html`
+ * (opción A): una sola columna centrada con cabecera compacta (paso + barra de
+ * progreso), el CTA en la cabecera desde el paso 2 y deslizamiento entre pasos.
+ * El rail lateral de la maqueta se retiró al verlo en el navegador.
  *
- * Los 6 pasos están conectados a la API: 1-3 configuran el colegio, 4 agrega
- * personal (reutiliza POST /usuarios) y 5 importa matrículas con un CSV que se
- * valida contra los cursos reales (POST /matriculas/importar).
+ * Los 7 pasos están conectados a la API: 1-2 configuran el colegio (identidad y
+ * calendario), 3-4 sedes y cursos, 5 agrega personal (reutiliza POST /usuarios)
+ * y 6 importa matrículas con un CSV que se valida contra los cursos reales
+ * (POST /matriculas/importar).
  */
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type TouchEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -21,10 +24,7 @@ import {
   NOMBRES_DEPARTAMENTOS,
   nombreOficialMen,
   nombreSaneado,
-  SubdominioSchema,
-  subdominioDeNombre,
   TIPOS_DOCUMENTO,
-  type ColegioDane,
   type CursoMatricula,
   type EstadoOnboarding,
   type ResultadoImportacionMatriculas,
@@ -35,10 +35,13 @@ import { SelectField } from '@/components/SelectField';
 import { TextField } from '@/components/TextField';
 import { esEmailValido, esNitValido, esTelefonoValido } from '@/lib/validacion';
 import { useEmpleados, useRoles, useSedes } from '@/hooks/usePersonas';
+import { SESION_KEY } from '@/hooks/useSesion';
+import { useAnchoMovil } from '@/hooks/useAnchoMovil';
 import {
   ApiError,
   actualizarUsuario,
   buscarColegioDane,
+  cerrarSesion,
   crearUsuario,
   finalizarOnboarding,
   generarEstructuraOnboarding,
@@ -57,9 +60,11 @@ import {
   resolverCursoCsv,
   type FilaCsvMatricula,
 } from '@/lib/matriculas';
+import { gestoDePaso, necesitaBienvenida } from '@/lib/onboarding-movil';
 
 const PASOS = [
   'Colegio',
+  'Calendario',
   'Sedes y jornadas',
   'Estructura',
   'Personal',
@@ -82,6 +87,20 @@ const NIVELES: { id: string; texto: string; grados: number[] }[] = [
 ];
 
 const LETRAS = ['A', 'B', 'C', 'D', 'E', 'F'];
+
+/**
+ * Zonas donde el deslizamiento no cambia de paso: los campos (el dedo está
+ * seleccionando texto) y las tablas, que tienen scroll horizontal propio.
+ */
+const ZONAS_SIN_GESTO = 'input, textarea, select, [role="dialog"], .onb-tabla-envoltura';
+
+/**
+ * Campos del paso 1 con regla propia: se validan al perder el foco y otra vez al
+ * continuar. El calendario y los períodos van aparte (no son campos de texto).
+ */
+const CAMPOS_PASO_1 = ['nombre', 'nit', 'telefono', 'email', 'departamento', 'municipio'] as const;
+
+type CampoPaso1 = (typeof CAMPOS_PASO_1)[number];
 
 interface PeriodoForm {
   numero: number;
@@ -165,9 +184,22 @@ export default function OnboardingPage() {
     retry: false,
   });
 
+  /**
+   * Año de referencia del calendario escolar, calculado por el SERVIDOR
+   * (`hoyLocal`, America/Bogota). Antes salía de `new Date()` del navegador: un
+   * equipo con la zona o la fecha mal proponía un año que la API rechaza.
+   */
+  const anioServidor = data?.anioActual;
+
   const [paso, setPaso] = useState(1);
   const [aviso, setAviso] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
+  /** En móvil el CTA baja al pie: allí no cabe en la cabecera con el texto del paso. */
+  const movil = useAnchoMovil();
+  /** Bienvenida del colegio recién creado: se decide una sola vez, al cargar. */
+  const [bienvenida, setBienvenida] = useState(false);
+  /** Aviso antes de salir del paso 1 sin código DANE (no hay nada guardado). */
+  const [confirmarSalida, setConfirmarSalida] = useState(false);
 
   // Paso 1
   const [colegio, setColegio] = useState({
@@ -176,7 +208,6 @@ export default function OnboardingPage() {
     nombreOficial: '',
     nit: '',
     codigoDane: '',
-    subdominio: '',
     municipio: '',
     departamento: '',
     direccion: '',
@@ -184,7 +215,8 @@ export default function OnboardingPage() {
     email: '',
     // '' = todavía no elige: sin calendario no se muestran los períodos.
     calendario: '' as 'A' | 'B' | '',
-    anioLectivo: new Date().getFullYear(),
+    // 0 hasta que carga el estado: el año lo propone el servidor (`anioActual`).
+    anioLectivo: 0,
   });
   /** Errores de validación por campo; se pintan bajo cada campo y se limpian al escribir. */
   const [errores, setErrores] = useState<Record<string, string>>({});
@@ -192,7 +224,6 @@ export default function OnboardingPage() {
 
   // Paso 1 · consulta del código DANE en los datos abiertos del MEN.
   const [buscandoDane, setBuscandoDane] = useState(false);
-  const [daneInfo, setDaneInfo] = useState<ColegioDane | null>(null);
   const [daneError, setDaneError] = useState<string | null>(null);
   // El formulario nace bloqueado: solo el código DANE manda hasta que el MEN
   // responda (o falle). Es una decisión de producto, no un estado de carga.
@@ -201,6 +232,11 @@ export default function OnboardingPage() {
   const busquedaRef = useRef(0);
   const inicializadoRef = useRef(false);
   const sedeInicializadaRef = useRef(false);
+  /** La bienvenida ya se evaluó: los refrescos de datos no la vuelven a abrir. */
+  const bienvenidaRef = useRef(false);
+  /** Origen del dedo mientras dura un toque; null si el gesto no aplica. */
+  const toqueRef = useRef<{ x: number; y: number } | null>(null);
+  const dialogoRef = useRef<HTMLDivElement>(null);
 
   // Paso 2
   const [sede, setSede] = useState({
@@ -228,14 +264,14 @@ export default function OnboardingPage() {
   const [resultadoCsv, setResultadoCsv] = useState<ResultadoImportacionMatriculas | null>(null);
   const [importando, setImportando] = useState(false);
 
-  // Consultas de los pasos 4 y 5: solo se disparan cuando el paso está activo.
-  const rolesQ = useRoles(paso === 4);
-  const sedesQ = useSedes(paso === 4);
-  const empleadosQ = useEmpleados('', paso === 4);
+  // Consultas de los pasos 5 y 6: solo se disparan cuando el paso está activo.
+  const rolesQ = useRoles(paso === 5);
+  const sedesQ = useSedes(paso === 5);
+  const empleadosQ = useEmpleados('', paso === 5);
   const cursosQ = useQuery<CursoMatricula[]>({
     queryKey: ['matriculas', 'cursos'],
     queryFn: listarCursosMatricula,
-    enabled: paso === 5,
+    enabled: paso === 6,
     retry: false,
   });
 
@@ -246,21 +282,26 @@ export default function OnboardingPage() {
       nombreOficial: data.colegio.nombreOficial ?? '',
       nit: data.colegio.nit ?? '',
       codigoDane: data.colegio.codigoDane,
-      subdominio: data.colegio.subdominio,
       municipio: data.colegio.municipio,
       departamento: data.colegio.departamento,
       direccion: data.colegio.direccion ?? '',
       telefono: data.colegio.telefono ?? '',
       email: data.colegio.email,
       calendario: data.colegio.calendario,
-      anioLectivo: data.anioLectivo?.anio ?? new Date().getFullYear(),
+      anioLectivo: data.anioLectivo?.anio ?? data.anioActual,
     });
     setPeriodos(
       data.periodos.length > 0
         ? data.periodos
-        : periodosBase(data.colegio.calendario, new Date().getFullYear()),
+        : periodosBase(data.colegio.calendario, data.anioActual),
     );
-    setPaso(Math.min(6, Math.max(1, data.paso)));
+    setPaso(Math.min(PASOS.length, Math.max(1, data.paso)));
+    // La bienvenida depende del estado de la PRIMERA carga: después de guardar
+    // el paso 1 llegan datos nuevos y el wizard ya no debe volver a mostrarla.
+    if (!bienvenidaRef.current) {
+      bienvenidaRef.current = true;
+      setBienvenida(necesitaBienvenida(data));
+    }
     if (data.sedes[0] !== undefined) {
       setSedeId(data.sedes[0].id);
       setJornada(data.sedes[0].jornadas[0] ?? Jornada.MANANA);
@@ -290,7 +331,26 @@ export default function OnboardingPage() {
   const cursosPrevistos = useMemo(() => grados.length * letras.length, [grados, letras]);
   const sedeActual = data?.sedes.find((s) => s.id === sedeId) ?? data?.sedes[0];
 
-  // Paso 4: roles asignables a personal, sedes para el alcance y listado real.
+  /**
+   * ¿El paso actual puede avanzar? Es el mismo requisito que habilita el botón
+   * de continuar, así el gesto y las flechas no se saltan ninguna validación.
+   */
+  const puedeAvanzar =
+    !guardando &&
+    (paso === 1
+      ? formHabilitado
+      : paso === 2
+        ? colegio.calendario !== '' && periodos.length >= 2
+        : paso === 3
+          ? sede.jornadas.length > 0
+          : paso === 4
+            ? cursosPrevistos > 0
+            : paso < 7);
+
+  /** Ancho de la barra de progreso: el paso 1 ya deja un séptimo pintado. */
+  const progreso = `${Math.round((paso / PASOS.length) * 100)}%`;
+
+  // Paso 5: roles asignables a personal, sedes para el alcance y listado real.
   const rolesEmpleado = (rolesQ.data?.items ?? []).filter(
     (rol) => rol.tipoPersona === 'EMPLEADO' && rol.activo,
   );
@@ -373,24 +433,35 @@ export default function OnboardingPage() {
     limpiarError('calendario');
   }
 
+  /** Año lectivo del select: al cambiarlo se recalculan los períodos base. */
   function conAnio(valor: string): void {
     const anio = Number(valor.replace(/\D/g, '').slice(0, 4)) || colegio.anioLectivo;
     setColegio((actual) => ({ ...actual, anioLectivo: anio }));
     if (colegio.calendario !== '') setPeriodos(periodosBase(colegio.calendario, anio));
-    limpiarError('anio');
   }
 
   /**
-   * Fechas de los períodos: completas, en orden y sin solapes. Devuelve el
-   * primer problema o null.
+   * Fechas de los períodos: completas, dentro del año lectivo (el calendario B
+   * termina en el año siguiente), en orden y sin solapes. Devuelve el primer
+   * problema o null.
    */
   function revisarPeriodos(): string | null {
     if (colegio.calendario === '') return null;
     if (periodos.length < 2) return 'Necesitas al menos dos períodos académicos.';
+    const primerDia = `${colegio.anioLectivo}-01-01`;
+    // El calendario B arranca en septiembre y cierra en junio del año siguiente.
+    const ultimoDia = `${colegio.anioLectivo + 1}-12-31`;
     let finAnterior: string | null = null;
     for (const p of periodos) {
       if (p.fechaInicio === '' || p.fechaFin === '') {
         return `${p.nombre}: completa las dos fechas.`;
+      }
+      // Ni antes del año lectivo ni más allá del siguiente.
+      if (p.fechaInicio < primerDia) {
+        return `${p.nombre}: no puede empezar antes del año lectivo (${colegio.anioLectivo}).`;
+      }
+      if (p.fechaFin > ultimoDia) {
+        return `${p.nombre}: no puede terminar después de ${colegio.anioLectivo + 1}.`;
       }
       if (p.fechaInicio >= p.fechaFin) {
         return `${p.nombre}: el inicio debe ser anterior al fin.`;
@@ -403,75 +474,127 @@ export default function OnboardingPage() {
     return null;
   }
 
+  /** Suma días a una fecha ISO (YYYY-MM-DD) sin depender de la zona horaria. */
+  function sumarDias(fecha: string, dias: number): string {
+    const [anio, mes, dia] = fecha.split('-').map(Number);
+    const base = new Date(Date.UTC(anio ?? 2000, (mes ?? 1) - 1, dia ?? 1));
+    base.setUTCDate(base.getUTCDate() + dias);
+    return base.toISOString().slice(0, 10);
+  }
+
   /**
-   * Reglas del paso 1. Se ejecutan al continuar y al «Guardar y salir»: los
-   * botones no envían un formulario HTML, así que la validación nativa del
-   * navegador nunca corre.
+   * Agrega un período al final. El tope de 4 es el del contrato
+   * (`ColegioOnboardingSchema`): más de cuatro no los acepta la API.
    */
-  function validarPaso1(): Record<string, string> {
+  function agregarPeriodo(): void {
+    if (periodos.length >= 4) return;
+    const anterior = periodos.at(-1);
+    const inicio =
+      anterior === undefined ? `${colegio.anioLectivo}-02-01` : sumarDias(anterior.fechaFin, 1);
+    const numero = periodos.length + 1;
+    setPeriodos([
+      ...periodos,
+      { numero, nombre: `Período ${numero}`, fechaInicio: inicio, fechaFin: sumarDias(inicio, 75) },
+    ]);
+    limpiarError('periodos');
+  }
+
+  /**
+   * Quita un período y renumera el resto (1..n): los números son la identidad
+   * del período en la API, así que no pueden quedar huecos.
+   */
+  function quitarPeriodo(numero: number): void {
+    if (periodos.length <= 2) return;
+    setPeriodos(
+      periodos
+        .filter((p) => p.numero !== numero)
+        // Se renumera, pero solo se reescribe el nombre si era el generado
+        // («Período 3»): un nombre puesto por el colegio se respeta.
+        .map((p, i) => ({
+          ...p,
+          numero: i + 1,
+          nombre: /^per[ií]odo \d+$/i.test(p.nombre) ? `Período ${i + 1}` : p.nombre,
+        })),
+    );
+    limpiarError('periodos');
+  }
+
+  /**
+   * Regla de un campo del paso 1 (`null` si está bien). Es la única fuente de
+   * verdad: la usan el blur de cada campo y el botón de continuar.
+   */
+  function mensajeDeCampo(campo: CampoPaso1): string | null {
+    switch (campo) {
+      case 'nombre':
+        return colegio.nombre.trim().length < 3 ? 'Escribe el nombre del colegio.' : null;
+      case 'nit':
+        return colegio.nit.trim() !== '' && !esNitValido(colegio.nit)
+          ? 'NIT inválido: de 8 a 15 dígitos con el de verificación opcional, p. ej. 900123456-7'
+          : null;
+      case 'telefono':
+        return colegio.telefono.trim() !== '' && !esTelefonoValido(colegio.telefono)
+          ? 'Teléfono inválido: entre 7 y 10 dígitos.'
+          : null;
+      case 'email':
+        return esEmailValido(colegio.email.trim())
+          ? null
+          : 'Correo inválido: debe tener la forma nombre@dominio.';
+      case 'departamento':
+        return esDepartamento(colegio.departamento) ? null : 'Elige el departamento.';
+      case 'municipio':
+        return esMunicipio(colegio.departamento, colegio.municipio)
+          ? null
+          : 'Elige el municipio del departamento.';
+    }
+  }
+
+  /**
+   * Al salir de un campo se valida SOLO ese campo: el mensaje aparece sin tener
+   * que pulsar «Continuar». Al corregirlo, `limpiarError` lo borra al escribir.
+   */
+  function validarAlSalir(campo: CampoPaso1): void {
+    const mensaje = mensajeDeCampo(campo);
+    setErrores((actual) => {
+      if (mensaje === null) {
+        if (actual[campo] === undefined) return actual;
+        const copia = { ...actual };
+        delete copia[campo];
+        return copia;
+      }
+      if (actual[campo] === mensaje) return actual;
+      return { ...actual, [campo]: mensaje };
+    });
+  }
+
+  /**
+   * Reglas del paso 1 completas. Se ejecutan al continuar y al «Guardar y salir»:
+   * los botones no envían un formulario HTML, así que la validación nativa del
+   * navegador nunca corre. Son las mismas reglas del blur, campo por campo.
+   */
+  /** Paso 1: identidad del establecimiento. */
+  function validarIdentidad(): Record<string, string> {
     const e: Record<string, string> = {};
-    if (colegio.nombre.trim().length < 3) {
-      e['nombre'] = 'Escribe el nombre del colegio.';
+    for (const campo of CAMPOS_PASO_1) {
+      const mensaje = mensajeDeCampo(campo);
+      if (mensaje !== null) e[campo] = mensaje;
     }
-    if (colegio.nit.trim() !== '' && !esNitValido(colegio.nit)) {
-      e['nit'] = 'NIT inválido: 9 dígitos y el de verificación, p. ej. 900123456-7.';
-    }
-    if (colegio.telefono.trim() !== '' && !esTelefonoValido(colegio.telefono)) {
-      e['telefono'] = 'Teléfono inválido: entre 7 y 10 dígitos.';
-    }
-    if (!esEmailValido(colegio.email.trim())) {
-      e['email'] = 'Correo inválido: debe tener la forma nombre@dominio.';
-    }
-    if (!esDepartamento(colegio.departamento)) {
-      e['departamento'] = 'Elige el departamento.';
-    }
-    if (!esMunicipio(colegio.departamento, colegio.municipio)) {
-      e['municipio'] = 'Elige el municipio del departamento.';
-    }
-    if (!SubdominioSchema.safeParse(colegio.subdominio).success) {
-      e['subdominio'] = 'Entre 3 y 32 caracteres: minúsculas, números y guiones.';
-    }
+    return e;
+  }
+
+  /** Paso 2: calendario escolar, año lectivo y períodos. */
+  function validarCalendario(): Record<string, string> {
+    const e: Record<string, string> = {};
     if (colegio.calendario === '') {
       e['calendario'] = 'Elige el calendario escolar.';
-    }
-    if (colegio.anioLectivo < 2020 || colegio.anioLectivo > 2100) {
-      e['anio'] = 'El año debe estar entre 2020 y 2100.';
     }
     const problemas = revisarPeriodos();
     if (problemas !== null) e['periodos'] = problemas;
     return e;
   }
 
-  /**
-   * El subdominio se sugiere desde el nombre mientras el admin no lo toque: si
-   * el que hay sigue siendo el derivado del nombre anterior (o está vacío), se
-   * recalcula. Un subdominio propio (semilla o escrito a mano) se respeta, para
-   * no cambiar la URL del colegio cada vez que se corrige el nombre.
-   */
+  /** El nombre se guarda tal cual: el colegio se identifica por su código. */
   function conNombre(valor: string): void {
-    setColegio((actual) => {
-      const derivado = subdominioDeNombre(actual.nombre);
-      const seguiaAlNombre = actual.subdominio === '' || actual.subdominio === derivado;
-      return {
-        ...actual,
-        nombre: valor,
-        subdominio: seguiaAlNombre ? subdominioDeNombre(valor) : actual.subdominio,
-      };
-    });
-  }
-
-  /** Mientras se escribe solo se permiten caracteres válidos (sin exigir el mínimo). */
-  function conSubdominio(valor: string): void {
-    setColegio((actual) => ({
-      ...actual,
-      subdominio: valor
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .toLowerCase()
-        .replace(/[^a-z0-9-]+/g, '-')
-        .replace(/^-+/, '')
-        .slice(0, 32),
-    }));
+    setColegio((actual) => ({ ...actual, nombre: valor }));
   }
 
   /**
@@ -489,14 +612,11 @@ export default function OnboardingPage() {
     try {
       const datos = await buscarColegioDane(codigo);
       if (id !== busquedaRef.current) return;
-      setDaneInfo(datos);
       setCodigoBuscado(codigo);
       // El MEN manda «INSTITUCION EDUCATIVA TECNICA DEPARTAMENTAL …»: lo
       // dejamos en «I.E.T.D. …» antes de prellenar, y el admin ajusta si quiere.
       const nombre = nombreSaneado(datos.nombre);
       setColegio((actual) => {
-        const derivado = subdominioDeNombre(actual.nombre);
-        const seguiaAlNombre = actual.subdominio === '' || actual.subdominio === derivado;
         return {
           ...actual,
           nombre,
@@ -508,7 +628,6 @@ export default function OnboardingPage() {
           telefono: datos.telefono ?? '',
           email: datos.email ?? actual.email,
           calendario: datos.calendario,
-          subdominio: seguiaAlNombre ? subdominioDeNombre(nombre) : actual.subdominio,
         };
       });
       if (datos.calendario !== colegio.calendario) {
@@ -517,7 +636,6 @@ export default function OnboardingPage() {
       setExito(`Datos del MEN de ${datos.anio} cargados. Revísalos y ajusta lo que haga falta.`);
     } catch (e) {
       if (id !== busquedaRef.current) return;
-      setDaneInfo(null);
       setDaneError(mensajeDeError(e, 'No pudimos consultar los datos del MEN.'));
     } finally {
       if (id === busquedaRef.current) {
@@ -535,19 +653,18 @@ export default function OnboardingPage() {
     const limpio = valor.replace(/\D/g, '').slice(0, 12);
     setColegio((actual) => ({ ...actual, codigoDane: limpio }));
     setDaneError(null);
-    // El aviso y la ficha del MEN hablan del código anterior: si cambia, se van.
+    // El aviso del MEN habla del código anterior: si cambia, se va.
     setExito(null);
     if (limpio.length === 12 && limpio === codigoBuscado) {
       setFormHabilitado(true);
       return;
     }
-    setDaneInfo(null);
     setFormHabilitado(false);
     if (limpio.length === 12) void buscarDane(limpio);
   }
 
-  async function guardarPaso1(siguiente: number): Promise<void> {
-    const problemas = validarPaso1();
+  async function guardarIdentidad(siguiente: number): Promise<void> {
+    const problemas = validarIdentidad();
     setErrores(problemas);
     if (Object.keys(problemas).length > 0) {
       setAviso('Revisa los campos marcados antes de continuar.');
@@ -564,7 +681,26 @@ export default function OnboardingPage() {
     }
   }
 
-  async function guardarPaso2(siguiente: number): Promise<void> {
+  /** Paso 2: el calendario y los períodos se guardan en el mismo colegio. */
+  async function guardarCalendario(siguiente: number): Promise<void> {
+    const problemas = validarCalendario();
+    setErrores(problemas);
+    if (Object.keys(problemas).length > 0) {
+      setAviso('Revisa el calendario y los períodos antes de continuar.');
+      return;
+    }
+    setGuardando(true);
+    setAviso(null);
+    try {
+      aplicar(await mutColegio.mutateAsync(), siguiente);
+    } catch (e) {
+      setAviso(e instanceof ApiError ? e.message : 'No se pudo guardar el calendario.');
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  async function guardarSedes(siguiente: number): Promise<void> {
     if (sede.jornadas.length === 0) {
       setAviso('Elige al menos una jornada para la sede.');
       return;
@@ -596,17 +732,20 @@ export default function OnboardingPage() {
    * «Guardar y salir»: guarda de verdad el paso actual. Antes solo llamaba a
    * `guardarPasoOnboarding(paso)`, que marca el paso en el colegio y no escribe
    * los datos, así que en el paso 1 se perdía todo lo escrito.
+   *
+   * Sin código DANE el colegio aún no existe: en lugar de cerrar en silencio,
+   * se abre el aviso de salida (`confirmarSalida`).
    */
   async function salir(): Promise<void> {
     setAviso(null);
+    if (paso === 1 && !formHabilitado) {
+      setConfirmarSalida(true);
+      return;
+    }
     setGuardando(true);
     try {
       if (paso === 1) {
-        if (!formHabilitado) {
-          router.push('/dashboard');
-          return;
-        }
-        const problemas = validarPaso1();
+        const problemas = validarIdentidad();
         setErrores(problemas);
         if (Object.keys(problemas).length > 0) {
           setAviso('Revisa los campos marcados: no se guardó nada.');
@@ -614,6 +753,14 @@ export default function OnboardingPage() {
         }
         aplicar(await mutColegio.mutateAsync(), 1);
       } else if (paso === 2) {
+        const problemas = validarCalendario();
+        setErrores(problemas);
+        if (Object.keys(problemas).length > 0) {
+          setAviso('Revisa el calendario y los períodos: no se guardó nada.');
+          return;
+        }
+        aplicar(await mutColegio.mutateAsync(), 2);
+      } else if (paso === 3) {
         if (sede.jornadas.length === 0) {
           setAviso('Elige al menos una jornada para la sede.');
           return;
@@ -633,6 +780,142 @@ export default function OnboardingPage() {
       setGuardando(false);
     }
   }
+
+  /** Cierra el aviso de salida sin mover al admin de donde está. */
+  function seguirAqui(): void {
+    setConfirmarSalida(false);
+  }
+
+  /**
+   * Cerrar sesión de verdad: la cookie se invalida en la API y la caché de la
+   * sesión se tira antes de volver al login. Lo usan la bienvenida y el aviso de
+   * salida del paso 1.
+   */
+  async function salirDeLaCuenta(): Promise<void> {
+    setConfirmarSalida(false);
+    setGuardando(true);
+    try {
+      await cerrarSesion();
+    } catch {
+      // La cookie pudo haber expirado ya: igual volvemos al login.
+    }
+    qc.removeQueries({ queryKey: SESION_KEY });
+    router.push('/login');
+  }
+
+  /** Vuelve un paso sin guardar: guardan el CTA, el gesto y las flechas. */
+  function volver(): void {
+    if (paso > 1) setPaso(paso - 1);
+  }
+
+  /** Avanza con el mismo guardado que el CTA: lo comparten el gesto y el teclado. */
+  async function avanzarUnPaso(): Promise<void> {
+    if (!puedeAvanzar) return;
+    if (paso === 1) await guardarIdentidad(2);
+    else if (paso === 2) await guardarCalendario(3);
+    else if (paso === 3) await guardarSedes(4);
+    else if (paso === 4) await generar(5);
+    else if (paso === 5) await avanzar(6);
+    else if (paso === 6) await avanzar(7);
+  }
+
+  /**
+   * Deslizar entre pasos: hacia la izquierda avanza (si el paso está completo) y
+   * hacia la derecha vuelve. No nace dentro de un campo ni de una tabla con
+   * scroll propio, y el umbral lo decide `gestoDePaso`.
+   */
+  function alTocar(evento: TouchEvent<HTMLElement>): void {
+    const dedo = evento.touches[0];
+    const origen = evento.target;
+    if (!(origen instanceof Element) || origen.closest(ZONAS_SIN_GESTO) !== null) {
+      toqueRef.current = null;
+      return;
+    }
+    if (dedo === undefined) {
+      toqueRef.current = null;
+      return;
+    }
+    toqueRef.current = { x: dedo.clientX, y: dedo.clientY };
+  }
+
+  function alSoltar(evento: TouchEvent<HTMLElement>): void {
+    const inicio = toqueRef.current;
+    const dedo = evento.changedTouches[0];
+    toqueRef.current = null;
+    if (inicio === null || dedo === undefined) return;
+    const gesto = gestoDePaso(
+      inicio,
+      { x: dedo.clientX, y: dedo.clientY },
+      { puedeAvanzar, puedeVolver: paso > 1 },
+    );
+    if (gesto === 'atras') volver();
+    else if (gesto === 'adelante') void avanzarUnPaso();
+  }
+
+  /**
+   * Las flechas del teclado hacen lo mismo que el gesto. El manejador se
+   * registra una sola vez y lee de `navegacion` la versión vigente de las
+   * acciones: así no se vuelve a suscribir en cada render.
+   */
+  const navegacion = useRef({ volver, avanzar: avanzarUnPaso, activa: true });
+  useEffect(() => {
+    navegacion.current = {
+      volver,
+      avanzar: avanzarUnPaso,
+      activa: !bienvenida && !confirmarSalida,
+    };
+  });
+
+  useEffect(() => {
+    function alPulsarTecla(evento: KeyboardEvent): void {
+      if (!navegacion.current.activa) return;
+      if (evento.key !== 'ArrowLeft' && evento.key !== 'ArrowRight') return;
+      const activo = document.activeElement;
+      if (activo instanceof Element && activo.closest(ZONAS_SIN_GESTO) !== null) return;
+      evento.preventDefault();
+      if (evento.key === 'ArrowLeft') navegacion.current.volver();
+      else void navegacion.current.avanzar();
+    }
+    window.addEventListener('keydown', alPulsarTecla);
+    return () => window.removeEventListener('keydown', alPulsarTecla);
+  }, []);
+
+  /**
+   * Diálogo de salida: el foco entra en la primera acción, no se escapa con Tab,
+   * Escape equivale a «Seguir aquí» y al cerrarse vuelve a donde estaba.
+   */
+  useEffect(() => {
+    if (!confirmarSalida) return;
+    const previo = document.activeElement;
+    const dialogo = dialogoRef.current;
+    dialogo?.querySelector<HTMLElement>('button')?.focus();
+
+    function alPulsar(evento: KeyboardEvent): void {
+      if (evento.key === 'Escape') {
+        evento.preventDefault();
+        setConfirmarSalida(false);
+        return;
+      }
+      if (evento.key !== 'Tab' || dialogo === null) return;
+      const focos = Array.from(dialogo.querySelectorAll<HTMLElement>('button'));
+      const primero = focos[0];
+      const ultimo = focos[focos.length - 1];
+      if (primero === undefined || ultimo === undefined) return;
+      if (evento.shiftKey && document.activeElement === primero) {
+        evento.preventDefault();
+        ultimo.focus();
+      } else if (!evento.shiftKey && document.activeElement === ultimo) {
+        evento.preventDefault();
+        primero.focus();
+      }
+    }
+
+    document.addEventListener('keydown', alPulsar);
+    return () => {
+      document.removeEventListener('keydown', alPulsar);
+      if (previo instanceof HTMLElement) previo.focus();
+    };
+  }, [confirmarSalida]);
 
   async function terminar(): Promise<void> {
     setGuardando(true);
@@ -800,6 +1083,19 @@ export default function OnboardingPage() {
       : base;
   }, [colegio.departamento, colegio.municipio]);
 
+  /**
+   * Años lectivos seleccionables: el anterior, el actual y el próximo. El campo
+   * es un select, no texto libre, así que no se puede pedir un año lejano. Un
+   * colegio con un año heredado fuera de esa ventana conserva el suyo para que
+   * el formulario no aparezca vacío.
+   */
+  const aniosLectivos = useMemo(() => {
+    if (anioServidor === undefined) return [];
+    const base = [anioServidor - 1, anioServidor, anioServidor + 1];
+    const anio = colegio.anioLectivo;
+    return (base.includes(anio) ? base : [...base, anio]).sort((a, b) => a - b);
+  }, [anioServidor, colegio.anioLectivo]);
+
   if (isLoading) {
     return (
       <main className="onb-cargando" aria-live="polite">
@@ -817,183 +1113,277 @@ export default function OnboardingPage() {
     );
   }
 
-  return (
-    <div className="onb-shell">
-      <aside className="onb-rail" aria-label="Pasos de la configuración">
-        <div>
-          <p className="onb-marca">EduPlatform</p>
-          <p className="onb-sub">Configuración inicial</p>
+  // Colegio recién creado: antes del paso 1 se explica qué va a pasar y qué hace
+  // falta, para que el código DANE no aparezca como un campo suelto. En
+  // escritorio es una tarjeta centrada; en móvil, el mismo bloque sin marco.
+  if (bienvenida) {
+    return (
+      <main className="onb-bienvenida">
+        <div className="onb-bienvenida-card">
+          <p className="onb-marca">Bienvenido a EduPlatform</p>
+          <h1 className="onb-saludo">Empecemos a configurar tu colegio</h1>
+          <p className="onb-saludo-sub">
+            Son solo siete pasos y te tomará unos 10 minutos. Puedes salir y volver cuando quieras:
+            lo que configures queda guardado.
+          </p>
+          <p className="onb-bienvenida-titulo">¿Qué necesitas?</p>
+          <ul className="onb-necesita">
+            <li>
+              <span className="onb-punto" aria-hidden="true">
+                1
+              </span>
+              Código DANE
+            </li>
+            <li>
+              <span className="onb-punto" aria-hidden="true">
+                2
+              </span>
+              Sedes y jornadas
+            </li>
+            <li>
+              <span className="onb-punto" aria-hidden="true">
+                3
+              </span>
+              Personal y estudiantes
+            </li>
+          </ul>
+          <div className="onb-bienvenida-pie">
+            <M3Button grande className="full-width" onClick={() => setBienvenida(false)}>
+              Empezar
+            </M3Button>
+            <button
+              type="button"
+              className="onb-enlace"
+              onClick={() => void salirDeLaCuenta()}
+              disabled={guardando}
+            >
+              Cerrar sesión
+            </button>
+          </div>
         </div>
-        <ol className="onb-pasos">
-          {PASOS.map((titulo, i) => {
-            const n = i + 1;
-            const estado = n === paso ? 'activo' : n < paso ? 'hecho' : 'pendiente';
-            return (
-              <li key={titulo} className={`onb-paso onb-paso--${estado}`}>
-                <span className="onb-num">{n < paso ? '✓' : n}</span>
-                <span>{titulo}</span>
-              </li>
-            );
-          })}
-        </ol>
-        <button type="button" className="onb-salir" onClick={() => void salir()}>
-          Guardar y salir
-        </button>
-      </aside>
+      </main>
+    );
+  }
 
-      <main className="onb-main">
-        <p className="onb-eyebrow">PASO {paso} DE 6</p>
-        <h1 className="onb-titulo">{tituloDe(paso)}</h1>
-        <p className="onb-bajada">{bajadaDe(paso)}</p>
+  /**
+   * CTA del paso: uno solo, que se pinta en la cabecera (escritorio) o en el pie
+   * (móvil). Si se renderizaran los dos habría dos botones con el mismo nombre.
+   */
+  const cta = (
+    <>
+      {paso === 1 && formHabilitado && (
+        <M3Button onClick={() => void guardarIdentidad(2)} disabled={guardando}>
+          Continuar al calendario
+        </M3Button>
+      )}
+      {paso === 2 && (
+        <M3Button onClick={() => void guardarCalendario(3)} disabled={guardando}>
+          Continuar a sedes
+        </M3Button>
+      )}
+      {paso === 3 && (
+        <M3Button onClick={() => void guardarSedes(4)} disabled={guardando}>
+          Continuar a estructura
+        </M3Button>
+      )}
+      {paso === 4 && (
+        <M3Button onClick={() => void generar(5)} disabled={guardando || cursosPrevistos === 0}>
+          Generar {cursosPrevistos} cursos
+        </M3Button>
+      )}
+      {paso === 5 && (
+        <M3Button onClick={() => void avanzar(6)} disabled={guardando}>
+          Continuar a estudiantes
+        </M3Button>
+      )}
+      {paso === 6 && (
+        <M3Button onClick={() => void avanzar(7)} disabled={importando}>
+          Continuar al resumen
+        </M3Button>
+      )}
+      {paso === 7 && (
+        <M3Button onClick={() => void terminar()} disabled={guardando}>
+          Entrar al dashboard
+        </M3Button>
+      )}
+    </>
+  );
 
-        {aviso !== null && (
-          <p className="onb-aviso" role="alert">
-            {aviso}
+  return (
+    <div className="onb-pagina">
+      {/* Cabecera compacta (opción A): el paso y su avance se leen arriba, en
+          móvil y en escritorio. Vive fuera del shell para poder quedarse fija. */}
+      <header className="onb-cab">
+        <div className="onb-cab-fila">
+          {paso > 1 ? (
+            <button
+              type="button"
+              className="onb-cab-atras"
+              onClick={volver}
+              aria-label="Paso anterior"
+            >
+              ←
+            </button>
+          ) : (
+            <span className="onb-cab-hueco" aria-hidden="true" />
+          )}
+          <p className="onb-cab-meta">
+            <strong>Paso {paso}</strong> de {PASOS.length} · {PASOS[paso - 1] ?? ''}
           </p>
-        )}
+          {movil ? (
+            <span className="onb-cab-hueco" aria-hidden="true" />
+          ) : (
+            <div className="onb-acciones">{cta}</div>
+          )}
+        </div>
+        <div
+          className="onb-barra"
+          role="progressbar"
+          aria-valuemin={1}
+          aria-valuemax={PASOS.length}
+          aria-valuenow={paso}
+          aria-valuetext={`Paso ${paso} de ${PASOS.length}`}
+        >
+          <span className="onb-barra-relleno" style={{ width: progreso }} />
+        </div>
+      </header>
 
-        {exito !== null && (
-          <p className="onb-ok" role="status">
-            {exito}
-          </p>
-        )}
+      <div className="onb-shell">
+        <main className="onb-main" onTouchStart={alTocar} onTouchEnd={alSoltar}>
+          <h1 className="onb-titulo">{tituloDe(paso)}</h1>
+          <p className="onb-bajada">{bajadaDe(paso)}</p>
 
-        {paso === 1 && (
-          <section className="onb-card" aria-busy={buscandoDane}>
-            <h2 className="onb-card-titulo">Identidad del colegio</h2>
-            <TextField
-              id="onb-dane"
-              label="Código DANE"
-              value={colegio.codigoDane}
-              onChange={conCodigo}
-              error={daneError}
-              autoFocus
-              ayuda={
-                buscandoDane
-                  ? 'Buscando los datos del colegio en el MEN…'
-                  : formHabilitado
-                    ? '12 dígitos. Los datos del colegio se completan solos.'
-                    : 'Escribe los 12 dígitos del código DANE para ver el resto del formulario.'
-              }
-            />
+          {aviso !== null && (
+            <p className="onb-aviso" role="alert">
+              {aviso}
+            </p>
+          )}
 
-            {daneInfo !== null && (
-              <p className="onb-nota">
-                Datos del MEN ({daneInfo.anio}): {daneInfo.sector ?? 'sector sin dato'} ·{' '}
-                {daneInfo.caracter ?? 'carácter sin dato'} · rector {daneInfo.rector ?? 'sin dato'}{' '}
-                · {daneInfo.matricula} matriculado(s) · {daneInfo.sedes} sede(s).
-              </p>
-            )}
+          {exito !== null && (
+            <p className="onb-ok" role="status">
+              {exito}
+            </p>
+          )}
 
-            {!formHabilitado && !buscandoDane && (
-              <p className="onb-nota">
-                Con el código DANE se traen el nombre, el municipio y la dirección del
-                establecimiento. Si el código no aparece en el MEN también podrás escribir los datos
-                a mano.
-              </p>
-            )}
+          {paso === 1 && (
+            <section className="onb-card" aria-busy={buscandoDane}>
+              <h2 className="onb-card-titulo">Identidad del colegio</h2>
+              <TextField
+                id="onb-dane"
+                label="Código DANE"
+                value={colegio.codigoDane}
+                onChange={conCodigo}
+                error={daneError}
+                autoFocus={data.colegio.codigoDane.trim() === ''}
+                ayuda={
+                  buscandoDane
+                    ? 'Buscando los datos del colegio en el MEN…'
+                    : !formHabilitado
+                      ? 'Digita los 12 dígitos del código DANE.'
+                      : undefined
+                }
+              />
 
-            {formHabilitado && (
-              <div className="onb-form">
-                <div className="onb-grid">
-                  <TextField
-                    id="onb-nombre"
-                    label="Nombre"
-                    value={colegio.nombre}
-                    onChange={conNombre}
-                    error={errores['nombre']}
-                  />
-                  <TextField
-                    id="onb-nit"
-                    label="NIT (opcional)"
-                    value={colegio.nit}
-                    onChange={(v) => {
-                      setColegio({ ...colegio, nit: v });
-                      limpiarError('nit');
-                    }}
-                    error={errores['nit']}
-                    ayuda="Con dígito de verificación, p. ej. 900123456-7."
-                  />
-                  {/* El nombre completo es largo: ocupa las dos columnas. */}
-                  <div className="onb-campo-ancho">
+              {formHabilitado && (
+                <div className="onb-form">
+                  <div className="onb-grid">
                     <TextField
-                      id="onb-nombre-oficial"
-                      label="Nombre oficial (documentos)"
-                      value={colegio.nombreOficial}
-                      onChange={(v) => setColegio({ ...colegio, nombreOficial: v })}
-                      ayuda="Como lo registra el MEN; se imprime en certificados y actas."
+                      id="onb-nombre"
+                      label="Nombre"
+                      value={colegio.nombre}
+                      onChange={conNombre}
+                      error={errores['nombre']}
+                      onBlur={() => validarAlSalir('nombre')}
+                    />
+                    <TextField
+                      id="onb-nit"
+                      label="NIT (opcional)"
+                      value={colegio.nit}
+                      onChange={(v) => {
+                        setColegio({ ...colegio, nit: v });
+                        limpiarError('nit');
+                      }}
+                      error={errores['nit']}
+                      ayuda="Con dígito de verificación, p. ej. 900123456-7."
+                      onBlur={() => validarAlSalir('nit')}
+                    />
+                    {/* El nombre completo es largo: ocupa las dos columnas. */}
+                    <div className="onb-campo-ancho">
+                      <TextField
+                        id="onb-nombre-oficial"
+                        label="Nombre oficial (documentos)"
+                        value={colegio.nombreOficial}
+                        onChange={(v) => setColegio({ ...colegio, nombreOficial: v })}
+                        ayuda="Como lo registra el MEN; se imprime en certificados y actas."
+                      />
+                    </div>
+                    <SelectField
+                      id="onb-departamento"
+                      label="Departamento"
+                      value={colegio.departamento}
+                      onChange={conDepartamento}
+                      opciones={opcionesDepartamento.map((d) => ({ valor: d, texto: d }))}
+                      placeholder="Elige…"
+                      error={errores['departamento']}
+                      onBlur={() => validarAlSalir('departamento')}
+                    />
+                    <SelectField
+                      id="onb-municipio"
+                      label="Municipio"
+                      value={colegio.municipio}
+                      onChange={conMunicipio}
+                      opciones={opcionesMunicipio.map((m) => ({ valor: m, texto: m }))}
+                      placeholder={
+                        colegio.departamento === '' ? 'Primero el departamento' : 'Elige…'
+                      }
+                      error={errores['municipio']}
+                      disabled={colegio.departamento === ''}
+                      onBlur={() => validarAlSalir('municipio')}
+                      ayuda={
+                        colegio.departamento === ''
+                          ? 'Se habilita al elegir el departamento.'
+                          : undefined
+                      }
+                    />
+                    <TextField
+                      id="onb-direccion"
+                      label="Dirección"
+                      value={colegio.direccion}
+                      onChange={(v) => setColegio({ ...colegio, direccion: v })}
+                    />
+                    <TextField
+                      id="onb-telefono"
+                      label="Teléfono"
+                      value={colegio.telefono}
+                      onChange={(v) => {
+                        setColegio({ ...colegio, telefono: v });
+                        limpiarError('telefono');
+                      }}
+                      error={errores['telefono']}
+                      onBlur={() => validarAlSalir('telefono')}
+                    />
+                    <TextField
+                      id="onb-email"
+                      label="Correo del colegio"
+                      tipo="email"
+                      value={colegio.email}
+                      onChange={(v) => {
+                        setColegio({ ...colegio, email: v });
+                        limpiarError('email');
+                      }}
+                      error={errores['email']}
+                      onBlur={() => validarAlSalir('email')}
                     />
                   </div>
-                  <SelectField
-                    id="onb-departamento"
-                    label="Departamento"
-                    value={colegio.departamento}
-                    onChange={conDepartamento}
-                    opciones={opcionesDepartamento.map((d) => ({ valor: d, texto: d }))}
-                    placeholder="Elige…"
-                    error={errores['departamento']}
-                  />
-                  <SelectField
-                    id="onb-municipio"
-                    label="Municipio"
-                    value={colegio.municipio}
-                    onChange={conMunicipio}
-                    opciones={opcionesMunicipio.map((m) => ({ valor: m, texto: m }))}
-                    placeholder={colegio.departamento === '' ? 'Primero el departamento' : 'Elige…'}
-                    error={errores['municipio']}
-                    disabled={colegio.departamento === ''}
-                    ayuda={
-                      colegio.departamento === ''
-                        ? 'Se habilita al elegir el departamento.'
-                        : undefined
-                    }
-                  />
-                  <TextField
-                    id="onb-direccion"
-                    label="Dirección"
-                    value={colegio.direccion}
-                    onChange={(v) => setColegio({ ...colegio, direccion: v })}
-                  />
-                  <TextField
-                    id="onb-telefono"
-                    label="Teléfono"
-                    value={colegio.telefono}
-                    onChange={(v) => {
-                      setColegio({ ...colegio, telefono: v });
-                      limpiarError('telefono');
-                    }}
-                    error={errores['telefono']}
-                  />
-                  <TextField
-                    id="onb-email"
-                    label="Correo del colegio"
-                    tipo="email"
-                    value={colegio.email}
-                    onChange={(v) => {
-                      setColegio({ ...colegio, email: v });
-                      limpiarError('email');
-                    }}
-                    error={errores['email']}
-                  />
-                  <TextField
-                    id="onb-sub"
-                    label="Subdominio"
-                    value={colegio.subdominio}
-                    onChange={(v) => {
-                      conSubdominio(v);
-                      limpiarError('subdominio');
-                    }}
-                    ayuda="Se sugiere del nombre; puedes cambiarlo."
-                    error={errores['subdominio']}
-                  />
                 </div>
+              )}
+            </section>
+          )}
 
-                <p className="onb-nota">
-                  Tus usuarios entran por la dirección del colegio (
-                  <strong>{data.colegio.subdominio}</strong>) con su nombre de usuario y contraseña;
-                  no hace falta que sea un correo real.
-                </p>
-
+          {paso === 2 && (
+            <section className="onb-card">
+              <h2 className="onb-card-titulo">Calendario y períodos</h2>
+              <div className="onb-form">
                 <div className="onb-fila-calendario">
                   <div>
                     <span className="onb-etiqueta" id="onb-calendario-etiqueta">
@@ -1010,6 +1400,7 @@ export default function OnboardingPage() {
                           className={`onb-chip${colegio.calendario === c ? ' onb-chip--on' : ''}`}
                         >
                           <input
+                            id={`onb-calendario-${c}`}
                             type="radio"
                             name="calendario"
                             checked={colegio.calendario === c}
@@ -1026,12 +1417,15 @@ export default function OnboardingPage() {
                     )}
                   </div>
                   <div className="onb-anio">
-                    <TextField
+                    <SelectField
                       id="onb-anio"
                       label="Año lectivo"
                       value={String(colegio.anioLectivo)}
                       onChange={conAnio}
-                      error={errores['anio']}
+                      opciones={aniosLectivos.map((a) => ({
+                        valor: String(a),
+                        texto: String(a),
+                      }))}
                     />
                   </div>
                 </div>
@@ -1046,9 +1440,11 @@ export default function OnboardingPage() {
                       {periodos.map((p, i) => (
                         <div key={p.numero} className="onb-periodo">
                           <strong>{p.nombre}</strong>
-                          <label>
+                          <label htmlFor={`onb-periodo-${p.numero}-inicio`}>
                             Inicio
                             <input
+                              id={`onb-periodo-${p.numero}-inicio`}
+                              name={`periodo-${p.numero}-inicio`}
                               type="date"
                               value={p.fechaInicio}
                               onChange={(e) => {
@@ -1059,9 +1455,11 @@ export default function OnboardingPage() {
                               }}
                             />
                           </label>
-                          <label>
+                          <label htmlFor={`onb-periodo-${p.numero}-fin`}>
                             Fin
                             <input
+                              id={`onb-periodo-${p.numero}-fin`}
+                              name={`periodo-${p.numero}-fin`}
                               type="date"
                               value={p.fechaFin}
                               onChange={(e) => {
@@ -1072,8 +1470,33 @@ export default function OnboardingPage() {
                               }}
                             />
                           </label>
+                          <button
+                            type="button"
+                            className="onb-periodo-quitar"
+                            onClick={() => quitarPeriodo(p.numero)}
+                            disabled={periodos.length <= 2}
+                            aria-label={`Quitar el ${p.nombre}`}
+                            title={
+                              periodos.length <= 2
+                                ? 'El colegio necesita al menos dos períodos'
+                                : undefined
+                            }
+                          >
+                            Quitar
+                          </button>
                         </div>
                       ))}
+                    </div>
+                    <div className="onb-periodos-acciones">
+                      <button
+                        type="button"
+                        className="onb-agregar-periodo"
+                        onClick={agregarPeriodo}
+                        disabled={periodos.length >= 4}
+                      >
+                        <span aria-hidden="true">+</span> Agregar período
+                      </button>
+                      <span className="onb-nota">{periodos.length} de 4 · mínimo dos períodos</span>
                     </div>
                     {errores['periodos'] !== undefined && (
                       <p className="onb-error m3-body-small" role="alert">
@@ -1083,542 +1506,566 @@ export default function OnboardingPage() {
                   </>
                 )}
               </div>
-            )}
-          </section>
-        )}
+            </section>
+          )}
 
-        {paso === 2 && (
-          <section className="onb-card">
-            <p className="onb-nota">Cada curso pertenecerá a una sede y a una de sus jornadas.</p>
-            <div className="onb-grid">
-              <TextField
-                id="onb-sede-nombre"
-                label="Nombre de la sede"
-                value={sede.nombre}
-                onChange={(v) => setSede({ ...sede, nombre: v })}
-              />
-              <TextField
-                id="onb-sede-dir"
-                label="Dirección"
-                value={sede.direccion}
-                onChange={(v) => setSede({ ...sede, direccion: v })}
-              />
-            </div>
-            <h2 className="onb-card-titulo">Jornadas que ofrece</h2>
-            <div className="onb-opciones">
-              {JORNADAS.map((j) => {
-                const on = sede.jornadas.includes(j.valor);
-                return (
-                  <label key={j.valor} className={`onb-chip${on ? ' onb-chip--on' : ''}`}>
-                    <input
-                      type="checkbox"
-                      checked={on}
-                      onChange={() =>
-                        setSede({
-                          ...sede,
-                          jornadas: on
-                            ? sede.jornadas.filter((x) => x !== j.valor)
-                            : [...sede.jornadas, j.valor],
-                        })
-                      }
-                    />
-                    {j.texto}
-                  </label>
-                );
-              })}
-            </div>
-            {data.sedes.length > 0 && (
-              <p className="onb-nota">
-                Ya tienes {data.sedes.length} sede(s): {data.sedes.map((s) => s.nombre).join(', ')}.
-                Al guardar se actualiza {sedeActual?.nombre ?? 'la sede'}.
-              </p>
-            )}
-          </section>
-        )}
-
-        {paso === 3 && (
-          <section className="onb-card">
-            <p className="onb-nota">
-              Genera los cursos por sede y jornada. Podrás editarlos uno a uno después.
-            </p>
-            <div className="onb-grid">
-              <label className="onb-campo">
-                Sede
-                <select value={sedeId} onChange={(e) => setSedeId(e.target.value)}>
-                  {data.sedes.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.nombre}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="onb-campo">
-                Jornada
-                <select value={jornada} onChange={(e) => setJornada(e.target.value as Jornada)}>
-                  {(sedeActual?.jornadas ?? []).map((j) => (
-                    <option key={j} value={j}>
-                      {JORNADAS.find((x) => x.valor === j)?.texto ?? j}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            {NIVELES.map((n) => (
-              <div key={n.id} className="onb-nivel">
-                <label className="onb-chip onb-chip--on">
-                  <input
-                    type="checkbox"
-                    checked={n.grados.every((g) => grados.includes(g))}
-                    onChange={() =>
-                      setGrados(
-                        n.grados.every((g) => grados.includes(g))
-                          ? grados.filter((g) => !n.grados.includes(g))
-                          : [...new Set([...grados, ...n.grados])].sort((a, b) => a - b),
-                      )
-                    }
-                  />
-                  {n.texto}
-                </label>
-                <div className="onb-opciones">
-                  {n.grados.map((g) => (
-                    <label
-                      key={g}
-                      className={`onb-chip${grados.includes(g) ? ' onb-chip--on' : ''}`}
-                    >
+          {paso === 3 && (
+            <section className="onb-card">
+              <p className="onb-nota">Cada curso pertenecerá a una sede y a una de sus jornadas.</p>
+              <div className="onb-grid">
+                <TextField
+                  id="onb-sede-nombre"
+                  label="Nombre de la sede"
+                  value={sede.nombre}
+                  onChange={(v) => setSede({ ...sede, nombre: v })}
+                />
+                <TextField
+                  id="onb-sede-dir"
+                  label="Dirección"
+                  value={sede.direccion}
+                  onChange={(v) => setSede({ ...sede, direccion: v })}
+                />
+              </div>
+              <h2 className="onb-card-titulo">Jornadas que ofrece</h2>
+              <div className="onb-opciones">
+                {JORNADAS.map((j) => {
+                  const on = sede.jornadas.includes(j.valor);
+                  return (
+                    <label key={j.valor} className={`onb-chip${on ? ' onb-chip--on' : ''}`}>
                       <input
+                        id={`onb-jornada-${j.valor}`}
+                        name="jornadas"
                         type="checkbox"
-                        checked={grados.includes(g)}
+                        checked={on}
                         onChange={() =>
-                          setGrados(
-                            grados.includes(g)
-                              ? grados.filter((x) => x !== g)
-                              : [...grados, g].sort((a, b) => a - b),
-                          )
+                          setSede({
+                            ...sede,
+                            jornadas: on
+                              ? sede.jornadas.filter((x) => x !== j.valor)
+                              : [...sede.jornadas, j.valor],
+                          })
                         }
                       />
-                      {g === 0 ? 'Transición' : `${g}°`}
+                      {j.texto}
                     </label>
-                  ))}
-                </div>
+                  );
+                })}
               </div>
-            ))}
-
-            <h2 className="onb-card-titulo">Grupos por grado</h2>
-            <div className="onb-opciones">
-              {LETRAS.map((l) => (
-                <label key={l} className={`onb-chip${letras.includes(l) ? ' onb-chip--on' : ''}`}>
-                  <input
-                    type="checkbox"
-                    checked={letras.includes(l)}
-                    onChange={() =>
-                      setLetras(
-                        letras.includes(l)
-                          ? letras.filter((x) => x !== l)
-                          : [...letras, l].sort((a, b) => a.localeCompare(b)),
-                      )
-                    }
-                  />
-                  {l}
-                </label>
-              ))}
-            </div>
-            <p className="onb-nota">
-              Se crearán {cursosPrevistos} curso(s)
-              {grados.length > 0 && letras.length > 0
-                ? `: ${grados.map((g) => (g === 0 ? 'Transición' : `${g}°`)).join(', ')} × ${letras.join(', ')}`
-                : ''}
-              {sedeActual !== undefined ? ` · ${sedeActual.nombre}` : ''}.
-            </p>
-          </section>
-        )}
-
-        {paso === 4 && (
-          <section className="onb-card">
-            <div className="onb-card-cabecera">
-              <h2 className="onb-card-titulo">Agregar personal</h2>
-              <span className="onb-contador">
-                {data.personal.total} {data.personal.total === 1 ? 'persona' : 'personas'} en el
-                colegio
-              </span>
-            </div>
-
-            <div className="onb-grid">
-              <TextField
-                id="onb-emp-nombres"
-                label="Nombres"
-                value={empleado.nombres}
-                onChange={(v) => setEmpleado({ ...empleado, nombres: v })}
-              />
-              <TextField
-                id="onb-emp-apellidos"
-                label="Apellidos"
-                value={empleado.apellidos}
-                onChange={(v) => setEmpleado({ ...empleado, apellidos: v })}
-              />
-              <label className="onb-campo">
-                Tipo de documento
-                <select
-                  value={empleado.tipoDocumento}
-                  onChange={(e) =>
-                    setEmpleado({ ...empleado, tipoDocumento: e.target.value as TipoDocumento })
-                  }
-                >
-                  {TIPOS_DOCUMENTO.map((tipo) => (
-                    <option key={tipo} value={tipo}>
-                      {tipo}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <TextField
-                id="onb-emp-documento"
-                label="Número de documento"
-                value={empleado.numeroDocumento}
-                onChange={(v) => setEmpleado({ ...empleado, numeroDocumento: v })}
-              />
-              <TextField
-                id="onb-emp-usuario"
-                label="Nombre de usuario"
-                value={empleado.usuario}
-                onChange={(v) => setEmpleado({ ...empleado, usuario: v })}
-                ayuda="Con esto entrará a la plataforma (p. ej. rector.garcia)"
-              />
-              <label className="onb-campo">
-                Rol
-                <select
-                  value={empleado.rolId}
-                  onChange={(e) => setEmpleado({ ...empleado, rolId: e.target.value })}
-                >
-                  <option value="">Elige un rol…</option>
-                  {rolesEmpleado.map((rol) => (
-                    <option key={rol.id} value={rol.id}>
-                      {rol.nombre}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="onb-campo">
-                Sede (alcance)
-                <select
-                  value={empleado.sedeId}
-                  onChange={(e) => setEmpleado({ ...empleado, sedeId: e.target.value })}
-                >
-                  <option value="">Todas las sedes</option>
-                  {sedes.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.nombre}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            <div className="onb-acciones">
-              <M3Button
-                icono="person_add"
-                onClick={() => void crearEmpleado()}
-                disabled={guardando}
-              >
-                Agregar al equipo
-              </M3Button>
-            </div>
-
-            {credencial !== null && (
-              <div className="onb-credencial" role="status">
-                <p>
-                  <strong>{credencial.nombre}</strong> quedó creado. Esta contraseña temporal se
-                  muestra una sola vez:
+              {data.sedes.length > 0 && (
+                <p className="onb-nota">
+                  Ya tienes {data.sedes.length} sede(s):{' '}
+                  {data.sedes.map((s) => s.nombre).join(', ')}. Al guardar se actualiza{' '}
+                  {sedeActual?.nombre ?? 'la sede'}.
                 </p>
-                <code>{credencial.password}</code>
-              </div>
-            )}
+              )}
+            </section>
+          )}
 
-            <h2 className="onb-card-titulo">Personal agregado</h2>
-            {empleadosQ.isLoading ? (
-              <p className="onb-nota">Cargando personal…</p>
-            ) : personal.length === 0 ? (
+          {paso === 4 && (
+            <section className="onb-card">
               <p className="onb-nota">
-                Además de tu cuenta de administrador aún no hay personal. Puedes continuar sin
-                agregar a nadie y hacerlo después en Personas → Empleados.
+                Genera los cursos por sede y jornada. Podrás editarlos uno a uno después.
               </p>
-            ) : (
-              <div className="onb-tabla-envoltura">
-                <table className="onb-tabla">
-                  <thead>
-                    <tr>
-                      <th scope="col">Persona</th>
-                      <th scope="col">Documento</th>
-                      <th scope="col">Rol</th>
-                      <th scope="col">Estado</th>
-                      <th scope="col">
-                        <span className="sr-only">Acciones</span>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {personal.map((persona) => (
-                      <tr key={persona.id}>
-                        <td>
-                          <strong>
-                            {persona.nombres} {persona.apellidos}
-                          </strong>
-                          <span className="onb-celda-detalle">{persona.usuario}</span>
-                        </td>
-                        <td>{persona.numeroDocumento}</td>
-                        <td>{persona.rolNombre ?? 'Sin rol'}</td>
-                        <td>
-                          <span className="onb-chip onb-chip--solo">
-                            {persona.activo ? 'Activo' : 'Inactivo'}
-                          </span>
-                        </td>
-                        <td>
-                          {persona.activo ? (
-                            <button
-                              type="button"
-                              className="onb-quitar"
-                              onClick={() =>
-                                void quitarEmpleado(
-                                  persona.id,
-                                  `${persona.nombres} ${persona.apellidos}`,
-                                )
-                              }
-                              disabled={guardando}
-                            >
-                              Quitar
-                            </button>
-                          ) : null}
-                        </td>
-                      </tr>
+              <div className="onb-grid">
+                <label className="onb-campo">
+                  Sede
+                  <select
+                    id="onb-estructura-sede"
+                    name="sede"
+                    value={sedeId}
+                    onChange={(e) => setSedeId(e.target.value)}
+                  >
+                    {data.sedes.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.nombre}
+                      </option>
                     ))}
-                  </tbody>
-                </table>
+                  </select>
+                </label>
+                <label className="onb-campo">
+                  Jornada
+                  <select
+                    id="onb-estructura-jornada"
+                    name="jornada"
+                    value={jornada}
+                    onChange={(e) => setJornada(e.target.value as Jornada)}
+                  >
+                    {(sedeActual?.jornadas ?? []).map((j) => (
+                      <option key={j} value={j}>
+                        {JORNADAS.find((x) => x.valor === j)?.texto ?? j}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               </div>
-            )}
 
-            {!rolesQ.isLoading && rolesEmpleado.length === 0 && (
+              {NIVELES.map((n) => (
+                <div key={n.id} className="onb-nivel">
+                  <label className="onb-chip onb-chip--on">
+                    <input
+                      id={`onb-nivel-${n.id}`}
+                      name="niveles"
+                      type="checkbox"
+                      checked={n.grados.every((g) => grados.includes(g))}
+                      onChange={() =>
+                        setGrados(
+                          n.grados.every((g) => grados.includes(g))
+                            ? grados.filter((g) => !n.grados.includes(g))
+                            : [...new Set([...grados, ...n.grados])].sort((a, b) => a - b),
+                        )
+                      }
+                    />
+                    {n.texto}
+                  </label>
+                  <div className="onb-opciones">
+                    {n.grados.map((g) => (
+                      <label
+                        key={g}
+                        className={`onb-chip${grados.includes(g) ? ' onb-chip--on' : ''}`}
+                      >
+                        <input
+                          id={`onb-grado-${g}`}
+                          name="grados"
+                          type="checkbox"
+                          checked={grados.includes(g)}
+                          onChange={() =>
+                            setGrados(
+                              grados.includes(g)
+                                ? grados.filter((x) => x !== g)
+                                : [...grados, g].sort((a, b) => a - b),
+                            )
+                          }
+                        />
+                        {g === 0 ? 'Transición' : `${g}°`}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ))}
+
+              <h2 className="onb-card-titulo">Grupos por grado</h2>
+              <div className="onb-opciones">
+                {LETRAS.map((l) => (
+                  <label key={l} className={`onb-chip${letras.includes(l) ? ' onb-chip--on' : ''}`}>
+                    <input
+                      id={`onb-letra-${l}`}
+                      name="letras"
+                      type="checkbox"
+                      checked={letras.includes(l)}
+                      onChange={() =>
+                        setLetras(
+                          letras.includes(l)
+                            ? letras.filter((x) => x !== l)
+                            : [...letras, l].sort((a, b) => a.localeCompare(b)),
+                        )
+                      }
+                    />
+                    {l}
+                  </label>
+                ))}
+              </div>
               <p className="onb-nota">
-                No hay roles de tipo empleado activos: créalos en Personas → Roles antes de agregar
-                personal.
+                Se crearán {cursosPrevistos} curso(s)
+                {grados.length > 0 && letras.length > 0
+                  ? `: ${grados.map((g) => (g === 0 ? 'Transición' : `${g}°`)).join(', ')} × ${letras.join(', ')}`
+                  : ''}
+                {sedeActual !== undefined ? ` · ${sedeActual.nombre}` : ''}.
               </p>
-            )}
-          </section>
-        )}
+            </section>
+          )}
 
-        {paso === 5 && (
-          <section className="onb-card">
-            <div className="onb-card-cabecera">
-              <h2 className="onb-card-titulo">Importar estudiantes (CSV)</h2>
-              <span className="onb-contador">
-                {data.estudiantes.matriculados} matriculado(s) de {data.estudiantes.total}{' '}
-                estudiante(s)
-              </span>
-            </div>
-
-            <div className="onb-archivo-fila">
-              <label className="onb-archivo">
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  upload_file
+          {paso === 5 && (
+            <section className="onb-card">
+              <div className="onb-card-cabecera">
+                <h2 className="onb-card-titulo">Agregar personal</h2>
+                <span className="onb-contador">
+                  {data.personal.total} {data.personal.total === 1 ? 'persona' : 'personas'} en el
+                  colegio
                 </span>
-                {nombreArchivo === '' ? 'Elegir archivo CSV' : nombreArchivo}
-                <input
-                  type="file"
-                  accept=".csv,text/csv"
-                  onChange={(evento) => void leerCsv(evento)}
+              </div>
+
+              <div className="onb-grid">
+                <TextField
+                  id="onb-emp-nombres"
+                  label="Nombres"
+                  value={empleado.nombres}
+                  onChange={(v) => setEmpleado({ ...empleado, nombres: v })}
                 />
-              </label>
-              <M3Button variante="outlined" icono="download" onClick={descargarPlantillaMatriculas}>
-                Descargar plantilla
-              </M3Button>
-            </div>
+                <TextField
+                  id="onb-emp-apellidos"
+                  label="Apellidos"
+                  value={empleado.apellidos}
+                  onChange={(v) => setEmpleado({ ...empleado, apellidos: v })}
+                />
+                <label className="onb-campo">
+                  Tipo de documento
+                  <select
+                    id="onb-emp-tipo-documento"
+                    name="tipoDocumento"
+                    value={empleado.tipoDocumento}
+                    onChange={(e) =>
+                      setEmpleado({ ...empleado, tipoDocumento: e.target.value as TipoDocumento })
+                    }
+                  >
+                    {TIPOS_DOCUMENTO.map((tipo) => (
+                      <option key={tipo} value={tipo}>
+                        {tipo}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <TextField
+                  id="onb-emp-documento"
+                  label="Número de documento"
+                  value={empleado.numeroDocumento}
+                  onChange={(v) => setEmpleado({ ...empleado, numeroDocumento: v })}
+                />
+                <TextField
+                  id="onb-emp-usuario"
+                  label="Nombre de usuario"
+                  value={empleado.usuario}
+                  onChange={(v) => setEmpleado({ ...empleado, usuario: v })}
+                  ayuda="Con esto entrará a la plataforma (p. ej. rector.garcia)"
+                />
+                <label className="onb-campo">
+                  Rol
+                  <select
+                    id="onb-emp-rol"
+                    name="rol"
+                    value={empleado.rolId}
+                    onChange={(e) => setEmpleado({ ...empleado, rolId: e.target.value })}
+                  >
+                    <option value="">Elige un rol…</option>
+                    {rolesEmpleado.map((rol) => (
+                      <option key={rol.id} value={rol.id}>
+                        {rol.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="onb-campo">
+                  Sede (alcance)
+                  <select
+                    id="onb-emp-sede"
+                    name="sede"
+                    value={empleado.sedeId}
+                    onChange={(e) => setEmpleado({ ...empleado, sedeId: e.target.value })}
+                  >
+                    <option value="">Todas las sedes</option>
+                    {sedes.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
 
-            <p className="onb-nota">
-              Columnas: documento, nombres, apellidos, correo, sede, grado (6 o 6°), letra, jornada
-              (Mañana, Tarde, Noche, Única o Sabatina) y fechaNacimiento opcional. Solo se
-              matriculan cuentas que ya existen; si el estudiante no tiene ficha, agrega la fecha de
-              nacimiento.
-            </p>
+              <div className="onb-acciones">
+                <M3Button
+                  icono="person_add"
+                  onClick={() => void crearEmpleado()}
+                  disabled={guardando}
+                >
+                  Agregar al equipo
+                </M3Button>
+              </div>
 
-            {cursosQ.isLoading && <p className="onb-nota">Cargando cursos del año lectivo…</p>}
-            {cursosQ.isError && (
-              <p className="onb-aviso" role="alert">
-                No pudimos cargar los cursos del año lectivo. Revisa la conexión y vuelve a entrar
-                al paso 5.
-              </p>
-            )}
-            {cursosQ.isSuccess && cursosMatricula.length === 0 && (
-              <p className="onb-nota">
-                No hay cursos en el año vigente: vuelve al paso 3 y genera la estructura.
-              </p>
-            )}
+              {credencial !== null && (
+                <div className="onb-credencial" role="status">
+                  <p>
+                    <strong>{credencial.nombre}</strong> quedó creado. Esta contraseña temporal se
+                    muestra una sola vez:
+                  </p>
+                  <code>{credencial.password}</code>
+                </div>
+              )}
 
-            {csvMensaje !== null && (
-              <p className="onb-nota" role="status">
-                {csvMensaje}
-              </p>
-            )}
-
-            {csvMensaje === null && nombreArchivo === '' && resultadoCsv === null && (
-              <p className="onb-nota">
-                Aún no has cargado un archivo. Puedes continuar y hacer la carga después: el
-                checklist «Completa tu colegio» te lo recordará.
-              </p>
-            )}
-
-            {filasCsv.length > 0 && (
-              <>
+              <h2 className="onb-card-titulo">Personal agregado</h2>
+              {empleadosQ.isLoading ? (
+                <p className="onb-nota">Cargando personal…</p>
+              ) : personal.length === 0 ? (
+                <p className="onb-nota">
+                  Además de tu cuenta de administrador aún no hay personal. Puedes continuar sin
+                  agregar a nadie y hacerlo después en Personas → Empleados.
+                </p>
+              ) : (
                 <div className="onb-tabla-envoltura">
-                  <table className="onb-tabla onb-tabla--csv">
+                  <table className="onb-tabla">
                     <thead>
                       <tr>
-                        <th scope="col">Línea</th>
+                        <th scope="col">Persona</th>
                         <th scope="col">Documento</th>
-                        <th scope="col">Estudiante</th>
-                        <th scope="col">Curso</th>
+                        <th scope="col">Rol</th>
                         <th scope="col">Estado</th>
+                        <th scope="col">
+                          <span className="sr-only">Acciones</span>
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
-                      {filasResueltas.map(({ fila, motivo }) => {
-                        const nombre = `${fila.nombres} ${fila.apellidos}`.trim();
-                        return (
-                          <tr key={fila.linea}>
-                            <td>{fila.linea}</td>
-                            <td>{fila.documento}</td>
-                            <td>{nombre === '' ? '—' : nombre}</td>
-                            <td>{resolverCursoCsv(cursosMatricula, fila)?.nombre ?? '—'}</td>
-                            <td>
-                              {motivo === null ? (
-                                <span className="onb-chip onb-chip--ok">Válida</span>
-                              ) : (
-                                <span className="onb-chip onb-chip--error">{motivo}</span>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
+                      {personal.map((persona) => (
+                        <tr key={persona.id}>
+                          <td>
+                            <strong>
+                              {persona.nombres} {persona.apellidos}
+                            </strong>
+                            <span className="onb-celda-detalle">{persona.usuario}</span>
+                          </td>
+                          <td>{persona.numeroDocumento}</td>
+                          <td>{persona.rolNombre ?? 'Sin rol'}</td>
+                          <td>
+                            <span className="onb-chip onb-chip--solo">
+                              {persona.activo ? 'Activo' : 'Inactivo'}
+                            </span>
+                          </td>
+                          <td>
+                            {persona.activo ? (
+                              <button
+                                type="button"
+                                className="onb-quitar"
+                                onClick={() =>
+                                  void quitarEmpleado(
+                                    persona.id,
+                                    `${persona.nombres} ${persona.apellidos}`,
+                                  )
+                                }
+                                disabled={guardando}
+                              >
+                                Quitar
+                              </button>
+                            ) : null}
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
-                <div className="onb-acciones">
-                  <M3Button
-                    icono="upload"
-                    onClick={() => void importarCsv()}
-                    disabled={importando || filasValidas.length === 0}
-                  >
-                    Importar {filasValidas.length} fila(s) válida(s)
-                  </M3Button>
-                </div>
-              </>
-            )}
+              )}
 
-            {resultadoCsv !== null && (
-              <div className="onb-resultado" role="status">
-                <p>
-                  <strong>{resultadoCsv.creadas}</strong> matrícula(s) creada(s).
+              {!rolesQ.isLoading && rolesEmpleado.length === 0 && (
+                <p className="onb-nota">
+                  No hay roles de tipo empleado activos: créalos en Personas → Roles antes de
+                  agregar personal.
                 </p>
-                {resultadoCsv.errores.length > 0 ? (
-                  <ul>
-                    {resultadoCsv.errores.map((error) => {
-                      const original = lineasImportadas[error.fila - 1];
-                      return (
-                        <li key={`${error.fila}-${error.motivo}`}>
-                          Línea {original?.linea ?? error.fila}: {error.motivo}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                ) : (
-                  <p className="onb-nota">Sin errores.</p>
-                )}
-              </div>
-            )}
-          </section>
-        )}
-
-        {paso === 6 && (
-          <section className="onb-card">
-            <div className="onb-resumen">
-              <div>
-                <strong>{data.sedes.length}</strong>
-                <span>Sedes</span>
-              </div>
-              <div>
-                <strong>{data.estructura.cursos}</strong>
-                <span>Cursos</span>
-              </div>
-              <div>
-                <strong>{data.personal.total}</strong>
-                <span>Personas</span>
-              </div>
-              <div>
-                <strong>{data.estudiantes.matriculados}</strong>
-                <span>Matriculados</span>
-              </div>
-            </div>
-            <ul className="onb-checklist">
-              {data.checklist.map((c) => (
-                <li key={c.clave} className={c.hecho ? 'hecho' : ''}>
-                  <span aria-hidden>{c.hecho ? '✓' : '○'}</span>
-                  <div>
-                    <strong>{c.titulo}</strong>
-                    <p>{c.detalle}</p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-            <p className="onb-nota">
-              Puedes entrar al dashboard ahora: la tarjeta «Completa tu colegio» te recordará lo
-              pendiente.
-            </p>
-          </section>
-        )}
-
-        <footer className="onb-footer">
-          {paso > 1 ? (
-            <button type="button" className="onb-atras" onClick={() => setPaso(paso - 1)}>
-              ← Atrás
-            </button>
-          ) : (
-            <span />
+              )}
+            </section>
           )}
-          <div className="onb-acciones">
-            {paso === 1 && formHabilitado && (
-              <M3Button onClick={() => void guardarPaso1(2)} disabled={guardando}>
-                Continuar a sedes
+
+          {paso === 6 && (
+            <section className="onb-card">
+              <div className="onb-card-cabecera">
+                <h2 className="onb-card-titulo">Importar estudiantes (CSV)</h2>
+                <span className="onb-contador">
+                  {data.estudiantes.matriculados} matriculado(s) de {data.estudiantes.total}{' '}
+                  estudiante(s)
+                </span>
+              </div>
+
+              <div className="onb-archivo-fila">
+                <label className="onb-archivo">
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    upload_file
+                  </span>
+                  {nombreArchivo === '' ? 'Elegir archivo CSV' : nombreArchivo}
+                  <input
+                    id="onb-csv"
+                    name="csv"
+                    type="file"
+                    accept=".csv,text/csv"
+                    onChange={(evento) => void leerCsv(evento)}
+                  />
+                </label>
+                <M3Button
+                  variante="outlined"
+                  icono="download"
+                  onClick={descargarPlantillaMatriculas}
+                >
+                  Descargar plantilla
+                </M3Button>
+              </div>
+
+              <p className="onb-nota">
+                Columnas: documento, nombres, apellidos, correo, sede, grado (6 o 6°), letra,
+                jornada (Mañana, Tarde, Noche, Única o Sabatina), fechaNacimiento opcional,
+                condicion opcional (Nuevo, Antiguo, Repitente, Reingreso o Trasladado; se asume
+                Nuevo) y tipoDocumento opcional (CC, TI, CE, RC, PEP o PPT), que solo hace falta si
+                dos cuentas comparten el número. Solo se matriculan cuentas que ya existen; si el
+                estudiante no tiene ficha, agrega la fecha de nacimiento.
+              </p>
+
+              {cursosQ.isLoading && <p className="onb-nota">Cargando cursos del año lectivo…</p>}
+              {cursosQ.isError && (
+                <p className="onb-aviso" role="alert">
+                  No pudimos cargar los cursos del año lectivo. Revisa la conexión y vuelve a entrar
+                  al paso 5.
+                </p>
+              )}
+              {cursosQ.isSuccess && cursosMatricula.length === 0 && (
+                <p className="onb-nota">
+                  No hay cursos en el año vigente: vuelve al paso 3 y genera la estructura.
+                </p>
+              )}
+
+              {csvMensaje !== null && (
+                <p className="onb-nota" role="status">
+                  {csvMensaje}
+                </p>
+              )}
+
+              {csvMensaje === null && nombreArchivo === '' && resultadoCsv === null && (
+                <p className="onb-nota">
+                  Aún no has cargado un archivo. Puedes continuar y hacer la carga después: el
+                  checklist «Completa tu colegio» te lo recordará.
+                </p>
+              )}
+
+              {filasCsv.length > 0 && (
+                <>
+                  <div className="onb-tabla-envoltura">
+                    <table className="onb-tabla onb-tabla--csv">
+                      <thead>
+                        <tr>
+                          <th scope="col">Línea</th>
+                          <th scope="col">Documento</th>
+                          <th scope="col">Estudiante</th>
+                          <th scope="col">Curso</th>
+                          <th scope="col">Estado</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filasResueltas.map(({ fila, motivo }) => {
+                          const nombre = `${fila.nombres} ${fila.apellidos}`.trim();
+                          return (
+                            <tr key={fila.linea}>
+                              <td>{fila.linea}</td>
+                              <td>{fila.documento}</td>
+                              <td>{nombre === '' ? '—' : nombre}</td>
+                              <td>{resolverCursoCsv(cursosMatricula, fila)?.nombre ?? '—'}</td>
+                              <td>
+                                {motivo === null ? (
+                                  <span className="onb-chip onb-chip--ok">Válida</span>
+                                ) : (
+                                  <span className="onb-chip onb-chip--error">{motivo}</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="onb-acciones">
+                    <M3Button
+                      icono="upload"
+                      onClick={() => void importarCsv()}
+                      disabled={importando || filasValidas.length === 0}
+                    >
+                      Importar {filasValidas.length} fila(s) válida(s)
+                    </M3Button>
+                  </div>
+                </>
+              )}
+
+              {resultadoCsv !== null && (
+                <div className="onb-resultado" role="status">
+                  <p>
+                    <strong>{resultadoCsv.creadas}</strong> matrícula(s) creada(s).
+                  </p>
+                  {resultadoCsv.errores.length > 0 ? (
+                    <ul>
+                      {resultadoCsv.errores.map((error) => {
+                        const original = lineasImportadas[error.fila - 1];
+                        return (
+                          <li key={`${error.fila}-${error.motivo}`}>
+                            Línea {original?.linea ?? error.fila}: {error.motivo}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : (
+                    <p className="onb-nota">Sin errores.</p>
+                  )}
+                </div>
+              )}
+            </section>
+          )}
+
+          {paso === 7 && (
+            <section className="onb-card">
+              <div className="onb-resumen">
+                <div>
+                  <strong>{data.sedes.length}</strong>
+                  <span>Sedes</span>
+                </div>
+                <div>
+                  <strong>{data.estructura.cursos}</strong>
+                  <span>Cursos</span>
+                </div>
+                <div>
+                  <strong>{data.personal.total}</strong>
+                  <span>Personas</span>
+                </div>
+                <div>
+                  <strong>{data.estudiantes.matriculados}</strong>
+                  <span>Matriculados</span>
+                </div>
+              </div>
+              <ul className="onb-checklist">
+                {data.checklist.map((c) => (
+                  <li key={c.clave} className={c.hecho ? 'hecho' : ''}>
+                    <span aria-hidden>{c.hecho ? '✓' : '○'}</span>
+                    <div>
+                      <strong>{c.titulo}</strong>
+                      <p>{c.detalle}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <p className="onb-nota">
+                Puedes entrar al dashboard ahora: la tarjeta «Completa tu colegio» te recordará lo
+                pendiente.
+              </p>
+            </section>
+          )}
+
+          <footer className="onb-footer">
+            {movil && <div className="onb-acciones">{cta}</div>}
+            <button
+              type="button"
+              className="onb-salir"
+              onClick={() => void salir()}
+              disabled={guardando}
+            >
+              Guardar y salir
+            </button>
+          </footer>
+        </main>
+      </div>
+
+      {confirmarSalida && (
+        <div className="onb-velo">
+          <div
+            className="onb-dialogo"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="onb-dialogo-titulo"
+            ref={dialogoRef}
+          >
+            <h2 id="onb-dialogo-titulo">¿Salir sin vincular el colegio?</h2>
+            <p>
+              No has ingresado un código DANE, así que el colegio todavía no está creado. Si sales
+              ahora se cierra tu sesión; podrás retomar la configuración cuando entres de nuevo.
+            </p>
+            <div className="onb-dialogo-acciones">
+              <M3Button variante="text" onClick={seguirAqui}>
+                Seguir aquí
               </M3Button>
-            )}
-            {paso === 2 && (
-              <M3Button onClick={() => void guardarPaso2(3)} disabled={guardando}>
-                Continuar a estructura
-              </M3Button>
-            )}
-            {paso === 3 && (
-              <M3Button
-                onClick={() => void generar(4)}
-                disabled={guardando || cursosPrevistos === 0}
-              >
-                Generar {cursosPrevistos} cursos
-              </M3Button>
-            )}
-            {paso === 4 && (
-              <M3Button onClick={() => void avanzar(5)} disabled={guardando}>
-                Continuar a estudiantes
-              </M3Button>
-            )}
-            {paso === 5 && (
-              <M3Button onClick={() => void avanzar(6)} disabled={importando}>
-                Continuar al resumen
-              </M3Button>
-            )}
-            {paso === 6 && (
-              <M3Button onClick={() => void terminar()} disabled={guardando}>
-                Entrar al dashboard
-              </M3Button>
-            )}
+              <M3Button onClick={() => void salirDeLaCuenta()}>Cerrar sesión</M3Button>
+            </div>
           </div>
-        </footer>
-      </main>
+        </div>
+      )}
     </div>
   );
 }
@@ -1628,12 +2075,14 @@ function tituloDe(paso: number): string {
     case 1:
       return 'Tu colegio';
     case 2:
-      return 'Sedes y jornadas';
+      return 'Calendario y períodos';
     case 3:
-      return 'Estructura académica';
+      return 'Sedes y jornadas';
     case 4:
-      return 'Personal del colegio';
+      return 'Estructura académica';
     case 5:
+      return 'Personal del colegio';
+    case 6:
       return 'Estudiantes';
     default:
       return 'Todo listo';
@@ -1645,12 +2094,14 @@ function bajadaDe(paso: number): string {
     case 1:
       return 'Confirma los datos base. Podrás cambiarlos después en Configuración.';
     case 2:
-      return 'Cada curso pertenecerá a una sede y a una de sus jornadas.';
+      return 'Define el calendario escolar, el año lectivo y los períodos académicos.';
     case 3:
-      return 'Genera los cursos por sede y jornada. Podrás editarlos uno a uno después.';
+      return 'Cada curso pertenecerá a una sede y a una de sus jornadas.';
     case 4:
-      return 'Agrega al equipo ahora o impórtalo en bloque. También puedes hacerlo después.';
+      return 'Genera los cursos por sede y jornada. Podrás editarlos uno a uno después.';
     case 5:
+      return 'Agrega al equipo ahora o impórtalo en bloque. También puedes hacerlo después.';
+    case 6:
       return 'La importación masiva es la vía recomendada. Puedes omitirla y cargarlos después.';
     default:
       return 'Revisa lo que quedó configurado. Lo pendiente puede completarse después.';

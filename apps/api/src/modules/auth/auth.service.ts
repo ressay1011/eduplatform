@@ -3,7 +3,7 @@
  * de contraseña). No conoce HTTP: recibe datos YA validados por el controller
  * y devuelve contratos de @eduplatform/types.
  */
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import type { TenantContext } from '@eduplatform/database';
 import {
   ErrorCodes,
@@ -55,7 +55,7 @@ interface ResultadoLogin<T> {
 }
 
 @Injectable()
-export class AuthService {
+export class AuthService implements OnModuleInit {
   private readonly logger = new Logger(AuthService.name);
 
   constructor(
@@ -67,17 +67,26 @@ export class AuthService {
     private readonly attempts: LoginAttemptsService,
   ) {}
 
+  /**
+   * Genera el hash señuelo al levantar el servicio, para que la primera
+   * comparación contra un correo inexistente no pague su coste. Va sin `await`
+   * a propósito: no debe retrasar el arranque.
+   */
+  onModuleInit(): void {
+    void hashSenuelo();
+  }
+
   /** Branding público del colegio para la pantalla de login (sin sesión). */
-  async contextoColegio(subdominio: string): Promise<ContextoColegioPublico> {
-    const clave = this.claveSubdominio(subdominio);
+  async contextoColegio(codigo: string): Promise<ContextoColegioPublico> {
+    const clave = this.claveCodigo(codigo);
     const enCache = this.contextoCache.obtener(clave);
     if (enCache !== null) return enCache;
 
-    const colegio = await this.repo.findColegioPublico(subdominio);
+    const colegio = await this.repo.findColegioPublico(codigo);
     if (colegio === null) {
-      throw apiError(ErrorCodes.NOT_FOUND, 404, 'No existe un colegio con ese subdominio');
+      throw apiError(ErrorCodes.NOT_FOUND, 404, 'No existe un colegio con ese código');
     }
-    const contexto = { ...this.aContextoPublico(colegio), subdominio: colegio.subdominio };
+    const contexto = this.aContextoPublico(colegio);
     this.contextoCache.guardar(clave, contexto);
     return contexto;
   }
@@ -85,6 +94,7 @@ export class AuthService {
   /** Convierte la fila de BD al contrato público (sin datos internos). */
   private aContextoPublico(colegio: ColegioPublicoRow): ContextoColegioPublico {
     return {
+      codigo: colegio.codigo,
       nombre: colegio.nombre,
       codigoDane: colegio.codigoDane ?? '',
       logoUrl: colegio.logoUrl,
@@ -95,23 +105,22 @@ export class AuthService {
     };
   }
 
-  private claveSubdominio(subdominio: string): string {
-    return `subdominio:${subdominio}`;
+  private claveCodigo(codigo: string): string {
+    return `codigo:${codigo.trim().toLowerCase()}`;
   }
 
   /**
    * Invalida la caché del contexto público de un colegio. Lo llamará el
-   * módulo de colegios al editar (nombre, color, logo, dominio, estado): el
-   * cambio se refleja en la siguiente carga, SIN esperar al TTL del caché.
+   * módulo de colegios al editar (nombre, color, logo, estado): el cambio se
+   * refleja en la siguiente carga, SIN esperar al TTL del caché.
    */
-  invalidarContextoColegio(colegio: { subdominio: string }): void {
-    this.contextoCache.invalidar(this.claveSubdominio(colegio.subdominio));
+  invalidarContextoColegio(colegio: { codigo: string }): void {
+    this.contextoCache.invalidar(this.claveCodigo(colegio.codigo));
   }
 
   /**
-   * Login de usuario de colegio. El tenant se resuelve por el subdominio del
-   * host (`colegio.<dominio>`) o, si no viene, por el dominio heredado del
-   * identificador (login unificado de siempre).
+   * Login de usuario de colegio. El tenant se resuelve por el código que lleva
+   * el identificador (`admin@juanaArias`); el host no participa.
    */
   async login(dto: LoginRequest, meta: RequestMeta): Promise<ResultadoLogin<LoginResponse>> {
     // Bloqueo por identificador (correo): aplica exista o NO la cuenta, para
@@ -124,13 +133,13 @@ export class AuthService {
       );
     }
 
-    // El colegio sale del subdominio del host (`colegio.<dominio>`) o del sufijo
-    // del nombre de usuario (`admin@juanaarias` → `juanaarias`).
-    const subdominio = dto.subdominio ?? sufijoDeUsuario(dto.usuario) ?? null;
-    const colegioPublico =
-      subdominio === null ? null : await this.repo.findColegioPublico(subdominio);
+    // El colegio sale del CÓDIGO que lleva el identificador (`admin@juanaArias`
+    // → `juanaArias`). `dto.codigo` es la pista del enlace (`?codigo=`) y solo se
+    // usa cuando el identificador no trae sufijo.
+    const codigo = sufijoDeUsuario(dto.usuario) ?? dto.codigo ?? null;
+    const colegioPublico = codigo === null ? null : await this.repo.findColegioPublico(codigo);
     if (colegioPublico === null) {
-      // Mensaje genérico: no se revela si el dominio o el correo existen.
+      // Mensaje genérico: no se revela si el colegio o la cuenta existen.
       this.attempts.registrarFallo(dto.usuario);
       throw apiError(ErrorCodes.INVALID_CREDENTIALS, 401, 'Usuario o contraseña incorrectos');
     }
@@ -146,7 +155,7 @@ export class AuthService {
     const usuario = await this.repo.findUsuarioPorUsuario(ctx, dto.usuario);
     if (usuario === null) {
       // Comparación contra un hash señuelo: mismo coste que una cuenta real.
-      await this.passwords.verify(dto.password, hashSenuelo());
+      await this.passwords.verify(dto.password, await hashSenuelo());
       await this.audit.registrar({
         accion: 'LOGIN_FAILED',
         entidad: 'auth',
@@ -158,7 +167,7 @@ export class AuthService {
     }
     if (!usuario.activo) {
       // Misma respuesta que una clave errada: no revela que la cuenta existe.
-      await this.passwords.verify(dto.password, hashSenuelo());
+      await this.passwords.verify(dto.password, await hashSenuelo());
       await this.audit.registrar({
         accion: 'LOGIN_FAILED',
         entidad: 'auth',
@@ -170,6 +179,10 @@ export class AuthService {
       throw apiError(ErrorCodes.INVALID_CREDENTIALS, 401, 'Usuario o contraseña incorrectos');
     }
     if (usuario.bloqueadoHasta !== null && usuario.bloqueadoHasta.getTime() > Date.now()) {
+      // Se compara contra el señuelo igual que en los otros caminos: responder
+      // sin bcrypt hacía esta rama ~300 veces más rápida y por timing se podía
+      // deducir que la cuenta existe y está bloqueada.
+      await this.passwords.verify(dto.password, await hashSenuelo());
       await this.audit.registrar({
         accion: 'LOGIN_FAILED',
         entidad: 'auth',
@@ -183,9 +196,16 @@ export class AuthService {
 
     const passwordOk = await this.passwords.verify(dto.password, usuario.passwordHash);
     if (!passwordOk) {
-      const intentos = usuario.intentosFallidos + 1;
+      const ahora = Date.now();
+      // Si el bloqueo anterior ya venció, la cuenta arranca de cero. Sin esto,
+      // `intentosFallidos` se quedaba en 5 para siempre y UN solo fallo por
+      // ventana volvía a bloquear: quien conociera el correo podía mantener la
+      // cuenta cerrada indefinidamente, incluso con la contraseña correcta.
+      const bloqueoVencido =
+        usuario.bloqueadoHasta !== null && usuario.bloqueadoHasta.getTime() <= ahora;
+      const intentos = (bloqueoVencido ? 0 : usuario.intentosFallidos) + 1;
       const bloqueadoHasta =
-        intentos >= MAX_INTENTOS_FALLIDOS ? new Date(Date.now() + BLOQUEO_MINUTOS * 60_000) : null;
+        intentos >= MAX_INTENTOS_FALLIDOS ? new Date(ahora + BLOQUEO_MINUTOS * 60_000) : null;
       await this.repo.registrarLoginFallido(ctx, usuario.id, intentos, bloqueadoHasta);
       this.attempts.registrarFallo(dto.usuario);
       await this.audit.registrar({
@@ -224,7 +244,7 @@ export class AuthService {
     return { respuesta: toLoginResponse(usuario, colegio), token, expira };
   }
 
-  /** Login del nivel plataforma (equipo SaaS, sin subdominio). */
+  /** Login del nivel plataforma (equipo SaaS, sin colegio). */
   async loginPlataforma(
     dto: PlataformaLoginRequest,
     meta: RequestMeta,
@@ -242,7 +262,7 @@ export class AuthService {
     const usuario = await this.repo.findPlataformaUsuarioPorEmail(ctx, dto.email);
     if (usuario === null || !usuario.activo) {
       // Mismo coste y mismo mensaje que una clave errada (anti-enumeración).
-      await this.passwords.verify(dto.password, hashSenuelo());
+      await this.passwords.verify(dto.password, await hashSenuelo());
       await this.audit.registrar({
         accion: 'LOGIN_FAILED',
         entidad: 'auth.plataforma',

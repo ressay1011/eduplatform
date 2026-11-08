@@ -10,20 +10,23 @@ import { createHash } from 'node:crypto';
 import type { Response } from 'express';
 import {
   CambioPasswordSchema,
+  CodigoColegioSchema,
+  ErrorCodes,
   LoginRequestSchema,
   PlataformaLoginRequestSchema,
-  SubdominioSchema,
   type ApiResponse,
   type ContextoColegioPublico,
   type LoginResponse,
   type MeResponse,
   type PlataformaLoginResponse,
 } from '@eduplatform/types';
+import { apiError } from '../../shared/api-error';
 import { env } from '../../config/env';
 import type { AuthContext, AuthenticatedRequest, RequestMeta } from './auth.types';
 import { SESION_COOKIE } from './auth.constants';
 import { AuthService } from './auth.service';
 import { CurrentAuth } from './decorators/current-auth.decorator';
+import { AllowPendingPassword } from './decorators/allow-pending-password.decorator';
 import { Public } from './decorators/public.decorator';
 
 const THROTTLE_TTL_MS = 60_000;
@@ -47,12 +50,15 @@ export class AuthController {
   @Throttle({ default: { limit: env.THROTTLE_LOGIN_LIMIT, ttl: THROTTLE_TTL_MS } })
   @Get('contexto-colegio')
   async contextoColegio(
-    @Query('subdominio') subdominio: string | undefined,
+    @Query('codigo') codigo: string | undefined,
     @Req() req: AuthenticatedRequest,
     @Res() res: Response,
   ): Promise<void> {
-    // El subdominio es el único identificador del colegio (host, ?colegio= o sufijo del usuario).
-    const data = await this.authService.contextoColegio(SubdominioSchema.parse(subdominio));
+    // El código es el identificador del colegio.
+    if (codigo === undefined) {
+      throw apiError(ErrorCodes.VALIDATION_ERROR, 400, 'Falta el código del colegio');
+    }
+    const data = await this.authService.contextoColegio(CodigoColegioSchema.parse(codigo));
     const etag = calcularEtag(data);
 
     res.setHeader('Cache-Control', 'no-cache');
@@ -72,9 +78,8 @@ export class AuthController {
   }
 
   /**
-   * Login de usuario de colegio. El colegio viene en `subdominio` (la web lo
-   * saca del host) o, si no, en el header `X-Colegio-Subdominio`; sin ninguno
-   * de los dos se usa la vía heredada por dominio del identificador.
+   * Login de usuario de colegio. El colegio sale del código que lleva el
+   * identificador (`admin@juanaArias`); `codigo` es la pista del enlace.
    */
   @Public()
   @Throttle({ default: { limit: env.THROTTLE_LOGIN_LIMIT, ttl: THROTTLE_TTL_MS } })
@@ -86,23 +91,12 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ): Promise<ApiResponse<LoginResponse>> {
     const dto = LoginRequestSchema.parse(body);
-    const header = req.headers['x-colegio-subdominio'];
-    const subdominioHeader = Array.isArray(header) ? header[0] : header;
-    const subdominio =
-      dto.subdominio ??
-      (subdominioHeader !== undefined && subdominioHeader !== ''
-        ? SubdominioSchema.parse(subdominioHeader)
-        : undefined);
-
-    const { respuesta, token, expira } = await this.authService.login(
-      { ...dto, subdominio },
-      metaDeRequest(req),
-    );
+    const { respuesta, token, expira } = await this.authService.login(dto, metaDeRequest(req));
     this.setCookieSesion(res, token, expira);
     return { success: true, data: respuesta };
   }
 
-  /** Login del nivel plataforma (equipo SaaS, sin subdominio). */
+  /** Login del nivel plataforma (equipo SaaS, sin colegio). */
   @Public()
   @Throttle({ default: { limit: env.THROTTLE_LOGIN_LIMIT, ttl: THROTTLE_TTL_MS } })
   @Post('login-plataforma')
@@ -122,6 +116,7 @@ export class AuthController {
   }
 
   /** Cierra la sesión actual (revoca en BD + limpia cookie). */
+  @AllowPendingPassword()
   @Post('logout')
   @HttpCode(200)
   async logout(
@@ -135,12 +130,14 @@ export class AuthController {
   }
 
   /** Datos de la sesión activa (usuario, colegio, permisos). */
+  @AllowPendingPassword()
   @Get('me')
   me(@CurrentAuth() auth: AuthContext): ApiResponse<MeResponse> {
     return { success: true, data: this.authService.me(auth) };
   }
 
   /** Cambio de contraseña (primer login forzado o cambio normal). */
+  @AllowPendingPassword()
   @Throttle({ default: { limit: 5, ttl: THROTTLE_TTL_MS } })
   @Post('cambiar-password')
   @HttpCode(200)

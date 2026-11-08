@@ -15,7 +15,6 @@ import { LoginAttemptsService } from './login-attempts.service';
 import { ContextoCacheService } from './contexto-cache.service';
 import { AuthGuard } from './guards/auth.guard';
 import { PermissionsGuard } from './guards/permissions.guard';
-import { TenantGuard } from './guards/tenant.guard';
 import { PasswordService } from './password.service';
 import { SessionTokenService } from './session-token.service';
 
@@ -36,9 +35,11 @@ import { SessionTokenService } from './session-token.service';
     // Guards globales — el orden de registro es el orden de ejecución.
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: AuthGuard },
-    { provide: APP_GUARD, useClass: TenantGuard },
     { provide: APP_GUARD, useClass: PermissionsGuard },
   ],
-  exports: [AuthService, PasswordService],
+  // LoginAttemptsService se exporta para que otros módulos (usuarios) puedan
+  // limpiar el bloqueo del identificador al resetear la contraseña: ese
+  // contador vive en memoria del proceso y la BD no lo toca.
+  exports: [AuthService, PasswordService, LoginAttemptsService],
 })
 export class AuthModule {}

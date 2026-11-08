@@ -116,14 +116,12 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   return envelope.data;
 }
 
-/** Contexto público + subdominio (respuesta del login unificado). */
-export interface ContextoConSede extends ContextoColegioPublico {
-  subdominio: string;
-}
+/** Contexto público del colegio (respuesta del login unificado). */
+export type ContextoConSede = ContextoColegioPublico;
 
-/** Branding público por subdominio (enlaces directos a un colegio). */
-export function getContextoColegio(subdominio: string): Promise<ContextoConSede> {
-  return request(`/auth/contexto-colegio?subdominio=${encodeURIComponent(subdominio)}`);
+/** Branding público por código de colegio (enlace directo o sufijo del usuario). */
+export function getContextoColegio(codigo: string): Promise<ContextoConSede> {
+  return request(`/auth/contexto-colegio?codigo=${encodeURIComponent(codigo)}`);
 }
 
 /** Login de usuario de colegio (guarda la cookie httpOnly). */

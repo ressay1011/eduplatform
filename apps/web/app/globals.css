@@ -1029,16 +1029,6 @@ body {
   text-align: center;
   color: var(--md-sys-color-on-surface-variant);
 }
-.form-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-@media (max-width: 640px) {
-  .form-grid {
-    grid-template-columns: 1fr;
-  }
-}
 .m3-select-label {
   display: block;
   margin-top: 12px;
@@ -1567,11 +1557,16 @@ body {
   background: color-mix(in srgb, var(--md-sys-color-scrim) 38%, transparent);
   cursor: pointer;
 }
+/* «no cabe»: la columna principal más el panel de 360 px no entran antes de
+   1180 px (panel + gap + mínimo legible de la columna). */
 @media (max-width: 1180px) {
   .dash-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+/* «no cabe»: con la barra lateral de 280 px, una tableta de 768 deja 424 px de
+   contenido (los KPIs de 4, el panel de 360 y la tabla de Personas no entran).
+   Con una rail de 80 px quedarían 624. Pendiente de decidir: rail en 601–1100. */
 @media (max-width: 1100px) {
   /* Tablet/móvil: la barra lateral pasa a drawer con hamburguesa. */
   .dash-menu-btn {
@@ -1600,7 +1595,7 @@ body {
     padding: 20px;
   }
 }
-@media (max-width: 640px) {
+@media (max-width: 600px) {
   .dash-kpis {
     grid-template-columns: 1fr;
   }
@@ -1627,8 +1622,10 @@ body {
   }
 }
 
-/* === Adaptación móvil/tablet de las pantallas de gestión === */
-@media (max-width: 700px) {
+/* === Adaptación a teléfono de las pantallas de gestión (≤ 600 px) ===
+   La tableta usa el diseño de escritorio. Las excepciones donde el diseño de
+   escritorio NO cabe antes de 600 px quedan marcadas con «no cabe». */
+@media (max-width: 600px) {
   .stage {
     /* Antes flex-start: dejaba la tarjeta pegada arriba y descompensada.
        El centrado seguro ya la sube sola cuando no cabe. */
@@ -1873,6 +1870,14 @@ body {
   gap: 16px;
   align-items: start;
 }
+/* Teléfono: una sola columna. (Antes había un `.form-grid` duplicado más
+   arriba con su media query, y la regla posterior anulaba el corte: entre 600
+   y 640 el formulario seguía a dos columnas y en 390 se desbordaba.) */
+@media (max-width: 600px) {
+  .form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 .form-grid .ancho-total {
   grid-column: 1 / -1;
 }
@@ -1903,10 +1908,9 @@ body {
   font-size: 12px;
 }
 
+/* La tabla de Personas no cabe con las columnas de escritorio ni en tableta:
+   se desplaza en horizontal desde 700 px. */
 @media (max-width: 700px) {
-  .form-grid {
-    grid-template-columns: 1fr;
-  }
   .tabla {
     display: block;
     overflow-x: auto;
@@ -2561,6 +2565,8 @@ body {
     sans-serif;
 }
 
+/* «no cabe»: en tableta la ficha de 360 px deja el formulario por debajo de su
+   ancho útil (720 px) y las filas de 5 columnas no caben en 424 px. */
 @media (max-width: 1100px) {
   .per-header {
     flex-direction: column;
@@ -2581,104 +2587,111 @@ body {
 }
 
 /* ── Onboarding (wizard de configuración inicial) ───────────────────────────
-   Réplica del frame 1440×1024: rail 320 #f5f3f7, contenido padding 64/48,
-   título Fraunces 28, tarjetas #f5f3f7 radio 12 padding 24.
+   Cabecera compacta de 60 px (paso + barra de 4 px) arriba de todo, sin rail
+   lateral: una sola columna centrada (máx. 1100 px).
+   Acciones: en escritorio y tableta el CTA va en la cabecera y una barra fija de
+   52 px al pie lleva solo «Guardar y salir»; en el teléfono (≤ 600 px) los dos
+   botones bajan al pie, apilados.
    Colores por tokens de la Foundation (M3 · Roles), así el wizard cambia con
    el tema del SO igual que el resto de la app. */
-.onb-shell {
-  display: grid;
-  grid-template-columns: 320px minmax(0, 1fr);
+/* Envoltura de la página: la cabecera vive fuera del cuerpo para poder quedarse
+   fija arriba mientras el contenido hace scroll. */
+.onb-pagina {
   min-height: 100vh;
   min-height: 100dvh;
   background: var(--md-sys-color-surface);
   color: var(--md-sys-color-on-surface);
 }
-.onb-rail {
+.onb-shell {
+  background: var(--md-sys-color-surface);
+  color: var(--md-sys-color-on-surface);
+}
+/* Cabecera compacta (opción A): el paso y su avance se leen arriba, igual en
+   móvil y en escritorio. */
+.onb-cab {
   position: sticky;
   top: 0;
+  z-index: 3;
+  background: var(--md-sys-color-surface);
+  box-shadow: 0 1px 0 var(--edu-borde-tarjeta);
+}
+.onb-cab-fila {
   display: flex;
-  flex-direction: column;
-  gap: 32px;
-  height: 100vh;
-  height: 100dvh;
-  padding: 40px 32px 32px;
-  background: var(--edu-superficie);
-  box-shadow: 0 0 0 1px var(--edu-borde-tarjeta);
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: 56px;
+  padding: 0 12px 0 8px;
+}
+.onb-cab-atras {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--md-sys-color-on-surface-variant);
+  font: 400 16px/1 var(--md-ref-typeface-plain);
+  cursor: pointer;
+}
+.onb-cab-atras:hover {
+  background: var(--edu-hover);
+}
+.onb-cab-meta {
+  margin: 0;
+  color: var(--md-sys-color-on-surface);
+  font: 500 13px/18px var(--md-ref-typeface-plain);
+}
+.onb-cab-meta strong {
+  font-weight: 700;
+}
+/* Simétrico del botón de atrás: mantiene el texto centrado. */
+.onb-cab-hueco {
+  width: 40px;
+  height: 1px;
+}
+.onb-barra {
+  height: 4px;
+  background: var(--md-sys-color-surface-container-high);
+}
+.onb-barra-relleno {
+  display: block;
+  height: 100%;
+  background: var(--md-sys-color-primary);
+  transition: width 200ms ease;
 }
 .onb-marca {
   margin: 0;
   color: var(--md-sys-color-primary);
   font: 600 16px/24px var(--md-ref-typeface-plain);
+  text-align: center;
 }
-.onb-sub {
-  margin: 2px 0 0;
-  color: var(--md-sys-color-on-surface-variant);
-  font: 400 12px/16px var(--md-ref-typeface-plain);
-}
-.onb-pasos {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.onb-paso {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  height: 28px;
-  padding: 0;
-  border-radius: 8px;
-  color: var(--md-sys-color-on-surface-variant);
-  font: 500 14px/20px var(--md-ref-typeface-plain);
-}
-.onb-paso--activo {
-  background: transparent;
-  color: var(--md-sys-color-on-surface);
-}
-.onb-paso--hecho {
-  color: var(--md-sys-color-on-surface);
-}
-.onb-num {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 999px;
-  background: var(--md-sys-color-surface);
-  color: var(--md-sys-color-on-surface-variant);
-  font: 600 12px/1 var(--md-ref-typeface-plain);
-}
-.onb-paso--activo .onb-num {
-  background: var(--md-sys-color-primary);
-  color: var(--md-sys-color-on-primary);
-}
-.onb-paso--hecho .onb-num {
-  background: var(--md-sys-color-primary-container);
-  color: var(--md-sys-color-primary);
-}
+/* «Guardar y salir»: acción secundaria del pie. */
 .onb-salir {
-  margin-top: auto;
-  padding: 0;
+  height: 40px;
+  padding: 0 12px;
   border: 0;
+  border-radius: 999px;
   background: none;
-  color: var(--md-sys-color-on-surface-variant);
-  font: 500 13px/20px var(--md-ref-typeface-plain);
-  text-align: left;
+  color: var(--md-sys-color-primary);
+  font: 600 13px/20px var(--md-ref-typeface-plain);
+  white-space: nowrap;
   cursor: pointer;
-  text-decoration: underline;
+}
+.onb-salir:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--md-sys-color-primary) 8%, transparent);
+}
+.onb-salir:disabled {
+  opacity: 0.38;
+  cursor: default;
 }
 .onb-main {
-  padding: 48px 64px 64px;
+  margin: 0 auto;
+  /* 92 px al pie: deja sitio a la barra fija de 52 px sin tapar contenido. */
+  padding: 32px 64px 92px;
   max-width: 1100px;
-}
-.onb-eyebrow {
-  margin: 0 0 8px;
-  color: var(--md-sys-color-primary);
-  font: 500 12px/16px var(--md-ref-typeface-plain);
-  letter-spacing: 0.02em;
+  touch-action: pan-y pinch-zoom;
 }
 .onb-titulo {
   margin: 0 0 6px;
@@ -2849,6 +2862,55 @@ body {
   color: var(--md-sys-color-on-surface);
   font: 400 13px/20px var(--md-ref-typeface-plain);
 }
+
+/* Quitar un período: acción secundaria dentro de la tarjeta del período. */
+.onb-periodo-quitar {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: var(--md-sys-color-primary);
+  font: 500 12px/16px var(--md-ref-typeface-plain);
+  cursor: pointer;
+}
+.onb-periodo-quitar:hover:not(:disabled) {
+  text-decoration: underline;
+}
+.onb-periodo-quitar:disabled {
+  color: var(--md-sys-color-on-surface-variant);
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.onb-periodos-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+}
+.onb-agregar-periodo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--md-sys-color-outline);
+  border-radius: 18px;
+  background: transparent;
+  color: var(--md-sys-color-primary);
+  font: 500 13px/18px var(--md-ref-typeface-plain);
+  cursor: pointer;
+}
+.onb-agregar-periodo:hover:not(:disabled) {
+  background: var(--md-sys-color-surface-container-high);
+}
+.onb-agregar-periodo:disabled {
+  color: var(--md-sys-color-on-surface-variant);
+  border-color: var(--md-sys-color-outline-variant);
+  opacity: 0.6;
+  cursor: not-allowed;
+}
 .onb-campo {
   display: flex;
   flex-direction: column;
@@ -2908,22 +2970,25 @@ body {
   color: var(--md-sys-color-on-surface-variant);
   font: 400 12px/16px var(--md-ref-typeface-plain);
 }
+/* Barra de acciones al pie. En escritorio y tablet lleva solo «Guardar y salir»
+   a la izquierda (el CTA vive en la cabecera); en móvil se apila con el CTA. */
 .onb-footer {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 4;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-top: 32px;
-}
-.onb-atras {
-  border: 0;
-  background: none;
-  color: var(--md-sys-color-on-surface-variant);
-  font: 500 13px/20px var(--md-ref-typeface-plain);
-  cursor: pointer;
+  height: 52px;
+  margin: 0;
+  padding: 0 24px;
+  background: var(--md-sys-color-surface);
+  box-shadow: 0 -1px 0 var(--edu-borde-tarjeta);
 }
 .onb-acciones {
   display: flex;
+  align-items: center;
   gap: 12px;
 }
 .onb-cargando {
@@ -2937,6 +3002,120 @@ body {
   color: var(--md-sys-color-on-surface);
   text-align: center;
   font: 400 14px/20px var(--md-ref-typeface-plain);
+}
+
+/* Bienvenida del colegio recién creado: antes del paso 1 y fuera del contador.
+   En escritorio es una tarjeta de 500 px centrada; en móvil, el mismo bloque
+   sin marco y centrado en vertical. */
+.onb-bienvenida {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 40px 24px;
+  background: var(--md-sys-color-surface);
+  color: var(--md-sys-color-on-surface);
+}
+.onb-bienvenida-card {
+  width: 100%;
+  max-width: 500px;
+  padding: 34px 32px;
+  border-radius: 28px;
+  background: var(--md-sys-color-surface-container-low);
+  box-shadow: 0 0 0 1px var(--md-sys-color-outline-variant);
+}
+.onb-saludo {
+  margin: 26px 0 0;
+  font:
+    600 26px/32px var(--font-fraunces),
+    'Fraunces',
+    Georgia,
+    serif;
+}
+.onb-saludo-sub {
+  margin: 10px 0 0;
+  color: var(--md-sys-color-on-surface-variant);
+  font: 400 13px/20px var(--md-ref-typeface-plain);
+}
+.onb-bienvenida-titulo {
+  margin: 22px 0 10px;
+  color: var(--md-sys-color-on-surface);
+  font: 600 13px/18px var(--md-ref-typeface-plain);
+}
+.onb-necesita {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.onb-necesita li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--md-sys-color-on-surface);
+  font: 500 13px/18px var(--md-ref-typeface-plain);
+}
+.onb-punto {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+  font: 600 11px/1 var(--md-ref-typeface-plain);
+}
+.onb-bienvenida-pie {
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  margin-top: 24px;
+}
+.onb-enlace {
+  border: 0;
+  background: none;
+  color: var(--md-sys-color-on-surface-variant);
+  font: 500 12px/18px var(--md-ref-typeface-plain);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Diálogo de salida sin código DANE: dos acciones, foco atrapado. */
+.onb-velo {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: color-mix(in srgb, var(--md-sys-color-scrim) 42%, transparent);
+}
+.onb-dialogo {
+  width: 100%;
+  max-width: 420px;
+  padding: 22px 20px 14px;
+  border-radius: 24px;
+  background: var(--md-sys-color-surface-container-low);
+  color: var(--md-sys-color-on-surface);
+  box-shadow: 0 10px 28px color-mix(in srgb, black 28%, transparent);
+}
+.onb-dialogo h2 {
+  margin: 0 0 10px;
+  font: 600 17px/24px var(--md-ref-typeface-plain);
+}
+.onb-dialogo p {
+  margin: 0;
+  color: var(--md-sys-color-on-surface-variant);
+  font: 400 13px/19px var(--md-ref-typeface-plain);
+}
+.onb-dialogo-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 16px;
 }
 
 /* Pasos 4 y 5: personal y CSV de matrículas */
@@ -3100,29 +3279,62 @@ body {
   color: var(--md-sys-color-error);
 }
 
-@media (max-width: 900px) {
-  .onb-shell {
-    grid-template-columns: 1fr;
-  }
-  .onb-rail {
-    position: static;
-    height: auto;
-    padding: 24px;
-  }
-  .onb-pasos {
-    flex-direction: row;
-    flex-wrap: wrap;
-  }
-  .onb-salir {
-    margin-top: 0;
-  }
+/* Teléfonos: mismo corte que el resto de la app (≤ 600 px). La tableta usa el
+   diseño de escritorio: cabecera con CTA y tarjetas a dos columnas. */
+@media (max-width: 600px) {
   .onb-main {
-    padding: 24px;
+    /* La barra del pie mide lo mismo en tableta que en escritorio: 92 px. */
+    padding: 20px 20px 92px;
+  }
+  .onb-titulo {
+    font:
+      600 23px/29px var(--font-fraunces),
+      'Fraunces',
+      Georgia,
+      serif;
+  }
+  /* Bienvenida en móvil: el bloque sin marco, centrado en vertical. */
+  .onb-bienvenida {
+    padding: 26px 24px calc(24px + env(safe-area-inset-bottom));
+  }
+  .onb-bienvenida-card {
+    max-width: none;
+    padding: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+  }
+  .onb-saludo {
+    margin-top: 22px;
+  }
+  .onb-bienvenida-pie {
+    margin-top: 22px;
   }
   .onb-grid,
   .onb-periodos,
   .onb-resumen {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Teléfonos: el CTA baja al pie y se apila sobre «Guardar y salir». La tableta
+   (≥ 601 px) se queda con el diseño de escritorio. */
+@media (max-width: 600px) {
+  .onb-main {
+    padding-bottom: calc(124px + env(safe-area-inset-bottom));
+  }
+  .onb-footer {
+    display: grid;
+    justify-items: center;
+    gap: 6px;
+    height: auto;
+    padding: 8px 16px calc(10px + env(safe-area-inset-bottom));
+  }
+  .onb-acciones {
+    width: 100%;
+  }
+  .onb-acciones .m3-btn {
+    width: 100%;
   }
 }
 
@@ -3175,7 +3387,7 @@ body {
 .onb-tarjeta li p {
   margin: 2px 0 0;
 }
-@media (max-width: 900px) {
+@media (max-width: 600px) {
   .onb-tarjeta ul {
     grid-template-columns: 1fr;
   }

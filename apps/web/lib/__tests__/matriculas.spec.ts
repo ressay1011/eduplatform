@@ -131,11 +131,69 @@ describe('resolución de curso y motivo', () => {
   });
 });
 
+describe('condición en el CSV', () => {
+  it('lee condicion por nombre de encabezado aunque venga en otro orden', () => {
+    const csv = [
+      'documento,condicion,nombres,apellidos,correo,sede,grado,letra,jornada,fechaNacimiento',
+      '1098765432,Repitente,Ana,Gómez,,Sede Principal,6,A,Mañana,2013-04-18',
+    ].join('\n');
+    const { filas, errores } = parsearCsvMatriculas(csv);
+    expect(errores).toEqual([]);
+    const fila = filas[0];
+    if (fila === undefined) throw new Error('Fila esperada');
+    expect(fila).toMatchObject({
+      condicion: 'Repitente',
+      jornada: 'Mañana',
+      fechaNacimiento: '2013-04-18',
+    });
+    expect(aFilaRequest(fila)).toMatchObject({ condicion: 'Repitente' });
+  });
+
+  it('sin encabezado, fecha y condición van en la novena y décima columna', () => {
+    const csv = '1098765432,Ana,Gómez,,Sede Principal,6,A,Mañana,2013-04-18,Trasladado';
+    const fila = parsearCsvMatriculas(csv).filas[0];
+    if (fila === undefined) throw new Error('Fila esperada');
+    expect(fila).toMatchObject({ fechaNacimiento: '2013-04-18', condicion: 'Trasladado' });
+  });
+
+  it('un encabezado sin columnas obligatorias se reporta antes de leer filas', () => {
+    const csv = ['documento,nombres,sede,grado,jornada', '1,Ana,Sede Principal,6,Mañana'].join(
+      '\n',
+    );
+    const { filas, errores } = parsearCsvMatriculas(csv);
+    expect(filas).toHaveLength(0);
+    expect(errores[0]).toContain('le faltan columnas: letra');
+  });
+});
+
+describe('tipo de documento en el CSV', () => {
+  it('se lee por nombre de encabezado y viaja al contrato', () => {
+    const csv = [
+      'documento,tipoDocumento,nombres,apellidos,correo,sede,grado,letra,jornada,condicion',
+      '1098765432,CC,Ana,Gómez,,Sede Principal,6,A,Mañana,Nuevo',
+    ].join('\n');
+    const fila = parsearCsvMatriculas(csv).filas[0];
+    if (fila === undefined) throw new Error('Fila esperada');
+    expect(fila.tipoDocumento).toBe('CC');
+    expect(aFilaRequest(fila)).toMatchObject({ tipoDocumento: 'CC' });
+  });
+
+  it('sin encabezado va en la undécima columna', () => {
+    const csv = '1098765432,Ana,Gómez,,Sede Principal,6,A,Mañana,2013-04-18,Nuevo,TI';
+    const fila = parsearCsvMatriculas(csv).filas[0];
+    if (fila === undefined) throw new Error('Fila esperada');
+    expect(fila).toMatchObject({ condicion: 'Nuevo', tipoDocumento: 'TI' });
+  });
+});
+
 describe('plantillaMatriculasCsv', () => {
   it('trae encabezado y una fila de ejemplo', () => {
     const lineas = plantillaMatriculasCsv().split('\r\n');
     expect(lineas[0]).toContain('documento,nombres,apellidos,correo,sede,grado,letra,jornada');
+    expect(lineas[0]).toMatch(/fechaNacimiento,condicion,tipoDocumento$/);
     expect(lineas[1]?.split(',')[0]).toBe('1098765432');
+    expect(lineas[1]?.split(',')[9]).toBe('Nuevo');
+    expect(lineas[1]?.split(',')[10]).toBe('TI');
   });
 
   it('descarga la plantilla con un enlace temporal y libera el objeto URL', () => {

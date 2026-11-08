@@ -15,7 +15,7 @@ import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { SESION_KEY, useSesion } from '@/hooks/useSesion';
 import { cerrarSesion } from '@/lib/api';
-import { inicialesDe } from '@/lib/subdominio';
+import { inicialesDe } from '@/lib/iniciales';
 import { inicialesVisible, nombreCorto } from '@/lib/nombre';
 
 interface ItemNav {

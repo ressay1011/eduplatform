@@ -3,10 +3,9 @@
 /**
  * LoginFlow — ÚNICO punto de entrada para todos los colegios.
  *
- * Paso 1: el correo. Si la URL trae el colegio en el subdominio
- * (`juanaarias.<dominio>` o `?colegio=`), el branding ya está resuelto al
- * cargar y el correo solo identifica al usuario; si no, la API deduce el
- * colegio por el dominio (lo que va después de la @). El resultado se guarda en la
+ * Paso 1: el usuario. El colegio sale de lo que va después de la `@`
+ * (`admin@juanaarias`): la API resuelve su contexto público y se aplican su
+ * logo y colores antes de pedir la contraseña. El resultado se guarda en la
  * caché de TanStack Query: si el colegio cambia su color, `invalidateQueries`
  * lo refresca de inmediato (sin esperar TTL ni ventanas de 60s).
  * Paso 2: contraseña. La API emite la cookie httpOnly con la sesión.
@@ -25,12 +24,12 @@ import { TextField } from '@/components/TextField';
 import { SESION_KEY } from '@/hooks/useSesion';
 import { ApiError, getContextoColegio, iniciarSesion, type ContextoConSede } from '@/lib/api';
 import { aplicarBranding } from '@/lib/branding';
-import { inicialesDe, subdominioActual } from '@/lib/subdominio';
+import { inicialesDe } from '@/lib/iniciales';
 import { esUsuarioValido } from '@/lib/validacion';
 
-/** Clave de caché del contexto público por subdominio. */
-function claveSubdominio(subdominio: string) {
-  return ['contexto-colegio', `sub:${subdominio}`] as const;
+/** Clave de caché del contexto público por código de colegio. */
+function claveCodigo(codigo: string) {
+  return ['contexto-colegio', `cod:${codigo.toLowerCase()}`] as const;
 }
 
 export function LoginFlow() {
@@ -41,8 +40,6 @@ export function LoginFlow() {
   const [usuario, setUsuario] = useState('');
   const [password, setPassword] = useState('');
   const [colegio, setColegio] = useState<ContextoConSede | null>(null);
-  /** Subdominio del host: si existe, el colegio ya está resuelto antes del correo. */
-  const [subdominio, setSubdominio] = useState<string | null>(null);
   const [recordarme, setRecordarme] = useState(false);
   const [mostrarPassword, setMostrarPassword] = useState(false);
 
@@ -63,41 +60,9 @@ export function LoginFlow() {
     document.getElementById('usuario')?.focus();
   }, []);
 
-  // Enlace por colegio (`juanaarias.<dominio>` o `?colegio=`): el tenant se
-  // resuelve por el host y el correo deja de tener que ser del dominio del
-  // colegio. Si el subdominio no existe, se sigue con el login de siempre.
-  useEffect(() => {
-    const sub = subdominioActual();
-    if (sub === null) return;
-    setSubdominio(sub);
-
-    let vigente = true;
-    void queryClient
-      .fetchQuery({
-        queryKey: claveSubdominio(sub),
-        queryFn: () => getContextoColegio(sub),
-        staleTime: 5 * 60_000,
-        retry: false,
-      })
-      .then((contexto) => {
-        if (!vigente) return;
-        aplicarBranding(contexto.primaryColor);
-        setColegio(contexto);
-      })
-      .catch(() => {
-        if (vigente) {
-          setBanner('No encontramos un colegio en esta dirección. Revisa el enlace.');
-        }
-      });
-    return () => {
-      vigente = false;
-    };
-  }, [queryClient]);
-
   /**
-   * Paso 1: valida el nombre de usuario. Con el colegio ya resuelto por el
-   * subdominio solo pasa al paso 2; sin subdominio intenta la vía heredada
-   * (el colegio se deduce del dominio del identificador).
+   * Paso 1: valida el nombre de usuario y resuelve su colegio por el sufijo
+   * (`admin@juanaarias` → `juanaarias`), aplicando el branding antes del paso 2.
    */
   const onEnviarPaso1 = useCallback(
     async (e: FormEvent) => {
@@ -115,14 +80,8 @@ export function LoginFlow() {
       setErrorUsuario(null);
       setBanner(null);
 
-      // Con el colegio resuelto por el subdominio no hay nada que buscar.
-      if (subdominio !== null && colegio !== null) {
-        setPaso(2);
-        return;
-      }
-
-      // Sin subdominio en la URL el colegio sale del propio usuario:
-      // `admin@juanaarias` → colegio `juanaarias`.
+      // El colegio sale del propio usuario:
+      // `admin@juanaArias` → colegio `juanaArias`.
       const sufijo = sufijoDeUsuario(valor);
       if (sufijo === null) {
         setErrorUsuario('Escribe tu usuario con el colegio: por ejemplo admin@juanaarias.');
@@ -132,10 +91,10 @@ export function LoginFlow() {
       setIdentificando(true);
       try {
         const contexto = await queryClient.fetchQuery({
-          queryKey: claveSubdominio(sufijo),
+          queryKey: claveCodigo(sufijo),
           queryFn: () => getContextoColegio(sufijo),
           staleTime: 5 * 60_000,
-          // Un 404 (subdominio sin colegio) no se reintenta: no es transitorio.
+          // Un 404 (código sin colegio) no se reintenta: no es transitorio.
           retry: false,
         });
         aplicarBranding(contexto.primaryColor);
@@ -153,7 +112,7 @@ export function LoginFlow() {
         setIdentificando(false);
       }
     },
-    [usuario, queryClient, subdominio, colegio],
+    [usuario, queryClient],
   );
 
   const onEnviarPaso2 = useCallback(
@@ -174,10 +133,9 @@ export function LoginFlow() {
       setAvisoRecuperacion(false);
       try {
         const respuesta = await iniciarSesion({
-          usuario: usuario.trim().toLowerCase(),
+          usuario: usuario.trim(),
           password,
           rememberMe: recordarme,
-          ...(subdominio !== null ? { subdominio } : {}),
         });
         // La sesión cambió: /me debe leerse fresco en el dashboard.
         await queryClient.invalidateQueries({ queryKey: SESION_KEY });
@@ -199,7 +157,7 @@ export function LoginFlow() {
         setEnviando(false);
       }
     },
-    [password, usuario, recordarme, router, queryClient, subdominio],
+    [password, usuario, recordarme, router, queryClient],
   );
 
   // Un colegio recién entregado aún no tiene nombre: hasta que lo tenga, el

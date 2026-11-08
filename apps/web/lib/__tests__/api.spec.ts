@@ -41,7 +41,7 @@ describe('lib/api', () => {
     );
     await expect(getContextoColegio('colegio-norte')).resolves.toEqual({ nombre: 'Colegio Norte' });
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining('/auth/contexto-colegio?subdominio=colegio-norte'),
+      expect.stringContaining('/auth/contexto-colegio?codigo=colegio-norte'),
       expect.objectContaining({ credentials: 'include' }),
     );
   });
@@ -60,7 +60,7 @@ describe('lib/api', () => {
     expect(fallo).toMatchObject({ code: 'INVALID_CREDENTIALS', status: 401 });
   });
 
-  it('el login sin subdominio no envía header (el colegio sale del dominio heredado)', async () => {
+  it('el login sin pista no envía header (el colegio sale del código del usuario)', async () => {
     fetchMock.mockResolvedValue(respuesta(200, { success: true, data: { sessionToken: 't' } }));
     await iniciarSesion({
       usuario: 'a@colegio-sur.edu.co',

@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.build.json",
+  "compilerOptions": {
+    "module": "es2022",
+    "moduleResolution": "bundler",
+    "declaration": false,
+    "sourceMap": false,
+    "outDir": "dist/esm"
+  }
+}

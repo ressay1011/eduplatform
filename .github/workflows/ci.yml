@@ -8,6 +8,8 @@ on:
     branches: [main]
   # Cualquier PR, también los apilados sobre otra rama de trabajo.
   pull_request:
+  # Relanzar a mano: botón «Run workflow» en Actions o `gh workflow run CI`.
+  workflow_dispatch:
 
 # El GITHUB_TOKEN de este workflow solo necesita leer el código. Declararlo
 # explícitamente quita los permisos de escritura heredados del repositorio
@@ -17,7 +19,9 @@ permissions:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # En las PR conviene cancelar la corrida anterior al subir un commit nuevo; en
+  # `main` no, para que cada commit fusionado tenga su propio veredicto.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # Un solo job para todo lo que necesita Postgres, dependencias y build: así el
@@ -34,7 +38,9 @@ jobs:
         image: postgres:16-alpine
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
+          # Base efímera, solo alcanzable desde el runner mientras dura el job:
+          # con `trust` no hace falta clave y no queda ninguna en el archivo.
+          POSTGRES_HOST_AUTH_METHOD: trust
           POSTGRES_DB: eduplatform
         ports:
           - 5432:5432
@@ -47,8 +53,8 @@ jobs:
     env:
       # Mismos roles que en local: el runtime va con app_user (sujeto a RLS) y
       # el esquema lo crea app_migrator. Los tests e2e necesitan ambos.
-      DATABASE_URL: postgresql://app_user:app_user_dev@localhost:5432/eduplatform
-      MIGRATOR_URL: postgresql://app_migrator:app_migrator_dev@localhost:5432/eduplatform
+      DATABASE_URL: postgresql://app_user@localhost:5432/eduplatform
+      MIGRATOR_URL: postgresql://app_migrator@localhost:5432/eduplatform
       TOKEN_PEPPER: ci-pepper-0123456789abcdef0123456789abcdef
       NEXT_PUBLIC_API_URL: http://localhost:4000/api
       NODE_ENV: test
@@ -56,33 +62,35 @@ jobs:
       CORS_ORIGINS: http://localhost:3000
       COOKIE_SAMESITE: lax
       E2E_ADMIN_USUARIO: admin@demo-dist-1
-      E2E_ADMIN_PASSWORD: Demo2026!
+      # Cambia en cada corrida: es la clave del admin demo y solo vive lo que
+      # dura el job (el sembrado la usa para calcular el hash).
+      E2E_ADMIN_PASSWORD: demo-${{ github.run_id }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: pnpm 9.12
-        uses: pnpm/action-setup@v6
-        with:
-          version: 9.12.0
+      # La versión vive en `packageManager` del package.json: no se repite aquí
+      # (si divergen, pnpm/action-setup aborta antes del primer paso).
+      - name: pnpm (versión de package.json)
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
 
-      - name: Node 22
-        uses: actions/setup-node@v7
+      - name: Node 24
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: '22'
+          node-version: '24'
           cache: pnpm
 
       - name: Instalar dependencias
         run: pnpm install --frozen-lockfile --prod=false
 
       - name: Crear roles de base de datos
-        run: PGPASSWORD=postgres psql -h localhost -U postgres -d eduplatform -v ON_ERROR_STOP=1 -f packages/database/sql/0000_roles.sql
+        run: psql -h localhost -U postgres -d eduplatform -v ON_ERROR_STOP=1 -f packages/database/sql/0000_roles.sql
 
-      # drizzle-kit importa el esquema, que importa @eduplatform/types desde
-      # dist/: sin compilarlo antes, el push muere con MODULE_NOT_FOUND.
+      # drizzle-kit importa el esquema, que importa paquetes del monorepo desde
+      # su dist/: sin compilarlos antes, el push muere con MODULE_NOT_FOUND.
       - name: Compilar paquetes para el esquema
-        run: pnpm --filter @eduplatform/types run build
+        run: pnpm --filter "@eduplatform/database^..." run build
 
       - name: Esquema (drizzle push como app_migrator)
         run: pnpm --filter @eduplatform/database exec drizzle-kit push --force
@@ -92,7 +100,7 @@ jobs:
       # drizzle-kit puede salir con 0 aunque falle: se comprueba la tabla.
       - name: Verificar que el esquema existe
         run: |
-          TABLA=$(PGPASSWORD=postgres psql -h localhost -U postgres -d eduplatform -tAc "select to_regclass('public.sedes')")
+          TABLA=$(psql -h localhost -U postgres -d eduplatform -tAc "select to_regclass('public.sedes')")
           echo "to_regclass(public.sedes) = $TABLA"
           test "$TABLA" = "sedes" || { echo "::error::drizzle push no creó el esquema"; exit 1; }
 
@@ -128,17 +136,30 @@ jobs:
       # una base efímera de CI.
       - name: Sembrar colegio demo
         run: |
-          HASH=$(cd apps/api && node -e "require('bcrypt').hash(process.argv[1],4).then(h=>console.log(h))" "Demo2026!")
+          HASH=$(pnpm --filter @eduplatform/api exec node -e "require('bcrypt').hash(process.argv[1],4).then(h=>console.log(h))" "$E2E_ADMIN_PASSWORD")
           DEMO_HASH="$HASH" DATABASE_URL="$MIGRATOR_URL" node packages/database/scripts/seed-demo.mjs
+
+      # El script entra como app_user (el sujeto a RLS, no el dueño) y comprueba
+      # que un colegio no ve datos de otro. Sin este paso, una política rota
+      # pasaba el CI en verde y la fuga aparecía con datos reales.
+      - name: Aislamiento entre colegios (RLS)
+        run: |
+          TENANT=$(psql -h localhost -U postgres -d eduplatform -tAc \
+            "select id from colegios where codigo='demo-dist-1'")
+          TENANT_ID="$TENANT" pnpm --filter @eduplatform/database exec node scripts/verify-rls.mjs
 
       # Sin caché, Chromium son ~130 MB en cada corrida.
       - name: Caché de Chromium
-        uses: actions/cache@v6
+        id: cache-chromium
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
 
+      # Con la caché acertada no hace falta reinstalar las dependencias del
+      # navegador: el paso es el que corre `apt` y se lleva ~30-40 s.
       - name: Instalar Chromium
+        if: steps.cache-chromium.outputs.cache-hit != 'true'
         run: pnpm exec playwright install --with-deps chromium
 
       # Si el humo falla, Playwright deja traza y captura en test-results.
@@ -149,7 +170,7 @@ jobs:
       # traen algo cuando el humo falla.
       - name: Guardar reportes
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: reportes
           path: |
@@ -159,9 +180,10 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-  # Sonar solo corre si el repositorio tiene configurado SONAR_ENABLED=true y
-  # los secretos SONAR_TOKEN + SONAR_HOST_URL (requiere servidor propio o
-  # SonarCloud de pago: el repo es privado).
+  # Sonar corre en cada PR y push: SONAR_ENABLED=true y los secretos
+  # SONAR_TOKEN + SONAR_HOST_URL están configurados (SonarCloud es gratis en
+  # repos públicos). Solo se salta en las PR de Dependabot, que no reciben
+  # secretos; ahí basta `verificar`.
   sonar:
     name: sonar
     runs-on: ubuntu-latest
@@ -173,17 +195,17 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout (historial completo para el blame)
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
       - name: Descargar cobertura
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: reportes
 
       - name: Escanear con SonarQube
-        uses: SonarSource/sonarqube-scan-action@v8
+        uses: SonarSource/sonarqube-scan-action@e805d875275f728fac1885b413934be6d7c63f65 # v8.4.1
         with:
           # Cada análisis es una versión: la ventana de «código nuevo» pasa a ser
           # el diff desde el análisis anterior en vez de arrastrar todo el

@@ -1,33 +1,28 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "ui": "tui",
-  "globalEnv": [
-    "NODE_ENV",
-    "PORT",
-    "DATABASE_URL",
-    "MIGRATOR_URL",
-    "TOKEN_PEPPER",
-    "THROTTLE_LIMIT",
-    "THROTTLE_LOGIN_LIMIT",
-    "COOKIE_SAMESITE",
-    "CORS_ORIGINS",
-    "NEXT_PUBLIC_API_URL"
-  ],
+  "globalEnv": ["NODE_ENV", "NEXT_PUBLIC_API_URL"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": [".next/**", "!.next/cache/**", "dist/**"]
     },
-    "lint": {
-      "dependsOn": ["^lint"]
-    },
     "typecheck": {
       "dependsOn": ["^build"]
     },
     "test": {
       "dependsOn": ["^build"],
-      "outputs": ["coverage/**"]
+      "outputs": ["coverage/**"],
+      "env": [
+        "DATABASE_URL",
+        "MIGRATOR_URL",
+        "TOKEN_PEPPER",
+        "CORS_ORIGINS",
+        "COOKIE_SAMESITE",
+        "THROTTLE_LIMIT",
+        "THROTTLE_LOGIN_LIMIT"
+      ]
     },
     "dev": {
       "cache": false,
@@ -38,7 +33,16 @@
     },
     "test:coverage": {
       "dependsOn": ["^build"],
-      "outputs": ["coverage/**"]
+      "outputs": ["coverage/**"],
+      "env": [
+        "DATABASE_URL",
+        "MIGRATOR_URL",
+        "TOKEN_PEPPER",
+        "CORS_ORIGINS",
+        "COOKIE_SAMESITE",
+        "THROTTLE_LIMIT",
+        "THROTTLE_LOGIN_LIMIT"
+      ]
     }
   }
 }

@@ -10,6 +10,7 @@ import { defineConfig } from 'eslint/config';
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
+import react from 'eslint-plugin-react';
 import nextPlugin from '@next/eslint-plugin-next';
 import prettier from 'eslint-config-prettier';
 import globals from 'globals';
@@ -28,6 +29,10 @@ export default defineConfig([
       'diseno/**',
       'docs/**',
       '**/*.min.js',
+      // Salidas de Playwright: se llenan solas y no son código fuente.
+      'test-results/**',
+      'playwright-report/**',
+      'blob-report/**',
     ],
   },
 
@@ -55,14 +60,22 @@ export default defineConfig([
 
   {
     files: ['apps/web/**/*.{ts,tsx}'],
-    plugins: { 'react-hooks': reactHooks, '@next/next': nextPlugin },
+    plugins: { 'react-hooks': reactHooks, '@next/next': nextPlugin, react },
+    // Sin esto el plugin avisa de que no encuentra la versión de React.
+    settings: { react: { version: 'detect' } },
     rules: {
       ...reactHooks.configs.recommended.rules,
       // Formularios de edición: los datos llegan por query y se hidratan UNA vez.
       // React Compiler lo marca como cascada, pero aquí no hay estado derivable.
       'react-hooks/set-state-in-effect': 'off',
+      // Única regla de eslint-plugin-react: una lista de JSX sin `key` pasa por
+      // tsc, por los tests y por el resto del lint sin que nadie la vea.
+      'react/jsx-key': 'error',
       ...nextPlugin.configs.recommended.rules,
       ...nextPlugin.configs['core-web-vitals'].rules,
+      // App Router: no hay carpeta `pages/`, así que la regla no puede validar
+      // nada y solo imprime un aviso en cada ejecución.
+      '@next/next/no-html-link-for-pages': 'off',
       // App Router: las fuentes se cargan una sola vez en app/layout.tsx.
       '@next/next/no-page-custom-font': 'off',
       '@next/next/google-font-display': 'off',

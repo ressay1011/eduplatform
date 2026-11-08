@@ -63,13 +63,13 @@ function onboarding(completado: boolean): EstadoOnboarding {
   return {
     completado,
     paso: completado ? 6 : 1,
+    anioActual: new Date().getFullYear(),
     colegio: {
       id: 'c1',
       nombre: '',
       nombreOficial: null,
       nit: null,
       codigoDane: '',
-      subdominio: 'juanaarias',
       municipio: '',
       departamento: '',
       direccion: null,

@@ -27,7 +27,9 @@ import {
 import { randomInt } from 'node:crypto';
 import { apiError } from '../../shared/api-error';
 import { AuditService } from '../../shared/audit.service';
+import { esViolacionUnica } from '../../shared/pg-errors';
 import { RolesRepository } from '../roles/roles.repository';
+import { LoginAttemptsService } from '../auth/login-attempts.service';
 import { PasswordService } from '../auth/password.service';
 import { UsuariosRepository, type UsuarioRow } from './usuarios.repository';
 
@@ -46,11 +48,37 @@ export class UsuariosService {
     private readonly repo: UsuariosRepository,
     private readonly roles: RolesRepository,
     private readonly passwords: PasswordService,
+    private readonly attempts: LoginAttemptsService,
     private readonly audit: AuditService,
   ) {}
 
   private contexto(actor: ActorUsuarios): TenantContext {
     return { colegioId: actor.colegioId, isPlatformAdmin: false, userId: actor.usuarioId };
+  }
+
+  /**
+   * Completa el identificador con el código del colegio cuando el cliente no lo
+   * escribe (`juan` → `juan@juanaArias`). El código es lo que resuelve el
+   * colegio en el login; sin él la cuenta no podría entrar.
+   */
+  private async completarUsuario(ctx: TenantContext, usuario: string): Promise<string> {
+    const codigo = await this.repo.codigoColegio(ctx);
+    if (codigo === null) throw apiError(ErrorCodes.NOT_FOUND, 404, 'Colegio no encontrado');
+    if (!usuario.includes('@')) return `${usuario}@${codigo}`;
+
+    // El sufijo ES el código del colegio: el login resuelve el colegio por lo
+    // que va después de la última `@`, así que cualquier otro valor (un correo,
+    // otro colegio) crea una cuenta que nunca podrá entrar: 201 con contraseña
+    // temporal y 401 al usarla.
+    const sufijo = usuario.slice(usuario.lastIndexOf('@') + 1);
+    if (sufijo.toLowerCase() !== codigo.toLowerCase()) {
+      throw apiError(
+        ErrorCodes.VALIDATION_ERROR,
+        400,
+        `El usuario debe terminar en @${codigo}. Escríbelo sin @ para completarlo automáticamente.`,
+      );
+    }
+    return usuario;
   }
 
   /** Listado paginado con búsqueda y permisos de cada usuario. */
@@ -111,7 +139,8 @@ export class UsuariosService {
       );
     }
 
-    if (await this.repo.existeUsuario(contexto, dto.usuario)) {
+    const usuario = await this.completarUsuario(contexto, dto.usuario);
+    if (await this.repo.existeUsuario(contexto, usuario)) {
       throw apiError(
         ErrorCodes.ALREADY_EXISTS,
         409,
@@ -143,7 +172,7 @@ export class UsuariosService {
     let creado: UsuarioRow;
     try {
       creado = await this.repo.crear(contexto, {
-        usuario: dto.usuario,
+        usuario,
         passwordHash,
         nombres: dto.nombres,
         apellidos: dto.apellidos,
@@ -233,12 +262,26 @@ export class UsuariosService {
       }
     }
 
-    if (dto.usuario !== undefined && dto.usuario !== actual.usuario) {
-      if (await this.repo.existeUsuario(contexto, dto.usuario, id)) {
+    // Si el cliente cambia el identificador sin sufijo, se completa con el código.
+    const usuarioFinal =
+      dto.usuario === undefined || dto.usuario === actual.usuario
+        ? undefined
+        : await this.completarUsuario(contexto, dto.usuario);
+    if (usuarioFinal !== undefined && usuarioFinal !== actual.usuario) {
+      // El identificador es el login: cambiarlo deja fuera al dueño de la
+      // cuenta, así que se reserva al administrador (igual que el rol).
+      if (!actor.esAdmin) {
+        throw apiError(
+          ErrorCodes.FORBIDDEN,
+          403,
+          'Solo un administrador puede cambiar el nombre de usuario',
+        );
+      }
+      if (await this.repo.existeUsuario(contexto, usuarioFinal, id)) {
         throw apiError(
           ErrorCodes.ALREADY_EXISTS,
           409,
-          'Ya existe un usuario con ese correo electrónico',
+          'Ya existe un usuario con ese nombre de usuario',
         );
       }
     }
@@ -274,12 +317,23 @@ export class UsuariosService {
 
     let fila: UsuarioRow | null;
     try {
-      fila = await this.repo.actualizar(contexto, id, dto);
+      fila = await this.repo.actualizar(
+        contexto,
+        id,
+        usuarioFinal === undefined ? dto : { ...dto, usuario: usuarioFinal },
+      );
     } catch (err) {
       this.rechazarDuplicado(err);
       throw err;
     }
     if (fila === null) throw apiError(ErrorCodes.NOT_FOUND, 404, 'Usuario no encontrado');
+
+    // Reactivar es devolverle la cuenta: si estaba bloqueado por intentos
+    // fallidos, el bloqueo en memoria seguiría dando 423 aunque la BD esté
+    // limpia.
+    if (dto.activo === true && !actual.activo) {
+      this.attempts.limpiar(fila.usuario);
+    }
 
     if (dto.rolId !== undefined) {
       if (dto.rolId === null) {
@@ -384,11 +438,24 @@ export class UsuariosService {
         'Solo un administrador puede resetear a otro administrador',
       );
     }
+    // Resetear la contraseña equivale a poder entrar como esa persona: se
+    // reserva al administrador del colegio, igual que asignar roles o permisos.
+    if (!actor.esAdmin) {
+      throw apiError(
+        ErrorCodes.FORBIDDEN,
+        403,
+        'Solo el administrador del colegio puede restablecer contraseñas',
+      );
+    }
 
     const passwordTemporal = this.generarPasswordTemporal();
     const passwordHash = await this.passwords.hash(passwordTemporal);
     await this.repo.actualizarPasswordTemporal(contexto, id, passwordHash);
     await this.repo.revocarSesiones(contexto, id);
+    // La BD ya limpia intentos/bloqueo; el contador por identificador vive en
+    // memoria y también hay que soltarlo, o el usuario recibe 423 con la
+    // contraseña recién entregada.
+    this.attempts.limpiar(actual.usuario);
 
     await this.audit.registrar({
       accion: 'UPDATE',
@@ -494,7 +561,7 @@ export class UsuariosService {
 
   /** Traduce la violación UNIQUE de Postgres a un 409 del contrato. */
   private rechazarDuplicado(err: unknown): void {
-    if (typeof err === 'object' && err !== null && Reflect.get(err, 'code') === '23505') {
+    if (esViolacionUnica(err)) {
       throw apiError(ErrorCodes.ALREADY_EXISTS, 409, 'Ya existe un usuario con esos datos');
     }
   }

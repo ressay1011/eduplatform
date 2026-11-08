@@ -14,67 +14,72 @@ export const EmailSchema = z
   .string()
   .trim()
   .toLowerCase()
-  .email('Correo electrónico inválido')
-  .max(254);
+  // Zod 4 deprecó `z.string().email()`: el formato vive en `z.email()` y el
+  // recorte previo se conserva con `pipe`.
+  .pipe(z.email('Correo electrónico inválido').max(254));
 
 /**
  * Request del login multipasos (paso 2).
  * El colegio ya se resolvió en el paso 1 a partir del dominio del correo.
  */
 /**
- * Subdominio de colegio (usado en la landing pública y al crear colegios).
- * Formato: minúsculas, números y guiones; 3–32 caracteres; no empieza ni
- * termina en guion (evita subdominios inválidos para DNS).
+ * Código del colegio: su identificador estable, el que va en el usuario
+ * (`admin@juanaArias` → `juanaArias`). Lo crea el administrador de plataforma y
+ * nunca se edita.
+ *
+ * Formato: letras en cualquier caja, números y guiones; 3–32 caracteres; no
+ * empieza ni termina en guion. Se guarda tal cual se escribió y se compara sin
+ * caja (`juanaArias` y `juanaarias` son el mismo colegio).
  */
-export const SubdominioSchema = z
+export const CodigoColegioSchema = z
   .string()
+  .trim()
   .regex(
-    /^[a-z0-9](?:[a-z0-9-]{1,30}[a-z0-9])$/,
-    'Usa minúsculas, números y guiones (3–32 caracteres, sin empezar/terminar en guion)',
+    /^[A-Za-z0-9](?:[A-Za-z0-9-]{1,30}[A-Za-z0-9])$/,
+    'Usa letras, números y guiones (3–32 caracteres, sin empezar/terminar en guion)',
   );
-export type Subdominio = z.infer<typeof SubdominioSchema>;
+export type CodigoColegio = z.infer<typeof CodigoColegioSchema>;
 
 /**
  * Nombre de usuario: el identificador de acceso del personal del colegio.
  *
- * NO es un correo. El colegio se resuelve por el subdominio del host, así que
- * el identificador solo tiene que ser único dentro del colegio; se admiten
- * letras, números, punto, guion, guion bajo y `@` (p. ej. `admin@juanaarias`).
+ * NO es un correo. El colegio se resuelve por el código que va después de la
+ * última `@` (`admin@juanaArias`), así que el identificador solo tiene que ser
+ * único dentro del colegio; se admiten letras en cualquier caja, números, punto,
+ * guion, guion bajo y `@`.
+ *
+ * Se guarda tal cual se escribió y se compara sin caja: `Admin@JuanaArias` y
+ * `admin@juanaarias` son la misma cuenta.
  */
 export const UsuarioSchema = z
   .string()
   .trim()
-  .toLowerCase()
   .min(3, 'Mínimo 3 caracteres')
   .max(64, 'Máximo 64 caracteres')
-  .regex(/^[a-z0-9](?:[a-z0-9._@-]*[a-z0-9])$/, 'Solo minúsculas, números, puntos, guiones y @');
+  .regex(
+    /^[A-Za-z0-9](?:[A-Za-z0-9._@-]*[A-Za-z0-9])$/,
+    'Solo letras, números, puntos, guiones y @',
+  );
 
 /**
- * Colegio de un nombre de usuario: lo que va después de la `@`
- * (`admin@juanaarias` → `juanaarias`). Es el `subdominio` del colegio, así que
- * NO necesita ser un correo ni tener TLD; con esto el colegio se resuelve igual
- * entrando por `eduplatform.co` a secas.
+ * El sufijo del nombre de usuario vive en `codigo.ts` (sin zod) y se reexporta
+ * aquí para no romper a los consumidores que ya lo importaban de `auth`.
  */
-export function sufijoDeUsuario(usuario: string): string | null {
-  const limpio = usuario.trim().toLowerCase();
-  const posicion = limpio.lastIndexOf('@');
-  if (posicion <= 0 || posicion === limpio.length - 1) return null;
-  const sufijo = limpio.slice(posicion + 1);
-  return /^[a-z0-9](?:[a-z0-9-]{1,30}[a-z0-9])$/.test(sufijo) ? sufijo : null;
-}
+export { sufijoDeUsuario } from './codigo';
 
 /**
  * Login de usuario de colegio.
  *
- * `subdominio` es opcional: cuando la web se sirve en `colegio.<dominio>` el
- * tenant ya se conoce por el host y el usuario solo se identifica a sí mismo.
- * Sin él se mantiene la resolución heredada por dominio del identificador.
+ * El colegio sale del **código** que lleva el identificador (`admin@juanaArias`).
+ * `codigo` es la pista del enlace (`?codigo=`) y solo se usa cuando el
+ * identificador no trae sufijo.
  */
 export const LoginRequestSchema = z.object({
   usuario: UsuarioSchema,
   password: z.string().min(8, 'Mínimo 8 caracteres').max(200),
   rememberMe: z.boolean().default(false),
-  subdominio: SubdominioSchema.optional(),
+  /** Pista del enlace (`?codigo=`): se usa si el identificador no trae sufijo. */
+  codigo: CodigoColegioSchema.optional(),
 });
 /** Tipo de ENTRADA del login (rememberMe es opcional: el server lo defaultea). */
 export type LoginRequest = z.input<typeof LoginRequestSchema>;
@@ -85,7 +90,7 @@ export type LoginRequest = z.input<typeof LoginRequestSchema>;
  */
 
 /**
- * Paso 1 del login sin subdominio: solo el identificador, para resolver el
+ * Paso 1 del login sin pista: solo el identificador, para resolver el
  * colegio por el dominio heredado (`admin@colegio.edu.co`).
  */
 export const IdentificarColegioRequestSchema = z.object({
@@ -136,12 +141,12 @@ export interface LoginResponse {
 }
 
 /**
- * Login del nivel PLATAFORMA (equipo SaaS) — sin subdominio de colegio.
+ * Login del nivel PLATAFORMA (equipo SaaS) — sin colegio.
  * `.strict()`: rechaza campos extra en el body.
  */
 export const PlataformaLoginRequestSchema = z
   .object({
-    email: z.string().email('Correo electrónico inválido').max(254),
+    email: z.email('Correo electrónico inválido').max(254),
     password: z.string().min(1).max(200),
   })
   .strict();
@@ -149,6 +154,8 @@ export type PlataformaLoginRequest = z.infer<typeof PlataformaLoginRequestSchema
 
 /** Datos públicos del colegio para el branding del login (pre-sesión). */
 export interface ContextoColegioPublico {
+  /** Código estable del colegio: es lo que resuelve el login. */
+  codigo: string;
   nombre: string;
   codigoDane: string;
   logoUrl: string | null;

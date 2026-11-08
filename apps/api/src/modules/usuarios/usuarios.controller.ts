@@ -32,7 +32,7 @@ export class UsuariosController {
 
   /** S16 del informe: un id que no es UUID debe dar 400, no un 500 de Postgres. */
   private idValido(id: string): string {
-    return z.string().uuid('Identificador inválido').parse(id);
+    return z.uuid('Identificador inválido').parse(id);
   }
 
   /** El módulo es tenant-scoped: la consola de plataforma no lo usa. */

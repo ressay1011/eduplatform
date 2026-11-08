@@ -6,6 +6,7 @@
  */
 import type { INestApplication } from '@nestjs/common';
 import type { CorsOptions } from '@nestjs/common/interfaces/external/cors-options.interface';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { env } from './config/env';
@@ -23,6 +24,14 @@ export function configureApp(app: INestApplication): void {
 
   // Cookies httpOnly con la sesión (auth propia) — req.cookies en los guards
   app.use(cookieParser());
+
+  // Límite del cuerpo. El de Express (100 kb) se quedaba corto: el esquema de
+  // importación admite 500 filas de matrícula (~150 kb con datos realistas) y
+  // la web las manda en una sola petición, así que a partir de ~390 filas la
+  // importación moría con un 500 sin explicación. `useBodyParser` es la vía de
+  // Nest (no hace falta declarar `express` como dependencia directa) y se
+  // aplica antes de `init()`, que es cuando Nest monta sus parsers.
+  (app as NestExpressApplication).useBodyParser('json', { limit: '1mb' });
 
   // Render (y otros PaaS) está detrás de un proxy: sin esto req.ip sería la IP
   // del proxy y el rate limiting castigaría a TODOS los usuarios por igual.

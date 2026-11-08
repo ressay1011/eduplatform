@@ -7,7 +7,6 @@
 import { describe, it, expect } from 'vitest';
 import {
   LoginRequestSchema,
-  SubdominioSchema,
   CambioPasswordSchema,
   PlataformaLoginRequestSchema,
   sufijoDeUsuario,
@@ -29,31 +28,20 @@ describe('LoginRequestSchema', () => {
     expect(r.success).toBe(false);
   });
 
-  it('normaliza el usuario a minúsculas y recorta espacios', () => {
+  it('conserva la caja del usuario y recorta espacios', () => {
     const r = LoginRequestSchema.safeParse({ usuario: '  Admin@Juana  ', password: 'segura123' });
     expect(r.success).toBe(true);
-    if (r.success) expect(r.data.usuario).toBe('admin@juana');
+    if (r.success) expect(r.data.usuario).toBe('Admin@Juana');
+  });
+
+  it('el sufijo del usuario (el código del colegio) se lee en minúsculas', () => {
+    expect(sufijoDeUsuario('Admin@JuanaArias')).toBe('juanaarias');
+    expect(sufijoDeUsuario('admin@juanaArias')).toBe('juanaarias');
   });
 
   it('rechaza contraseña de menos de 8 caracteres', () => {
     const r = LoginRequestSchema.safeParse({ usuario: 'admin@juana', password: 'corta' });
     expect(r.success).toBe(false);
-  });
-});
-
-describe('SubdominioSchema', () => {
-  it.each(['colegio-norte', 'demo', 'ie-juana-arias', 'a1b'])('acepta "%s"', (s) => {
-    expect(SubdominioSchema.safeParse(s).success).toBe(true);
-  });
-
-  it.each([
-    ['Ab', 'mayúsculas'],
-    ['-escuela', 'empieza en guion'],
-    ['escuela-', 'termina en guion'],
-    ['a'.repeat(33), 'demasiado largo'],
-    ['con espacios', 'espacios'],
-  ])('rechaza "%s" (%s)', (s) => {
-    expect(SubdominioSchema.safeParse(s).success).toBe(false);
   });
 });
 

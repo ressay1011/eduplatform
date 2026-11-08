@@ -5,7 +5,6 @@
 
 import { sql } from 'drizzle-orm';
 import {
-  check,
   boolean,
   index,
   integer,
@@ -17,7 +16,7 @@ import {
   timestamp,
   uuid,
 } from 'drizzle-orm/pg-core';
-import { Calendario, EstadoColegio, type Jornada } from '@eduplatform/types';
+import { Calendario, EstadoColegio, type Jornada, type PaletaColegio } from '@eduplatform/types';
 import { timestamps, softDelete } from './_tenant';
 
 /**
@@ -49,8 +48,12 @@ export const colegios = pgTable(
     /** Código DANE oficial de la IE (12 dígitos, único a nivel nacional). */
     // Sin DANE el colegio se crea igual; el wizard lo exige en el paso 1.
     codigoDane: text('codigo_dane').unique(),
-    /** Subdominio del colegio: `subdominio.eduplatform.co` (ADR-003). */
-    subdominio: text('subdominio').notNull().unique(),
+    /**
+     * Código estable del colegio: arma los usuarios (`admin@juanaArias`) y es lo
+     * que el login usa para resolver el tenant. Lo crea el administrador de
+     * plataforma y **nunca** se edita; la caja no distingue (`lower()` único).
+     */
+    codigo: text('codigo').notNull(),
     /**
      * Dominio de correo institucional (p. ej. `juanaarias.edu.co`).
      * Único: el login unificado lo usa para saber a qué colegio entra el usuario.
@@ -75,6 +78,14 @@ export const colegios = pgTable(
       .default('BASICO'),
     /** Override del color semilla Material Design 3 por colegio (hex). */
     primaryColor: text('primary_color'),
+    /** Segunda y tercera semilla de la paleta del colegio (hex). */
+    secondaryColor: text('secondary_color'),
+    tertiaryColor: text('tertiary_color'),
+    /**
+     * Paleta resuelta (claro y oscuro) calculada desde las tres semillas.
+     * Se guarda ya calculada; ver `PaletaColegio` en @eduplatform/types.
+     */
+    palette: jsonb('palette').$type<PaletaColegio>(),
     /**
      * Wizard de configuración inicial: paso 1..6 mientras está en curso.
      * Se guarda para poder reanudar («Guardar y salir»).
@@ -88,12 +99,7 @@ export const colegios = pgTable(
     ...timestamps,
     ...softDelete,
   },
-  (t) => [
-    index('colegios_estado_idx').on(t.estado),
-    index('colegios_subdominio_idx').on(t.subdominio),
-    // El subdominio es el único identificador del colegio: nunca vacío.
-    check('colegios_subdominio_no_vacio', sql`${t.subdominio} <> ''`),
-  ],
+  (t) => [index('colegios_estado_idx').on(t.estado)],
 );
 
 /**

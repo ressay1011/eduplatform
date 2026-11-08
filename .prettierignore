@@ -1,3 +1,13 @@
+# Qué no toca Prettier.
+#
+# Prettier 3 lee ESTE archivo y también `.gitignore` (su traza muestra
+# `ignorePath: [".gitignore", ".prettierignore"]`), así que casi todo lo de
+# abajo ya está excluido por allí. Se mantiene aquí como reserva: si alguien
+# toca `.gitignore`, los artefactos de build siguen sin formatearse.
+#
+# La única regla que NO puede vivir en `.gitignore` es `pnpm-lock.yaml`: ese
+# archivo sí se versiona y reformatearlo rompe la salida de pnpm.
+
 # Artefactos de build y dependencias
 node_modules/
 dist/

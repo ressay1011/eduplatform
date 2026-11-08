@@ -32,6 +32,15 @@ const revisar = (ok, mensaje) => {
 try {
   const [quien] = await sql`SELECT current_user AS usuario, current_database() AS base`;
   console.log(`# ${quien?.usuario}@${quien?.base}`);
+  if (quien?.usuario !== 'app_user') {
+    // El dueño del esquema no está sujeto a las políticas: con su URL todo
+    // «falla» sin explicar por qué. El .env del paquete trae justo esa.
+    console.error(
+      `\nConectado como "${quien?.usuario}", no como app_user: RLS no aplica al dueño del esquema.\n` +
+        'Pasa la URL de runtime por delante del .env (la variable del shell gana):\n' +
+        "  DATABASE_URL='postgresql://app_user:...@localhost:5432/eduplatform' TENANT_ID=<uuid> pnpm db:verify\n",
+    );
+  }
   revisar(quien?.usuario === 'app_user', 'el runtime conecta como app_user');
 
   const rls = await sql`
@@ -65,10 +74,10 @@ try {
     revisar(otro?.n === 0, `con un tenant ajeno, usuarios devuelve 0 (${otro?.n})`);
   });
 
-  const publico = await sql`SELECT subdominio FROM colegios_publico LIMIT 3`;
+  const publico = await sql`SELECT codigo FROM colegios_publico LIMIT 3`;
   revisar(
     publico.length > 0,
-    `vista pública del login visible (${publico.map((c) => c.dominio_email).join(', ')})`,
+    `vista pública del login visible (${publico.map((c) => c.codigo).join(', ')})`,
   );
 } finally {
   await sql.end({ timeout: 5 });

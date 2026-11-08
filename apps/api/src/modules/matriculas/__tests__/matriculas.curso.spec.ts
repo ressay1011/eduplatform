@@ -5,10 +5,12 @@
 import { describe, expect, it } from 'vitest';
 import type { CursoMatricula } from '@eduplatform/types';
 import {
+  condicionDeTexto,
   ErrorMatricula,
   jornadaDeTexto,
   numeroDeGrado,
   resolverCursoCsv,
+  tipoDocumentoDeTexto,
 } from '../matriculas.curso';
 
 const CURSOS: CursoMatricula[] = [
@@ -98,5 +100,35 @@ describe('resolverCursoCsv', () => {
         jornada: 'MANANA',
       }),
     ).toThrow(/Grado inválido/);
+  });
+});
+
+describe('condicionDeTexto', () => {
+  it('acepta los textos del CSV sin distinguir caja ni tildes', () => {
+    expect(condicionDeTexto('Nuevo')).toBe('NUEVO');
+    expect(condicionDeTexto('repitente')).toBe('REPITENTE');
+    expect(condicionDeTexto('  REINGRESO ')).toBe('REINGRESO');
+    expect(condicionDeTexto('Trasladada')).toBe('TRASLADADO');
+    expect(condicionDeTexto('antigua')).toBe('ANTIGUO');
+  });
+
+  it('devuelve null con un texto que no es una condición', () => {
+    expect(condicionDeTexto('Pepito')).toBeNull();
+    expect(condicionDeTexto('')).toBeNull();
+  });
+});
+
+describe('tipoDocumentoDeTexto', () => {
+  it('acepta siglas y nombres, sin caja ni tildes', () => {
+    expect(tipoDocumentoDeTexto('cc')).toBe('CC');
+    expect(tipoDocumentoDeTexto('Ti')).toBe('TI');
+    expect(tipoDocumentoDeTexto('Cédula')).toBe('CC');
+    expect(tipoDocumentoDeTexto('tarjeta de identidad')).toBe('TI');
+    expect(tipoDocumentoDeTexto('PPT')).toBe('PPT');
+  });
+
+  it('devuelve null con un tipo que no existe', () => {
+    expect(tipoDocumentoDeTexto('pasaporte')).toBeNull();
+    expect(tipoDocumentoDeTexto('')).toBeNull();
   });
 });

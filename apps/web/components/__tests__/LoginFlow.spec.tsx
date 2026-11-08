@@ -1,7 +1,7 @@
 /**
  * Tests del LoginFlow unificado — la API y next/navigation van mockeados (el
  * contrato real lo cubren los e2e de la API). Se valida la máquina de estados,
- * la resolución del colegio por dominio del correo, la caché (TanStack Query)
+ * la resolución del colegio por el código del identificador, la caché (TanStack Query)
  * y su invalidación explícita al cambiar datos del colegio.
  */
 import { act, render, screen, waitFor } from '@testing-library/react';
@@ -17,11 +17,6 @@ const { mockPush, mockReplace } = vi.hoisted(() => ({
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush, replace: mockReplace }),
 }));
-
-vi.mock('@/lib/subdominio', async (original) => {
-  const mod = await original<typeof import('@/lib/subdominio')>();
-  return { ...mod, subdominioActual: vi.fn(() => null) };
-});
 
 vi.mock('@/lib/api', () => {
   class ApiErrorMock extends Error {
@@ -42,11 +37,11 @@ vi.mock('@/lib/api', () => {
 });
 
 import { ApiError, getContextoColegio, iniciarSesion } from '@/lib/api';
-import { subdominioActual } from '@/lib/subdominio';
 import { LoginFlow } from '../login/LoginFlow';
 import type { ContextoConSede } from '@/lib/api';
 
 const contexto: ContextoConSede = {
+  codigo: 'colegio-norte',
   nombre: 'Colegio Norte',
   codigoDane: '105001001234',
   logoUrl: null,
@@ -54,10 +49,9 @@ const contexto: ContextoConSede = {
   municipio: 'Plato',
   departamento: 'Magdalena',
   estado: 'ACTIVO',
-  subdominio: 'colegio-norte',
 };
 
-// Usuario de prueba con dominio heredado: el paso 1 sin subdominio lo resuelve.
+// Usuario de prueba: el paso 1 resuelve el colegio por el código del sufijo.
 const EMAIL = 'maria@colegio-norte';
 
 function nuevoCliente(): QueryClient {
@@ -101,12 +95,11 @@ async function identificar(valor: string): Promise<void> {
 describe('LoginFlow', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(subdominioActual).mockReturnValue(null);
     vi.mocked(getContextoColegio).mockResolvedValue(contexto);
     vi.mocked(iniciarSesion).mockResolvedValue(loginOk(false));
   });
 
-  it('sin subdominio en la URL resuelve el colegio por el sufijo del usuario', async () => {
+  it('sin código en el enlace resuelve el colegio por el sufijo del usuario', async () => {
     renderFlow();
     expect(screen.getByText('EduPlatform')).toBeInTheDocument();
 
@@ -133,39 +126,10 @@ describe('LoginFlow', () => {
     expect(screen.getByText('EP')).toBeInTheDocument();
   });
 
-  it('con el colegio en el subdominio: branding de entrada y login con subdominio', async () => {
-    vi.mocked(subdominioActual).mockReturnValue('juanaarias');
+  it('el colegio sale del sufijo del usuario', async () => {
     vi.mocked(getContextoColegio).mockResolvedValue({
       ...contexto,
       nombre: 'I.E.T.D. Juana Arias',
-      subdominio: 'juanaarias',
-    });
-
-    renderFlow();
-
-    // El nombre del colegio aparece sin escribir el usuario todavía.
-    expect(await screen.findByText('I.E.T.D. Juana Arias')).toBeInTheDocument();
-    expect(getContextoColegio).toHaveBeenCalledWith('juanaarias');
-
-    // El usuario puede ser un correo de cualquier dominio: no se consulta el dominio.
-    await userEvent.type(screen.getByLabelText(/^nombre de usuario/i), 'rector@gmail.com');
-    await userEvent.click(screen.getByRole('button', { name: /continuar|buscando tu colegio/i }));
-
-    await userEvent.type(await screen.findByLabelText(/^contraseña/i), 'ClaveLarga1');
-    await userEvent.click(screen.getByRole('button', { name: /ingresar/i }));
-
-    await waitFor(() =>
-      expect(iniciarSesion).toHaveBeenCalledWith(
-        expect.objectContaining({ usuario: 'rector@gmail.com', subdominio: 'juanaarias' }),
-      ),
-    );
-  });
-
-  it('sin subdominio en la URL, el colegio sale del sufijo del usuario', async () => {
-    vi.mocked(getContextoColegio).mockResolvedValue({
-      ...contexto,
-      nombre: 'I.E.T.D. Juana Arias',
-      subdominio: 'juanaarias',
     });
 
     renderFlow();
@@ -182,23 +146,8 @@ describe('LoginFlow', () => {
         expect.objectContaining({ usuario: 'maria@juanaarias' }),
       ),
     );
-    // Sin subdominio en la URL no se manda el campo.
-    expect(vi.mocked(iniciarSesion).mock.calls[0]?.[0]).not.toHaveProperty('subdominio');
-  });
-
-  it('subdominio que no existe → aviso y se puede seguir con el usuario', async () => {
-    vi.mocked(subdominioActual).mockReturnValue('fantasma');
-    vi.mocked(getContextoColegio).mockRejectedValue(
-      new ApiError(404, 'NOT_FOUND', 'No existe un colegio con ese subdominio'),
-    );
-
-    renderFlow();
-
-    expect(
-      await screen.findByText('No encontramos un colegio en esta dirección. Revisa el enlace.'),
-    ).toBeInTheDocument();
-    // El formulario sigue disponible: el usuario puede entrar igual.
-    expect(screen.getByLabelText(/^nombre de usuario/i)).toBeInTheDocument();
+    // Sin enlace no se manda la pista del código.
+    expect(vi.mocked(iniciarSesion).mock.calls[0]?.[0]).not.toHaveProperty('codigo');
   });
 
   it('el paso 1 valida el nombre de usuario antes de consultar', async () => {

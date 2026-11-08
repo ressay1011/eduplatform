@@ -19,27 +19,30 @@ if (!URL || !HASH) {
   process.exit(1);
 }
 
-const SUBDOMINIO = process.env.DEMO_SUBDOMINIO ?? 'demo-dist-1';
-// El acceso es con nombre de usuario, no un correo: admin@<subdominio>.
-const USUARIO_ADMIN = process.env.DEMO_ADMIN ?? `admin@${SUBDOMINIO}`;
+// El colegio se identifica por su CÓDIGO (el que va en `admin@<codigo>`).
+// `DEMO_SUBDOMINIO` se sigue aceptando como nombre heredado de la variable.
+const CODIGO = (process.env.DEMO_CODIGO ?? process.env.DEMO_SUBDOMINIO ?? 'demo-dist-1').trim();
+// El acceso es con nombre de usuario, no un correo: admin@<codigo>.
+const USUARIO_ADMIN = process.env.DEMO_ADMIN ?? `admin@${CODIGO}`;
 const NOMBRE_COLEGIO = process.env.DEMO_COLEGIO ?? 'I.E.T.D. Juana Arias de Benavides';
 
 const sql = postgres(URL, { max: 1 });
 
 try {
-  const existente = await sql`SELECT id FROM colegios WHERE subdominio = ${SUBDOMINIO} LIMIT 1`;
+  const existente =
+    await sql`SELECT id FROM colegios WHERE lower(codigo) = ${CODIGO.toLowerCase()} LIMIT 1`;
   let colegioId = existente[0]?.id;
   if (colegioId === undefined) {
     const [creado] = await sql`
-      INSERT INTO colegios (nombre, codigo_dane, subdominio, municipio, departamento, email, calendario, estado, primary_color)
-      VALUES (${NOMBRE_COLEGIO}, '105001000123', ${SUBDOMINIO}, 'Plato', 'Magdalena',
+      INSERT INTO colegios (nombre, codigo_dane, codigo, municipio, departamento, email, calendario, estado, primary_color)
+      VALUES (${NOMBRE_COLEGIO}, '105001000123', ${CODIGO}, 'Plato', 'Magdalena',
               'rectoria@eduplatform.co', 'A', 'ACTIVO', '#0b57d0')
       RETURNING id
     `;
     colegioId = creado?.id;
-    console.log(`# colegio creado: ${SUBDOMINIO} (${colegioId})`);
+    console.log(`# colegio creado: ${CODIGO} (${colegioId})`);
   } else {
-    console.log(`# colegio existente: ${SUBDOMINIO} (${colegioId})`);
+    console.log(`# colegio existente: ${CODIGO} (${colegioId})`);
   }
 
   const sede = await sql`

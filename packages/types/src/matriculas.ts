@@ -48,8 +48,8 @@ export interface CursoMatricula {
 
 /** POST /api/matriculas — alta individual de un estudiante existente. */
 export const CrearMatriculaSchema = z.object({
-  estudianteId: z.string().uuid('Estudiante inválido'),
-  cursoId: z.string().uuid('Curso inválido'),
+  estudianteId: z.uuid('Estudiante inválido'),
+  cursoId: z.uuid('Curso inválido'),
   condicion: CondicionMatriculaSchema.default(CondicionMatricula.NUEVO),
   fechaMatricula: FECHA_ISO.optional(),
 });
@@ -74,6 +74,17 @@ export const FilaMatriculaSchema = z.object({
   letra: z.string().trim().min(1, 'Falta la letra').max(2),
   jornada: z.string().trim().min(1, 'Falta la jornada').max(20),
   fechaNacimiento: FECHA_ISO.optional(),
+  /**
+   * Condición de ingreso en texto libre («Nuevo», «Repitente»…): se normaliza
+   * por fila en el API, con error de esa fila si no se reconoce. Un enum aquí
+   * tumbaría el lote entero (400) por una palabra mal escrita.
+   */
+  condicion: z.string().trim().max(20).optional(),
+  /**
+   * Tipo de documento en texto libre («CC», «TI», «Cédula»…): desambigua dos
+   * cuentas con el mismo número y distinto tipo. Se normaliza por fila.
+   */
+  tipoDocumento: z.string().trim().max(30).optional(),
 });
 export type FilaMatriculaRequest = z.input<typeof FilaMatriculaSchema>;
 
@@ -96,8 +107,8 @@ export interface ResultadoImportacionMatriculas {
 
 /** Query de GET /api/matriculas. */
 export const ListarMatriculasQuerySchema = z.object({
-  cursoId: z.string().uuid('Curso inválido').optional(),
-  anioLectivoId: z.string().uuid('Año inválido').optional(),
+  cursoId: z.uuid('Curso inválido').optional(),
+  anioLectivoId: z.uuid('Año inválido').optional(),
   q: z.string().trim().max(120).optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(200).default(50),

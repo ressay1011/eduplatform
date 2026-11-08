@@ -6,13 +6,14 @@
  * y estudiantes pueden quedar pendientes (checklist «Completa tu colegio»).
  */
 import { z } from 'zod';
-import { SubdominioSchema } from './auth';
+import { anioLocal } from './fecha';
 import { Calendario, Jornada } from './entities/enums';
+import { esNitValido } from './nit';
 
 const FECHA_ISO = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'La fecha debe ser AAAA-MM-DD');
 const JORNADAS = Object.values(Jornada) as [Jornada, ...Jornada[]];
 
-/** Código DANE del establecimiento: 12 dígitos (ver `subdominioDeNombre` abajo). */
+/** Código DANE del establecimiento: 12 dígitos. */
 export const CodigoDaneSchema = z
   .string()
   .trim()
@@ -35,55 +36,107 @@ export type PeriodoOnboardingRequest = z.input<typeof PeriodoOnboardingSchema>;
  * el wizard no lo edita. Cambiarlo dejaba a todos los usuarios fuera, porque el
  * login resuelve el colegio por el dominio del correo (ADR-006).
  */
-export const ColegioOnboardingSchema = z.object({
-  nombre: z.string().trim().min(3).max(160),
+export const ColegioOnboardingSchema = z
+  .object({
+    nombre: z.string().trim().min(3).max(160),
+    /**
+     * Nombre completo del establecimiento para documentos oficiales (certificados,
+     * actas). Se prellena con el del MEN en mayúsculas y tildes; el admin puede
+     * corregirlo. Sin él, los documentos usan `nombre`.
+     */
+    nombreOficial: z.string().trim().max(200).optional(),
+    /**
+     * NIT del colegio (opcional). La forma se valida aquí y no solo en el wizard:
+     * un POST directo con «abc» responde 400. El dígito de verificación NO se
+     * comprueba (ver `digitoVerificadorNit`): hay NIT reales sin él o con uno que
+     * no cuadra, y rechazarlos bloquearía colegios ya registrados.
+     */
+    nit: z
+      .string()
+      .trim()
+      .max(20)
+      .refine((valor) => valor === '' || esNitValido(valor), {
+        message:
+          'NIT inválido: de 8 a 15 dígitos con el de verificación opcional, p. ej. 900123456-7',
+      })
+      .optional(),
+    codigoDane: CodigoDaneSchema,
+    municipio: z.string().trim().min(2).max(80),
+    departamento: z.string().trim().min(2).max(80),
+    direccion: z.string().trim().max(160).optional(),
+    telefono: z.string().trim().max(30).optional(),
+    email: z.string().trim().pipe(z.email().max(160)),
+    calendario: z.enum([Calendario.A, Calendario.B]),
+    /**
+     * Año lectivo del colegio. La ventana (anterior, actual y próximo) se valida
+     * abajo, junto con las fechas de los períodos, porque depende del año en curso.
+     */
+    anioLectivo: z.number().int(),
+    periodos: z.array(PeriodoOnboardingSchema).min(2).max(4),
+  })
   /**
-   * Nombre completo del establecimiento para documentos oficiales (certificados,
-   * actas). Se prellena con el del MEN en mayúsculas y tildes; el admin puede
-   * corregirlo. Sin él, los documentos usan `nombre`.
+   * Reglas cruzadas del paso 1: ventana del año lectivo y fechas de los períodos.
+   *
+   * Son las mismas que aplica el wizard (año anterior, actual y próximo; períodos
+   * dentro del lectivo —el calendario B cruza al año siguiente—, en orden y sin
+   * solapes). Aquí se aplican también porque un cliente puede llamar a la API sin
+   * pasar por el formulario.
    */
-  nombreOficial: z.string().trim().max(200).optional(),
-  nit: z.string().trim().max(20).optional(),
-  codigoDane: CodigoDaneSchema,
-  subdominio: SubdominioSchema,
-  municipio: z.string().trim().min(2).max(80),
-  departamento: z.string().trim().min(2).max(80),
-  direccion: z.string().trim().max(160).optional(),
-  telefono: z.string().trim().max(30).optional(),
-  email: z.string().trim().email().max(160),
-  calendario: z.enum([Calendario.A, Calendario.B]),
-  anioLectivo: z.number().int().min(2020).max(2100),
-  periodos: z.array(PeriodoOnboardingSchema).min(2).max(4),
-});
-export type ColegioOnboardingRequest = z.input<typeof ColegioOnboardingSchema>;
+  .superRefine((valor, ctx) => {
+    // Año del calendario del colegio, no el del servidor en UTC: el 31-dic a
+    // partir de las 19:00 de Colombia la ventana se corría sola.
+    const anioActual = anioLocal();
+    if (Math.abs(valor.anioLectivo - anioActual) > 1) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['anioLectivo'],
+        message: `El año lectivo debe ser ${anioActual - 1}, ${anioActual} o ${anioActual + 1}`,
+      });
+      return;
+    }
 
-/**
- * Subdominio sugerido a partir del nombre del colegio.
- *
- * Quita tildes y puntos (para que «I.E.T.D.» no quede como `i-e-t-d-`), pasa a
- * minúsculas, convierte el resto de separadores en guiones y recorta a 32
- * caracteres — el máximo de `SubdominioSchema`. Devuelve `''` si no alcanza el
- * mínimo de 3, y en ese caso la web deja el campo vacío para que lo escriba el
- * admin. Es solo una SUGERENCIA: el campo siempre queda editable.
- */
-export function subdominioDeNombre(nombre: string): string {
-  const base = nombre
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '') // tildes y diéresis
-    .replace(/\./g, '') // «I.E.» → «IE»
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+/, '')
-    .slice(0, 32)
-    // Solo puede quedar un guion: la pasada anterior colapsa las rachas en uno.
-    // `-+$` con ancla es lo que Sonar marca como superlineal (typescript:S8786).
-    .replace(/-$/, '');
-  return base.length >= 3 ? base : '';
-}
+    const primerDia = `${valor.anioLectivo}-01-01`;
+    // El calendario B arranca en septiembre y cierra en junio del año siguiente.
+    const ultimoDia = `${valor.anioLectivo + 1}-12-31`;
+    let finAnterior: string | null = null;
+
+    valor.periodos.forEach((periodo, indice) => {
+      if (periodo.fechaInicio < primerDia) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['periodos', indice, 'fechaInicio'],
+          message: `El período no puede empezar antes del año lectivo (${valor.anioLectivo})`,
+        });
+      }
+      if (periodo.fechaFin > ultimoDia) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['periodos', indice, 'fechaFin'],
+          message: `El período no puede terminar después de ${valor.anioLectivo + 1}`,
+        });
+      }
+      if (periodo.fechaInicio >= periodo.fechaFin) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['periodos', indice, 'fechaFin'],
+          message: 'El inicio del período debe ser anterior al fin',
+        });
+      }
+      if (finAnterior !== null && periodo.fechaInicio <= finAnterior) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['periodos', indice, 'fechaInicio'],
+          message: 'El período se cruza con el anterior',
+        });
+      }
+      finAnterior = periodo.fechaFin;
+    });
+  });
+export type ColegioOnboardingRequest = z.input<typeof ColegioOnboardingSchema>;
 
 /** Paso 2: sede con las jornadas que ofrece. */
 export const SedeOnboardingSchema = z.object({
-  id: z.string().uuid().optional(),
+  id: z.uuid().optional(),
   nombre: z.string().trim().min(2).max(120),
   codigoDaneSede: z.string().trim().max(20).optional(),
   direccion: z.string().trim().max(160).optional(),
@@ -93,7 +146,7 @@ export type SedeOnboardingRequest = z.input<typeof SedeOnboardingSchema>;
 
 /** Paso 3: generador de cursos (producto cartesiano grados × letras). */
 export const EstructuraOnboardingSchema = z.object({
-  sedeId: z.string().uuid(),
+  sedeId: z.uuid(),
   jornada: z.enum(JORNADAS),
   grados: z.array(z.number().int().min(0).max(11)).min(1).max(12),
   letras: z
@@ -156,8 +209,6 @@ export interface ColegioOnboarding {
   nombreOficial: string | null;
   nit: string | null;
   codigoDane: string;
-  subdominio: string;
-  /** Dominio del correo institucional: solo lectura en el wizard. */
   municipio: string;
   departamento: string;
   direccion: string | null;
@@ -185,6 +236,12 @@ export interface ChecklistOnboardingItem {
 export interface EstadoOnboarding {
   completado: boolean;
   paso: number;
+  /**
+   * Año en curso según el SERVIDOR (`hoyLocal`, America/Bogota). El wizard lo usa
+   * para proponer el año lectivo y sus períodos: si saliera del reloj del equipo,
+   * uno con la zona o la fecha mal propondría un año que la API rechaza.
+   */
+  anioActual: number;
   colegio: ColegioOnboarding;
   sedes: SedeOnboarding[];
   anioLectivo: AnioLectivoOnboarding | null;

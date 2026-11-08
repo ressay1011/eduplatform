@@ -1,0 +1,4 @@
+# Formatea y lintea solo lo que va en este commit (reglas en package.json).
+# El CI vuelve a comprobarlo todo, esto solo evita gastar una corrida por un
+# espacio de más. Saltar una vez: HUSKY=0 git commit
+pnpm exec lint-staged

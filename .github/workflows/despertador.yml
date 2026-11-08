@@ -1,0 +1,95 @@
+name: Despertador de la API
+
+# Enciende y apaga el monitor de UptimeRobot que mantiene despierta la API.
+#
+# Render free suspende el servicio a los 15 min sin tráfico y el primer request
+# tarda 30-60 s. Con el monitor comprobando `GET /api/health/calentamiento`
+# cada 5 min dentro de la franja, el servicio no se duerme cuando hay usuarios
+# (y ese endpoint hace `SELECT 1`, así que despierta Neon en el mismo viaje).
+# Fuera de la franja se apaga: no gasta horas del plan y nadie espera.
+#
+# Por qué un workflow y no las ventanas de mantenimiento de UptimeRobot: son de
+# plan de pago (la API responde `account_paused`). Dos llamadas al día son
+# gratis y quedan auditadas en Actions.
+#
+# Los cron de GitHub van en UTC; Bogotá es UTC-5 todo el año. Se enciende 15 min
+# antes y se apaga 30 min después para que un retraso del programador (que los
+# hay, de 5 a 20 min) no deje a nadie mirando la pantalla de carga.
+
+on:
+  schedule:
+    - cron: '45 10 * * 1-5' # 05:45 lun-vie (Bogotá) → encender
+    - cron: '20 1 * * 2-6' # 20:20 lun-vie (Bogotá) → apagar (en UTC ya es el día siguiente)
+  workflow_dispatch:
+    inputs:
+      accion:
+        description: 'Qué hacer con el monitor'
+        required: true
+        default: encender
+        type: choice
+        options:
+          - encender
+          - apagar
+
+# Que dos corridas no se pisen: si un apagado y una manual coinciden, el estado
+# final sería una lotería.
+concurrency:
+  group: despertador
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  MONITOR_ID: '804589302' # «EduPlatform API · despertador» en UptimeRobot
+
+jobs:
+  cambiar:
+    name: Encender o apagar el monitor
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Decidir la acción
+        id: plan
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "accion=${{ inputs.accion }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.schedule }}" = "45 10 * * 1-5" ]; then
+            echo "accion=encender" >> "$GITHUB_OUTPUT"
+          else
+            echo "accion=apagar" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Llamar a UptimeRobot
+        env:
+          API_KEY: ${{ secrets.UPTIMEROBOT_API_KEY }}
+        run: |
+          if [ -z "$API_KEY" ]; then
+            echo "::error::Falta el secreto UPTIMEROBOT_API_KEY"
+            exit 1
+          fi
+          if [ "${{ steps.plan.outputs.accion }}" = "encender" ]; then estado=1; else estado=0; fi
+          echo "Acción: ${{ steps.plan.outputs.accion }} (status=$estado)"
+
+          respuesta=$(curl -sS -X POST https://api.uptimerobot.com/v2/editMonitor \
+            --data-urlencode "api_key=$API_KEY" \
+            --data "format=json" \
+            --data "id=$MONITOR_ID" \
+            --data "status=$estado")
+
+          echo "$respuesta"
+          echo "$respuesta" | grep -q '"stat":"ok"' || {
+            echo "::error::UptimeRobot rechazó el cambio"
+            exit 1
+          }
+
+      - name: Confirmar el estado
+        env:
+          API_KEY: ${{ secrets.UPTIMEROBOT_API_KEY }}
+        run: |
+          curl -sS -X POST https://api.uptimerobot.com/v2/getMonitors \
+            --data-urlencode "api_key=$API_KEY" \
+            --data "format=json" \
+            --data "monitors=$MONITOR_ID" > monitor.json
+          # 0 = pausado, 1 = sin comprobar, 2 = arriba, 8/9 = abajo
+          jq -r '.monitors[0] | "monitor \(.id): estado=\(.status) cada \(.interval)s · \(.url)"' monitor.json

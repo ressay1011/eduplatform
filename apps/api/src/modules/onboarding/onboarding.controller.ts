@@ -23,7 +23,7 @@ import { CurrentAuth } from '../auth/decorators/current-auth.decorator';
 import { RequirePermission } from '../auth/decorators/require-permission.decorator';
 import { OnboardingService, type ActorOnboarding } from './onboarding.service';
 
-const PasoSchema = z.object({ paso: z.number().int().min(1).max(6) });
+const PasoSchema = z.object({ paso: z.number().int().min(1).max(7) });
 
 @Controller('onboarding')
 export class OnboardingController {

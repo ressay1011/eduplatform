@@ -72,7 +72,6 @@ describe('Dashboard del colegio', () => {
         nombreOficial: null,
         nit: null,
         codigoDane: '147555000295',
-        subdominio: 'juanaarias',
         municipio: '',
         departamento: '',
         direccion: null,

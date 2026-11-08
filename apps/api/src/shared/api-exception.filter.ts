@@ -59,6 +59,19 @@ export class ApiExceptionFilter implements ExceptionFilter {
       return;
     }
 
+    // Error de transporte del cuerpo (body-parser): no es HttpException, así
+    // que sin este caso caía en el 500 genérico y el cliente no sabía si el
+    // problema era su archivo o el servidor.
+    const cuerpo = errorDeCuerpo(exception);
+    if (cuerpo !== null) {
+      const wrapped: ApiResponse<never> = {
+        success: false,
+        error: { code: cuerpo.code, message: cuerpo.message },
+      };
+      response.status(cuerpo.status).json(wrapped);
+      return;
+    }
+
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
       const body = exception.getResponse();
@@ -90,6 +103,33 @@ export class ApiExceptionFilter implements ExceptionFilter {
     };
     response.status(HttpStatus.INTERNAL_SERVER_ERROR).json(wrapped);
   }
+}
+
+/**
+ * Error de body-parser: `entity.too.large` (413) o `entity.parse.failed` (400).
+ * Se lee por propiedad y no por `instanceof`: son errores de Express y Nest los
+ * deja pasar tal cual, sin envolverlos.
+ */
+function errorDeCuerpo(
+  exception: unknown,
+): { status: number; code: ErrorCode; message: string } | null {
+  if (!(exception instanceof Error)) return null;
+  const tipo: unknown = Reflect.get(exception, 'type');
+  if (tipo === 'entity.too.large') {
+    return {
+      status: 413,
+      code: ErrorCodes.PAYLOAD_TOO_LARGE,
+      message: 'La petición es demasiado grande: divide el envío en partes más pequeñas',
+    };
+  }
+  if (tipo === 'entity.parse.failed') {
+    return {
+      status: 400,
+      code: ErrorCodes.VALIDATION_ERROR,
+      message: 'El cuerpo de la petición no es JSON válido',
+    };
+  }
+  return null;
 }
 
 /**

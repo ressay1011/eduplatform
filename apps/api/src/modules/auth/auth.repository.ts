@@ -25,7 +25,8 @@ export interface ColegioPublicoRow {
   id: string;
   nombre: string;
   codigoDane: string | null;
-  subdominio: string;
+  /** Código estable del colegio: es lo que resuelve el login. */
+  codigo: string;
   logoUrl: string | null;
   primaryColor: string | null;
   estado: string;
@@ -64,9 +65,27 @@ export interface ColegioAuthRow {
   id: string;
   nombre: string;
   codigoDane: string | null;
-  subdominio: string;
   primaryColor: string | null;
   estado: string;
+}
+
+/** Usuario con lo mínimo para armar la sesión (sin hash ni contadores). */
+export interface UsuarioContextoRow {
+  id: string;
+  colegioId: string;
+  usuario: string;
+  nombres: string | null;
+  apellidos: string | null;
+  esAdmin: boolean;
+  debeCambiarPassword: boolean;
+  activo: boolean;
+}
+
+/** Todo lo que la validación de sesión necesita, en una sola lectura. */
+export interface ContextoDeSesion {
+  usuario: UsuarioContextoRow | null;
+  colegio: ColegioAuthRow | null;
+  permisos: string[];
 }
 
 /** Usuario de plataforma con los campos que el auth necesita (incluye hash). */
@@ -97,9 +116,21 @@ const COLEGIO_COLUMNS = {
   id: colegios.id,
   nombre: colegios.nombre,
   codigoDane: colegios.codigoDane,
-  subdominio: colegios.subdominio,
+  codigo: colegios.codigo,
   primaryColor: colegios.primaryColor,
   estado: colegios.estado,
+} as const;
+
+/** Columnas del usuario para el contexto de sesión: sin hash ni contadores. */
+const USUARIO_CONTEXTO_COLUMNS = {
+  id: usuarios.id,
+  colegioId: usuarios.colegioId,
+  usuario: usuarios.usuario,
+  nombres: usuarios.nombres,
+  apellidos: usuarios.apellidos,
+  esAdmin: usuarios.esAdmin,
+  debeCambiarPassword: usuarios.debeCambiarPassword,
+  activo: usuarios.activo,
 } as const;
 
 const PLATAFORMA_COLUMNS = {
@@ -117,11 +148,11 @@ export class AuthRepository extends BaseRepository {
   // Lecturas pre-tenant (vistas) — login y validación de sesión
   // ------------------------------------------------------------------
 
-  /** Colegio por subdominio, con solo los datos públicos del login. */
-  async findColegioPublico(subdominio: string): Promise<ColegioPublicoRow | null> {
+  /** Colegio por **código** (sin caja), con solo los datos públicos del login. */
+  async findColegioPublico(codigo: string): Promise<ColegioPublicoRow | null> {
     const filas = await this.db.execute(
-      sql`SELECT id, nombre, subdominio, codigo_dane, logo_url, primary_color, estado, municipio, departamento
-          FROM colegios_publico WHERE subdominio = ${subdominio} LIMIT 1`,
+      sql`SELECT id, nombre, codigo, codigo_dane, logo_url, primary_color, estado, municipio, departamento
+          FROM colegios_publico WHERE lower(codigo) = ${codigo.trim().toLowerCase()} LIMIT 1`,
     );
     return this.mapearColegioPublico(filas[0]);
   }
@@ -139,7 +170,7 @@ export class AuthRepository extends BaseRepository {
       nombre: String(fila['nombre']),
       // Sin DANE (alta manual) viaja como '' — nunca la cadena «null».
       codigoDane: dane === null || dane === undefined ? '' : String(dane),
-      subdominio: String(fila['subdominio']),
+      codigo: String(fila['codigo']),
       logoUrl: logo === null || logo === undefined ? null : String(logo),
       primaryColor: color === null || color === undefined ? null : String(color),
       estado: String(fila['estado']),
@@ -171,14 +202,17 @@ export class AuthRepository extends BaseRepository {
   // Usuarios de colegio (tenant)
   // ------------------------------------------------------------------
 
-  /** Usuario por nombre de usuario dentro del colegio (normalizado a minúsculas). */
+  /** Usuario por identificador dentro del colegio, sin distinguir la caja. */
   async findUsuarioPorUsuario(ctx: TenantContext, usuario: string): Promise<UsuarioAuthRow | null> {
     return this.withTenant(ctx, async (tx) => {
       const filas = await tx
         .select(USUARIO_COLUMNS)
         .from(usuarios)
         .where(
-          and(eq(usuarios.colegioId, ctx.colegioId), eq(usuarios.usuario, usuario.toLowerCase())),
+          and(
+            eq(usuarios.colegioId, ctx.colegioId),
+            sql`lower(${usuarios.usuario}) = ${usuario.trim().toLowerCase()}`,
+          ),
         )
         .limit(1);
       return filas[0] ?? null;
@@ -209,20 +243,41 @@ export class AuthRepository extends BaseRepository {
     });
   }
 
-  /** Códigos de permiso asignados al usuario (vacío para esAdmin — no aplica). */
-  async findPermisosDeUsuario(ctx: TenantContext, usuarioId: string): Promise<string[]> {
+  /**
+   * Usuario + colegio + permisos en **una** consulta y **una** transacción.
+   * Antes eran tres `withTenant` seguidos (12 viajes a la base solo para
+   * resolver quién eres, en cada petición autenticada).
+   *
+   * El LEFT JOIN con los permisos devuelve una fila por permiso: usuario y
+   * colegio se leen de la primera y los permisos se recogen de todas.
+   */
+  async findContextoDeSesion(ctx: TenantContext, usuarioId: string): Promise<ContextoDeSesion> {
     return this.withTenant(ctx, async (tx) => {
       const filas = await tx
-        .select({ codigo: permisos.codigo })
-        .from(usuariosPermisos)
-        .innerJoin(permisos, eq(usuariosPermisos.permisoId, permisos.id))
-        .where(
+        .select({
+          usuario: USUARIO_CONTEXTO_COLUMNS,
+          colegio: COLEGIO_COLUMNS,
+          permiso: permisos.codigo,
+        })
+        .from(usuarios)
+        .innerJoin(colegios, eq(colegios.id, usuarios.colegioId))
+        .leftJoin(
+          usuariosPermisos,
           and(
+            eq(usuariosPermisos.usuarioId, usuarios.id),
             eq(usuariosPermisos.colegioId, ctx.colegioId),
-            eq(usuariosPermisos.usuarioId, usuarioId),
           ),
-        );
-      return filas.map((f) => f.codigo);
+        )
+        .leftJoin(permisos, eq(permisos.id, usuariosPermisos.permisoId))
+        .where(and(eq(usuarios.colegioId, ctx.colegioId), eq(usuarios.id, usuarioId)));
+
+      const primera = filas[0];
+      if (primera === undefined) return { usuario: null, colegio: null, permisos: [] };
+      return {
+        usuario: primera.usuario,
+        colegio: primera.colegio,
+        permisos: filas.map((f) => f.permiso).filter((p): p is string => p !== null),
+      };
     });
   }
 
