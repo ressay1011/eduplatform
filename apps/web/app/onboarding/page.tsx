@@ -229,8 +229,12 @@ export default function OnboardingPage() {
   const movil = useAnchoMovil();
   /** Bienvenida del colegio recién creado: se decide una sola vez, al cargar. */
   const [bienvenida, setBienvenida] = useState(false);
-  /** Aviso antes de salir del paso 1 sin código DANE (no hay nada guardado). */
-  const [confirmarSalida, setConfirmarSalida] = useState(false);
+  /**
+   * Aviso antes de cerrar la sesión: `sin-colegio` cuando el paso 1 no tiene
+   * código DANE (el colegio no existe todavía) e `incompleto` cuando el paso
+   * abierto no se puede guardar y el admin decide salir igual.
+   */
+  const [salida, setSalida] = useState<'sin-colegio' | 'incompleto' | null>(null);
 
   // Paso 1
   const [colegio, setColegio] = useState({
@@ -1311,17 +1315,16 @@ export default function OnboardingPage() {
   }
 
   /**
-   * «Guardar y salir»: guarda de verdad el paso actual. Antes solo llamaba a
-   * `guardarPasoOnboarding(paso)`, que marca el paso en el colegio y no escribe
-   * los datos, así que en el paso 1 se perdía todo lo escrito.
-   *
-   * Sin código DANE el colegio aún no existe: en lugar de cerrar en silencio,
-   * se abre el aviso de salida (`confirmarSalida`).
+   * «Guardar y salir»: guarda el paso actual si está completo y, si no, ofrece
+   * cerrar la sesión igual. Antes un paso a medias atrapaba al admin (avisaba
+   * «revisa los campos marcados» y no salía), y en el paso 1 sin código DANE ya
+   * se salía con aviso: ahora los dos casos se comportan igual. Al volver, el
+   * asistente retoma el paso guardado y lo demás se conserva.
    */
   async function salir(): Promise<void> {
     setAviso(null);
     if (paso === 1 && !formHabilitado) {
-      setConfirmarSalida(true);
+      setSalida('sin-colegio');
       return;
     }
     setGuardando(true);
@@ -1330,7 +1333,7 @@ export default function OnboardingPage() {
         const problemas = validarIdentidad();
         setErrores(problemas);
         if (Object.keys(problemas).length > 0) {
-          setAviso('Revisa los campos marcados: no se guardó nada.');
+          setSalida('incompleto');
           return;
         }
         aplicar(await mutColegio.mutateAsync(guardadoRef.current), 1);
@@ -1338,7 +1341,7 @@ export default function OnboardingPage() {
         const problemas = validarCalendario();
         setErrores(problemas);
         if (Object.keys(problemas).length > 0) {
-          setAviso('Revisa el calendario y los períodos: no se guardó nada.');
+          setSalida('incompleto');
           return;
         }
         aplicar(
@@ -1351,20 +1354,31 @@ export default function OnboardingPage() {
         );
       } else if (paso === 3) {
         if (sede.jornadas.length === 0) {
-          setAviso('Elige al menos una jornada para la sede.');
+          setSalida('incompleto');
           return;
         }
+        // Se manda el formulario completo: el repositorio escribe `null` en lo
+        // que no llegue, así que salir con medio formulario borraría el código
+        // DANE y la ubicación de la sede abierta.
         await guardarSedeOnboarding({
           id: sedeActual?.id,
           nombre: sede.nombre,
+          codigoDaneSede: sede.codigoDaneSede === '' ? undefined : sede.codigoDaneSede,
           direccion: sede.direccion === '' ? undefined : sede.direccion,
+          municipio: sede.municipio === '' ? undefined : sede.municipio,
+          departamento: sede.departamento === '' ? undefined : sede.departamento,
           jornadas: sede.jornadas,
         });
       }
       qc.setQueryData(['onboarding'], await guardarPasoOnboarding(paso));
       router.push('/dashboard');
     } catch (e) {
-      setAviso(e instanceof ApiError ? e.message : 'No se pudo guardar. Intenta de nuevo.');
+      // Un rechazo de validación de la API tampoco puede dejar al admin atrapado.
+      if (e instanceof ApiError && (e.status === 400 || e.status === 422)) {
+        setSalida('incompleto');
+      } else {
+        setAviso(e instanceof ApiError ? e.message : 'No se pudo guardar. Intenta de nuevo.');
+      }
     } finally {
       setGuardando(false);
     }
@@ -1372,7 +1386,7 @@ export default function OnboardingPage() {
 
   /** Cierra el aviso de salida sin mover al admin de donde está. */
   function seguirAqui(): void {
-    setConfirmarSalida(false);
+    setSalida(null);
   }
 
   /**
@@ -1381,7 +1395,7 @@ export default function OnboardingPage() {
    * salida del paso 1.
    */
   async function salirDeLaCuenta(): Promise<void> {
-    setConfirmarSalida(false);
+    setSalida(null);
     setGuardando(true);
     try {
       await cerrarSesion();
@@ -1469,7 +1483,7 @@ export default function OnboardingPage() {
     navegacion.current = {
       volver,
       avanzar: avanzarUnPaso,
-      activa: !bienvenida && !confirmarSalida,
+      activa: !bienvenida && salida === null,
     };
   });
 
@@ -1492,7 +1506,7 @@ export default function OnboardingPage() {
    * Escape equivale a «Seguir aquí» y al cerrarse vuelve a donde estaba.
    */
   useEffect(() => {
-    if (!confirmarSalida) return;
+    if (salida === null) return;
     const previo = document.activeElement;
     const dialogo = dialogoRef.current;
     dialogo?.querySelector<HTMLElement>('button')?.focus();
@@ -1500,7 +1514,7 @@ export default function OnboardingPage() {
     function alPulsar(evento: KeyboardEvent): void {
       if (evento.key === 'Escape') {
         evento.preventDefault();
-        setConfirmarSalida(false);
+        setSalida(null);
         return;
       }
       if (evento.key !== 'Tab' || dialogo === null) return;
@@ -1522,7 +1536,7 @@ export default function OnboardingPage() {
       document.removeEventListener('keydown', alPulsar);
       if (previo instanceof HTMLElement) previo.focus();
     };
-  }, [confirmarSalida]);
+  }, [salida]);
 
   async function terminar(): Promise<void> {
     setGuardando(true);
@@ -2854,7 +2868,7 @@ export default function OnboardingPage() {
         </main>
       </div>
 
-      {confirmarSalida && (
+      {salida !== null && (
         <div className="onb-velo">
           <div
             className="onb-dialogo"
@@ -2863,10 +2877,15 @@ export default function OnboardingPage() {
             aria-labelledby="onb-dialogo-titulo"
             ref={dialogoRef}
           >
-            <h2 id="onb-dialogo-titulo">¿Salir sin vincular el colegio?</h2>
+            <h2 id="onb-dialogo-titulo">
+              {salida === 'sin-colegio'
+                ? '¿Salir sin vincular el colegio?'
+                : '¿Salir sin guardar este paso?'}
+            </h2>
             <p>
-              No has ingresado un código DANE, así que el colegio todavía no está creado. Si sales
-              ahora se cierra tu sesión; podrás retomar la configuración cuando entres de nuevo.
+              {salida === 'sin-colegio'
+                ? 'No has ingresado un código DANE, así que el colegio todavía no está creado. Si sales ahora se cierra tu sesión; podrás retomar la configuración cuando entres de nuevo.'
+                : 'Falta información obligatoria de este paso (jornadas, cursos, calendario o períodos), así que todavía no se puede guardar. Si sales ahora se cierra tu sesión y podrás continuar la configuración donde la dejaste; lo que ya guardaste en pasos anteriores se conserva.'}
             </p>
             <div className="onb-dialogo-acciones">
               <M3Button variante="text" onClick={seguirAqui}>

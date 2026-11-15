@@ -669,8 +669,9 @@ describe('Onboarding · paso 1 (identidad)', () => {
     expect(mockPush).toHaveBeenCalledWith('/dashboard');
   });
 
-  it('«Guardar y salir» no sale si el formulario tiene errores', async () => {
+  it('«Guardar y salir» con errores ofrece cerrar la sesión en vez de atrapar al admin', async () => {
     vi.mocked(getOnboarding).mockResolvedValue(estado(1));
+    vi.mocked(cerrarSesion).mockResolvedValue({ cerrada: true });
     renderPagina();
 
     fireEvent.change(await screen.findByLabelText('Correo del colegio'), {
@@ -678,9 +679,55 @@ describe('Onboarding · paso 1 (identidad)', () => {
     });
     await userEvent.click(screen.getByRole('button', { name: /guardar y salir/i }));
 
+    // El campo queda marcado, pero la salida no se bloquea: se ofrece cerrar sesión.
     expect(await screen.findByText(/Correo inválido/i)).toBeInTheDocument();
-    expect(await screen.findByText(/no se guardó nada/i)).toBeInTheDocument();
+    expect(await screen.findByText('¿Salir sin guardar este paso?')).toBeInTheDocument();
     expect(guardarColegioOnboarding).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Cerrar sesión' }));
+    await waitFor(() => expect(cerrarSesion).toHaveBeenCalledTimes(1));
+    expect(mockPush).toHaveBeenCalledWith('/login');
+  });
+
+  it('«Guardar y salir» sin jornadas ni cursos tampoco deja al admin atrapado', async () => {
+    const sinMinimos = {
+      ...estado(1),
+      colegio: { ...estado(1).colegio, jornadasMen: [], cursos: [] },
+    };
+    vi.mocked(getOnboarding).mockResolvedValue(sinMinimos);
+    // El mínimo de 1 jornada y 1 curso lo exige la API: rechaza con 400.
+    vi.mocked(guardarColegioOnboarding).mockRejectedValue(
+      new ApiError(400, 'VALIDATION_ERROR', 'Elige al menos una jornada y un curso.'),
+    );
+    renderPagina();
+
+    await screen.findByLabelText('Nombre');
+    await userEvent.click(screen.getByRole('button', { name: /guardar y salir/i }));
+
+    expect(await screen.findByText('¿Salir sin guardar este paso?')).toBeInTheDocument();
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it('«Seguir aquí» cierra el aviso de salida y deja al admin donde estaba', async () => {
+    const sinMinimos = {
+      ...estado(1),
+      colegio: { ...estado(1).colegio, jornadasMen: [], cursos: [] },
+    };
+    vi.mocked(getOnboarding).mockResolvedValue(sinMinimos);
+    vi.mocked(guardarColegioOnboarding).mockRejectedValue(
+      new ApiError(400, 'VALIDATION_ERROR', 'Elige al menos una jornada y un curso.'),
+    );
+    renderPagina();
+
+    await screen.findByLabelText('Nombre');
+    await userEvent.click(screen.getByRole('button', { name: /guardar y salir/i }));
+    await screen.findByText('¿Salir sin guardar este paso?');
+    await userEvent.click(screen.getByRole('button', { name: 'Seguir aquí' }));
+
+    await waitFor(() =>
+      expect(screen.queryByText('¿Salir sin guardar este paso?')).not.toBeInTheDocument(),
+    );
+    expect(cerrarSesion).not.toHaveBeenCalled();
     expect(mockPush).not.toHaveBeenCalled();
   });
 
@@ -1022,7 +1069,7 @@ describe('Onboarding · paso 1 (identidad)', () => {
     expect(guardarColegioOnboarding).not.toHaveBeenCalled();
   });
 
-  it('«Guardar y salir» pide la jornada si la sede no tiene', async () => {
+  it('«Guardar y salir» con la sede sin jornada ofrece salir sin guardarla', async () => {
     const datos = estado(3);
     datos.sedes[0]!.jornadas = [];
     vi.mocked(getOnboarding).mockResolvedValue(datos);
@@ -1031,7 +1078,9 @@ describe('Onboarding · paso 1 (identidad)', () => {
     await screen.findByRole('heading', { name: 'Sedes y jornadas', level: 1 });
     await userEvent.click(screen.getByRole('button', { name: /guardar y salir/i }));
 
-    expect(await screen.findByText(/Elige al menos una jornada/i)).toBeInTheDocument();
+    // No se guarda a medias ni se deja al admin atrapado: se ofrece cerrar sesión.
+    expect(await screen.findByText('¿Salir sin guardar este paso?')).toBeInTheDocument();
+    expect(guardarSedeOnboarding).not.toHaveBeenCalled();
     expect(mockPush).not.toHaveBeenCalled();
   });
 });
