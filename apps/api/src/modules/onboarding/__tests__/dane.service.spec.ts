@@ -127,23 +127,48 @@ describe('DaneService', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it('propone las jornadas que el MEN publica para el establecimiento', async () => {
+  it('propone las jornadas del año más reciente y descarta las históricas', async () => {
     fetchMock.mockImplementation((url: string) =>
       Promise.resolve(
-        String(url).includes('emd6-ef7x')
-          ? json([{ jornadas: 'MAÑANA,COMPLETA,TARDE' }])
+        String(url).includes('ngw5-c5nw')
+          ? json([
+              { anno_inf: '2025', tipo_jornada: 'Mañana' },
+              { anno_inf: '2025', tipo_jornada: 'Tarde' },
+              { anno_inf: '2025', tipo_jornada: 'Nocturna' },
+              // Jornada retirada: solo aparece en el histórico (2010).
+              { anno_inf: '2010', tipo_jornada: 'Fin de Semana' },
+            ])
           : json([FILA]),
       ),
     );
 
     const datos = await servicio.buscar('147555000295');
 
-    expect(datos.jornadas).toEqual(['MANANA', 'COMPLETA', 'TARDE']);
+    expect(datos.jornadas).toEqual(['MANANA', 'TARDE', 'NOCTURNA']);
+  });
+
+  it('pide las jornadas agrupadas por año y jornada, sin clavar el año', async () => {
+    fetchMock.mockImplementation((url: string) =>
+      Promise.resolve(
+        String(url).includes('ngw5-c5nw')
+          ? json([{ anno_inf: '2025', tipo_jornada: 'Mañana' }])
+          : json([FILA]),
+      ),
+    );
+
+    await servicio.buscar('147555000295');
+
+    const urlJornadas = fetchMock.mock.calls
+      .map(([u]) => new URL(String(u)))
+      .find((u) => u.pathname.includes('ngw5-c5nw'));
+    expect(urlJornadas?.searchParams.get('$where')).toBe('codigo_dane=147555000295');
+    expect(urlJornadas?.searchParams.get('$group')).toBe('anno_inf,tipo_jornada');
+    expect(urlJornadas?.searchParams.get('$order')).toBe('anno_inf DESC');
   });
 
   it('si el dataset de jornadas falla, la búsqueda sigue y las deja vacías', async () => {
     fetchMock.mockImplementation((url: string) =>
-      String(url).includes('emd6-ef7x')
+      String(url).includes('ngw5-c5nw')
         ? Promise.resolve(json({ message: 'boom' }, 500))
         : Promise.resolve(json([FILA])),
     );

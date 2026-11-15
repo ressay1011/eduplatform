@@ -22,10 +22,11 @@ import { apiError } from '../../shared/api-error';
 /** Dataset «ESTABLECIMIENTOS EDUCATIVOS» del MEN (Socrata). */
 const URL_DATASET = 'https://www.datos.gov.co/resource/cfw5-qzt5.json';
 /**
- * Dataset DEPA. Es el único del MEN que publica las jornadas de cada
- * establecimiento; el de establecimientos no las trae.
+ * Matrícula por sede/jornada. El dataset de establecimientos no trae jornadas y
+ * el DEPA (`emd6-ef7x`) solo cubre Boyacá —fuera de allí devuelve `[]`—, así que
+ * la fuente que sirve en todo el país es esta, agrupada por año y jornada.
  */
-const URL_JORNADAS = 'https://www.datos.gov.co/resource/emd6-ef7x.json';
+const URL_JORNADAS = 'https://www.datos.gov.co/resource/ngw5-c5nw.json';
 const TTL_MS = 6 * 60 * 60 * 1000;
 /** El admin espera delante del botón: mejor fallar rápido que colgar la UI. */
 const TIMEOUT_MS = 8_000;
@@ -142,12 +143,17 @@ export class DaneService {
    * Jornadas que el MEN publica para el establecimiento. Es una sugerencia: si
    * el dataset no responde, no tiene la fila o trae valores desconocidos, se
    * devuelve lo legible (quizá nada) y el paso 1 sigue funcionando igual.
+   *
+   * Se agrupa por (año, jornada) y se toma **solo el año más reciente**: la
+   * unión histórica arrastra jornadas que ya no se usan («Fin de Semana» solo
+   * aparece en 2010) y propondría ofertas que el colegio no tiene.
    */
   private async consultarJornadas(codigo: string): Promise<Jornada[]> {
     const url = new URL(URL_JORNADAS);
-    url.searchParams.set('$where', `c_digo=${codigo}`);
-    url.searchParams.set('$select', 'jornadas');
-    url.searchParams.set('$limit', '1');
+    url.searchParams.set('$where', `codigo_dane=${codigo}`);
+    url.searchParams.set('$select', 'anno_inf,tipo_jornada');
+    url.searchParams.set('$group', 'anno_inf,tipo_jornada');
+    url.searchParams.set('$order', 'anno_inf DESC');
 
     const cabeceras: Record<string, string> = { Accept: 'application/json' };
     if (env.DATOS_GOV_APP_TOKEN !== undefined) {
@@ -162,7 +168,13 @@ export class DaneService {
       if (!respuesta.ok) return [];
       const cuerpo: unknown = await respuesta.json().catch(() => null);
       if (!Array.isArray(cuerpo) || cuerpo.length === 0) return [];
-      return this.aJornadas((cuerpo[0] as { jornadas?: string }).jornadas);
+
+      const filas = cuerpo as { anno_inf?: string; tipo_jornada?: string }[];
+      const ultimoAnio = filas.reduce((max, f) => Math.max(max, this.numero(f.anno_inf) ?? 0), 0);
+      const delAnio = filas
+        .filter((f) => (this.numero(f.anno_inf) ?? 0) === ultimoAnio)
+        .map((f) => f.tipo_jornada ?? '');
+      return this.aJornadas(delAnio.join(','));
     } catch (error) {
       this.logger.warn(
         `No se pudieron leer las jornadas del MEN para el código ${codigo}: ${error instanceof Error ? error.message : String(error)}`,
