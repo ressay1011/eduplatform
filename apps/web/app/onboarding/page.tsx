@@ -308,6 +308,8 @@ export default function OnboardingPage() {
   // Paso 2
   const [sede, setSede] = useState({
     nombre: 'Principal',
+    /** Código DANE de la sede: lo trae el MEN y se conserva al editar. */
+    codigoDaneSede: '',
     direccion: '',
     // Ubicación de la sede: por defecto la del colegio, pero una IE puede tener
     // sedes en otro municipio.
@@ -404,6 +406,7 @@ export default function OnboardingPage() {
       setJornada(data.sedes[0].jornadas[0] ?? Jornada.MANANA);
       setSede({
         nombre: data.sedes[0].nombre,
+        codigoDaneSede: data.sedes[0].codigoDaneSede ?? '',
         // Una sede vieja sin dirección se completa con la del colegio.
         direccion: data.sedes[0].direccion ?? data.colegio.direccion ?? '',
         // Una sede guardada sin ubicación hereda la del colegio.
@@ -418,6 +421,7 @@ export default function OnboardingPage() {
       sedeInicializadaRef.current = true;
       setSede((actual) => ({
         nombre: 'Principal',
+        codigoDaneSede: '',
         direccion: data.colegio.direccion ?? '',
         municipio: data.colegio.municipio,
         departamento: data.colegio.departamento,
@@ -477,6 +481,11 @@ export default function OnboardingPage() {
   const sedesMenPendientes = useMemo(
     () => sedesPendientes(sedesMen, data?.sedes ?? []),
     [sedesMen, data?.sedes],
+  );
+  /** Datos que el MEN publica de la sede abierta (si viene de la lista). */
+  const datosMenDeSede = useMemo(
+    () => sedesMen.find((s) => s.codigoDaneSede === sede.codigoDaneSede) ?? null,
+    [sedesMen, sede.codigoDaneSede],
   );
   /** Texto de la jornada como se lee en la UI («Noche», no «NOCTURNA»). */
   const textoJornada = (j: Jornada): string => JORNADAS.find((x) => x.valor === j)?.texto ?? j;
@@ -1062,6 +1071,7 @@ export default function OnboardingPage() {
     setSedeId(s.id);
     setSede({
       nombre: s.nombre,
+      codigoDaneSede: s.codigoDaneSede ?? '',
       direccion: s.direccion ?? data?.colegio.direccion ?? '',
       municipio: s.municipio || data?.colegio.municipio || '',
       departamento: s.departamento || data?.colegio.departamento || '',
@@ -1079,6 +1089,7 @@ export default function OnboardingPage() {
     setSedeId('');
     setSede({
       nombre: '',
+      codigoDaneSede: '',
       direccion: '',
       municipio: data?.colegio.municipio ?? '',
       departamento: data?.colegio.departamento ?? '',
@@ -1109,6 +1120,7 @@ export default function OnboardingPage() {
         await guardarSedeOnboarding({
           id: sedeId === '' ? undefined : sedeId,
           nombre: sede.nombre.trim(),
+          codigoDaneSede: sede.codigoDaneSede === '' ? undefined : sede.codigoDaneSede,
           direccion: sede.direccion === '' ? undefined : sede.direccion,
           municipio: sede.municipio === '' ? undefined : sede.municipio,
           departamento: sede.departamento === '' ? undefined : sede.departamento,
@@ -1128,14 +1140,15 @@ export default function OnboardingPage() {
 
   /**
    * «Traer las N»: guarda lo que haya en el formulario (casi siempre la sede
-   * «Principal» con la dirección del colegio) y crea las sedes del MEN que
-   * falten, cada una con su código DANE y sus jornadas. Se hace una por una con
-   * el mismo endpoint del alta: todas pasan por la misma validación.
+   * «Principal» con la dirección del colegio), completa con su código DANE las
+   * sedes que ya existen y crea las que faltan.
+   *
+   * El orden importa: hasta 2026-11-15 las pendientes se calculaban ANTES de
+   * guardar la sede abierta, así que un colegio sin sedes recibía «Principal» +
+   * las 7 del MEN y la principal quedaba duplicada.
    */
   async function traerSedesMen(): Promise<void> {
-    const pendientes = sedesPendientes(sedesMen, data?.sedes ?? []);
-    if (pendientes.length === 0) return;
-
+    if (sedesMen.length === 0) return;
     const municipioColegio = data?.colegio.municipio ?? '';
     const departamentoColegio = data?.colegio.departamento ?? '';
     setGuardando(true);
@@ -1149,6 +1162,7 @@ export default function OnboardingPage() {
         estado = await guardarSedeOnboarding({
           id: sedeId === '' ? undefined : sedeId,
           nombre: nombreActual,
+          codigoDaneSede: sede.codigoDaneSede === '' ? undefined : sede.codigoDaneSede,
           direccion: sede.direccion === '' ? undefined : sede.direccion,
           municipio: sede.municipio === '' ? undefined : sede.municipio,
           departamento: sede.departamento === '' ? undefined : sede.departamento,
@@ -1157,26 +1171,58 @@ export default function OnboardingPage() {
         if (sedeId === '') idPrincipal = estado.sedes.at(-1)?.id ?? null;
       }
 
+      // La lista de sedes con la que se compara es la de DESPUÉS de guardar.
+      let actuales = estado?.sedes ?? data?.sedes ?? [];
+
+      // Las que ya están (la «Principal», sobre todo) se completan con el código
+      // DANE del MEN y con la ubicación si la tenían vacía: no se duplican.
+      let completadas = 0;
+      for (const propuesta of sedesMen) {
+        const existente = actuales.find((s) => yaLaTienes(propuesta, [s]));
+        if (existente === undefined || (existente.codigoDaneSede ?? '') !== '') continue;
+        estado = await guardarSedeOnboarding({
+          id: existente.id,
+          nombre: existente.nombre,
+          codigoDaneSede: propuesta.codigoDaneSede,
+          direccion: existente.direccion ?? undefined,
+          municipio: existente.municipio || propuesta.municipio || undefined,
+          departamento: existente.departamento || propuesta.departamento || undefined,
+          jornadas: existente.jornadas,
+        });
+        actuales = estado.sedes;
+        completadas += 1;
+      }
+
+      const pendientes = sedesPendientes(sedesMen, actuales);
       for (const propuesta of pendientes) {
         estado = await guardarSedeOnboarding({
           nombre: propuesta.nombre,
           codigoDaneSede: propuesta.codigoDaneSede,
-          municipio: municipioColegio === '' ? undefined : municipioColegio,
-          departamento: departamentoColegio === '' ? undefined : departamentoColegio,
+          municipio:
+            propuesta.municipio ?? (municipioColegio === '' ? undefined : municipioColegio),
+          departamento:
+            propuesta.departamento ??
+            (departamentoColegio === '' ? undefined : departamentoColegio),
           jornadas: propuesta.jornadas,
         });
       }
 
       if (estado !== null) aplicar(estado);
-      // Si la sede abierta era nueva, queda abierta la que se acaba de guardar:
-      // así «Continuar» no la vuelve a crear.
       if (idPrincipal !== null) setSedeId(idPrincipal);
       setVerSedesMen(false);
-      setExito(
-        pendientes.length === 1
-          ? 'Sede del MEN agregada.'
-          : `${pendientes.length} sedes del MEN agregadas.`,
-      );
+
+      const partes: string[] = [];
+      if (pendientes.length > 0) {
+        partes.push(
+          pendientes.length === 1 ? '1 sede agregada' : `${pendientes.length} sedes agregadas`,
+        );
+      }
+      if (completadas > 0) {
+        partes.push(
+          completadas === 1 ? '1 completada con su DANE' : `${completadas} completadas con su DANE`,
+        );
+      }
+      setExito(partes.length > 0 ? `${partes.join(' · ')}.` : 'Las sedes ya estaban creadas.');
     } catch (e) {
       setAviso(e instanceof ApiError ? e.message : 'No se pudieron agregar las sedes del MEN.');
     } finally {
@@ -1205,6 +1251,7 @@ export default function OnboardingPage() {
         setSedeId(resto.id);
         setSede({
           nombre: resto.nombre,
+          codigoDaneSede: resto.codigoDaneSede ?? '',
           direccion: resto.direccion ?? estado.colegio.direccion ?? '',
           municipio: resto.municipio || estado.colegio.municipio,
           departamento: resto.departamento || estado.colegio.departamento,
@@ -1233,6 +1280,7 @@ export default function OnboardingPage() {
       const estado = await guardarSedeOnboarding({
         id: creando ? undefined : sedeId,
         nombre: sede.nombre.trim(),
+        codigoDaneSede: sede.codigoDaneSede === '' ? undefined : sede.codigoDaneSede,
         direccion: sede.direccion === '' ? undefined : sede.direccion,
         municipio: sede.municipio === '' ? undefined : sede.municipio,
         departamento: sede.departamento === '' ? undefined : sede.departamento,
@@ -2223,6 +2271,9 @@ export default function OnboardingPage() {
                             <span className="onb-men-meta">
                               {s.jornadas.map(textoJornada).join(' · ')}
                               {s.zona === null ? '' : ` · ${s.zona}`}
+                              {s.municipio !== null && s.municipio !== data.colegio.municipio
+                                ? ` · ${s.municipio}`
+                                : ''}
                               {s.matricula > 0 ? ` · ${s.matricula} estudiantes` : ''}
                             </span>
                           </span>
@@ -2234,7 +2285,7 @@ export default function OnboardingPage() {
                     </ul>
                   )}
                   <p className="onb-men-nota">
-                    Se agregan las que faltan; la sede abierta se guarda tal como está.
+                    Las que ya tienes se completan con su código DANE; se agregan las que faltan.
                   </p>
                 </div>
               )}
@@ -2278,6 +2329,17 @@ export default function OnboardingPage() {
                   disabled={sede.departamento === ''}
                 />
               </div>
+              {sede.codigoDaneSede !== '' && (
+                <p className="onb-sede-dane">
+                  Código DANE de la sede: <strong>{sede.codigoDaneSede}</strong>
+                  {datosMenDeSede?.zona === null || datosMenDeSede?.zona === undefined
+                    ? ''
+                    : ` · ${datosMenDeSede.zona}`}
+                  {datosMenDeSede?.matricula !== undefined && datosMenDeSede.matricula > 0
+                    ? ` · ${datosMenDeSede.matricula} estudiantes`
+                    : ''}
+                </p>
+              )}
               <h2 className="onb-card-titulo">Jornadas que ofrece</h2>
               <div className="onb-opciones">
                 {JORNADAS.map((j) => {

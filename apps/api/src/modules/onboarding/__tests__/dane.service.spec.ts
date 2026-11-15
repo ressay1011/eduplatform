@@ -138,6 +138,8 @@ describe('DaneService', () => {
                 codigo_dane_sede: '147555000295',
                 nombre_sede: 'CENT EDUC JUANA ARIAS DE BENAVIDES',
                 zona: 'Urbana',
+                departamento: 'MAGDALENA',
+                municipio: 'PLATO',
                 tipo_jornada: 'Mañana',
                 matricula: '850',
               },
@@ -146,6 +148,8 @@ describe('DaneService', () => {
                 codigo_dane_sede: '147555000295',
                 nombre_sede: 'CENT EDUC JUANA ARIAS DE BENAVIDES',
                 zona: 'Urbana',
+                departamento: 'MAGDALENA',
+                municipio: 'PLATO',
                 tipo_jornada: 'Nocturna',
                 matricula: '192',
               },
@@ -154,6 +158,8 @@ describe('DaneService', () => {
                 codigo_dane_sede: '247555001067',
                 nombre_sede: 'ERM LOS POZOS',
                 zona: 'Rural',
+                departamento: 'MAGDALENA',
+                municipio: 'SITIONUEVO',
                 tipo_jornada: 'Mañana',
                 matricula: '47',
               },
@@ -170,6 +176,8 @@ describe('DaneService', () => {
         nombre: 'Juana Arias de Benavides',
         jornadas: ['MANANA', 'NOCTURNA'],
         zona: 'Urbana',
+        departamento: 'Magdalena',
+        municipio: 'Plato',
         matricula: 1042,
         esPrincipal: true,
       },
@@ -178,6 +186,8 @@ describe('DaneService', () => {
         nombre: 'Los Pozos',
         jornadas: ['MANANA'],
         zona: 'Rural',
+        departamento: 'Magdalena',
+        municipio: 'Sitionuevo',
         matricula: 47,
         esPrincipal: false,
       },
@@ -246,7 +256,7 @@ describe('DaneService', () => {
       'codigo_dane=147555000295 AND anno_inf >= 2024',
     );
     expect(urlSedes?.searchParams.get('$group')).toBe(
-      'anno_inf,codigo_dane_sede,nombre_sede,zona,tipo_jornada',
+      'anno_inf,codigo_dane_sede,nombre_sede,zona,departamento,municipio,tipo_jornada',
     );
     expect(urlSedes?.searchParams.get('$order')).toBe('anno_inf DESC');
   });

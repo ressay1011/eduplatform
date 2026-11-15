@@ -13,6 +13,8 @@ function men(parcial: Partial<SedeMen> & { codigoDaneSede: string }): SedeMen {
     nombre: `Sede ${parcial.codigoDaneSede}`,
     jornadas: ['MANANA'],
     zona: 'Urbana',
+    departamento: 'Magdalena',
+    municipio: 'Plato',
     matricula: 100,
     esPrincipal: false,
     ...parcial,

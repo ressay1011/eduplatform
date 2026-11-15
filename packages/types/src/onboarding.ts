@@ -187,6 +187,9 @@ export interface SedeMen {
   jornadas: Jornada[];
   /** «Urbana» / «Rural», tal como lo publica el MEN. */
   zona: string | null;
+  /** Ubicación de la sede según el MEN (puede diferir de la del colegio). */
+  departamento: string | null;
+  municipio: string | null;
   matricula: number;
   /** Su código coincide con el del colegio: es la sede principal. */
   esPrincipal: boolean;

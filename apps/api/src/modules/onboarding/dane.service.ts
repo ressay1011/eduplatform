@@ -19,6 +19,8 @@ import {
   Calendario,
   ErrorCodes,
   Jornada,
+  municipiosDe,
+  NOMBRES_DEPARTAMENTOS,
   nombreSedeMen,
   type ColegioDane,
   type SedeMen,
@@ -73,6 +75,8 @@ interface FilaSede {
   codigo_dane_sede?: string;
   nombre_sede?: string;
   zona?: string;
+  departamento?: string;
+  municipio?: string;
   tipo_jornada?: string;
   matricula?: string;
 }
@@ -192,9 +196,12 @@ export class DaneService {
     );
     url.searchParams.set(
       '$select',
-      'anno_inf,codigo_dane_sede,nombre_sede,zona,tipo_jornada,sum(total_matricula) as matricula',
+      'anno_inf,codigo_dane_sede,nombre_sede,zona,departamento,municipio,tipo_jornada,sum(total_matricula) as matricula',
     );
-    url.searchParams.set('$group', 'anno_inf,codigo_dane_sede,nombre_sede,zona,tipo_jornada');
+    url.searchParams.set(
+      '$group',
+      'anno_inf,codigo_dane_sede,nombre_sede,zona,departamento,municipio,tipo_jornada',
+    );
     url.searchParams.set('$order', 'anno_inf DESC');
 
     const cabeceras: Record<string, string> = { Accept: 'application/json' };
@@ -216,7 +223,14 @@ export class DaneService {
 
       const porSede = new Map<
         string,
-        { nombre: string; zona: string | null; jornadas: Set<Jornada>; matricula: number }
+        {
+          nombre: string;
+          zona: string | null;
+          departamento: string | null;
+          municipio: string | null;
+          jornadas: Set<Jornada>;
+          matricula: number;
+        }
       >();
       for (const fila of filas) {
         if ((this.numero(fila.anno_inf) ?? 0) !== ultimoAnio) continue;
@@ -225,9 +239,15 @@ export class DaneService {
         const actual = porSede.get(codigoSede) ?? {
           nombre: this.texto(fila.nombre_sede) ?? '',
           zona: this.texto(fila.zona),
+          departamento: this.delCatalogo(NOMBRES_DEPARTAMENTOS, fila.departamento),
+          municipio: null,
           jornadas: new Set<Jornada>(),
           matricula: 0,
         };
+        actual.municipio ??= this.delCatalogo(
+          actual.departamento === null ? [] : municipiosDe(actual.departamento),
+          fila.municipio,
+        );
         for (const jornada of this.aJornadas(this.texto(fila.tipo_jornada) ?? '')) {
           actual.jornadas.add(jornada);
         }
@@ -241,6 +261,8 @@ export class DaneService {
           nombre: nombreSedeMen(sede.nombre),
           jornadas: ORDEN_JORNADAS.filter((j) => sede.jornadas.has(j)),
           zona: sede.zona,
+          departamento: sede.departamento,
+          municipio: sede.municipio,
           matricula: sede.matricula,
           esPrincipal: codigoDaneSede === codigo,
         }))
@@ -313,6 +335,31 @@ export class DaneService {
       jornadas,
       sedesMen,
     };
+  }
+
+  /**
+   * El MEN escribe el municipio en MAYÚSCULAS («PLATO»); los selects del wizard
+   * usan el catálogo de `colombia.ts` («Plato») y comparan por cadena exacta.
+   * Se busca el valor del catálogo sin tildes ni caja y, si no está, se deja en
+   * Título para no romper la preselección.
+   */
+  private delCatalogo(valores: readonly string[], men: string | undefined): string | null {
+    const limpio = this.texto(men);
+    if (limpio === null) return null;
+    const clave = (t: string): string =>
+      t
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim()
+        .toLowerCase();
+    const buscado = clave(limpio);
+    const encontrado = valores.find((v) => clave(v) === buscado);
+    if (encontrado !== undefined) return encontrado;
+    return limpio
+      .toLowerCase()
+      .split(/\s+/)
+      .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+      .join(' ');
   }
 
   private texto(valor: string | undefined): string | null {

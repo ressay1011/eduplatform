@@ -16,6 +16,7 @@ import type {
   ListaPersonas,
   ListaRoles,
   PersonaEmpleado,
+  SedeMen,
   UsuarioListado,
 } from '@eduplatform/types';
 
@@ -1219,42 +1220,52 @@ describe('Onboarding · paso 3 (varias sedes)', () => {
     await waitFor(() => expect(eliminarSedeOnboarding).toHaveBeenCalledWith('sede-2'));
   });
 
-  it('trae las sedes del MEN que faltan y esconde el bloque cuando ya están', async () => {
+  const SEDES_MEN: SedeMen[] = [
+    {
+      codigoDaneSede: '147555000295',
+      nombre: 'Juana Arias de Benavides',
+      jornadas: ['MANANA', 'TARDE', 'NOCTURNA'],
+      zona: 'Urbana',
+      departamento: 'Magdalena',
+      municipio: 'Plato',
+      matricula: 1703,
+      esPrincipal: true,
+    },
+    {
+      codigoDaneSede: '147555000040',
+      nombre: 'San José',
+      jornadas: ['MANANA', 'TARDE'],
+      zona: 'Urbana',
+      departamento: 'Magdalena',
+      municipio: 'Plato',
+      matricula: 421,
+      esPrincipal: false,
+    },
+    {
+      codigoDaneSede: '247555001067',
+      nombre: 'Los Pozos',
+      jornadas: ['MANANA'],
+      zona: 'Rural',
+      departamento: 'Magdalena',
+      municipio: 'Sitionuevo',
+      matricula: 47,
+      esPrincipal: false,
+    },
+  ];
+
+  it('trae las sedes del MEN que faltan, completa la principal y esconde el bloque', async () => {
     const actual = estado(3);
     vi.mocked(getOnboarding).mockResolvedValue(actual);
-    vi.mocked(buscarColegioDane).mockResolvedValue({
-      ...DANE,
-      sedesMen: [
-        {
-          codigoDaneSede: '147555000295',
-          nombre: 'Juana Arias de Benavides',
-          jornadas: ['MANANA', 'TARDE', 'NOCTURNA'],
-          zona: 'Urbana',
-          matricula: 1703,
-          esPrincipal: true,
-        },
-        {
-          codigoDaneSede: '147555000040',
-          nombre: 'San José',
-          jornadas: ['MANANA', 'TARDE'],
-          zona: 'Urbana',
-          matricula: 421,
-          esPrincipal: false,
-        },
-        {
-          codigoDaneSede: '247555001067',
-          nombre: 'Los Pozos',
-          jornadas: ['MANANA'],
-          zona: 'Rural',
-          matricula: 47,
-          esPrincipal: false,
-        },
-      ],
-    });
-    vi.mocked(guardarSedeOnboarding).mockResolvedValue({
+    vi.mocked(buscarColegioDane).mockResolvedValue({ ...DANE, sedesMen: [...SEDES_MEN] });
+
+    const conPrincipalCompletada: EstadoOnboarding = {
+      ...actual,
+      sedes: [{ ...actual.sedes[0]!, codigoDaneSede: '147555000295' }],
+    };
+    const conTodo: EstadoOnboarding = {
       ...actual,
       sedes: [
-        ...actual.sedes,
+        ...conPrincipalCompletada.sedes,
         {
           id: 'sede-2',
           nombre: 'San José',
@@ -1269,31 +1280,123 @@ describe('Onboarding · paso 3 (varias sedes)', () => {
           nombre: 'Los Pozos',
           codigoDaneSede: '247555001067',
           direccion: null,
+          municipio: 'Sitionuevo',
+          departamento: 'Magdalena',
+          jornadas: ['MANANA'],
+        },
+      ],
+    };
+    vi.mocked(guardarSedeOnboarding)
+      .mockResolvedValueOnce(actual) // el formulario abierto
+      .mockResolvedValueOnce(conPrincipalCompletada) // completa la principal
+      .mockResolvedValueOnce(conTodo)
+      .mockResolvedValueOnce(conTodo);
+
+    renderPagina();
+
+    expect(await screen.findByText('El MEN reporta 3 sedes')).toBeInTheDocument();
+    // La «Sede Principal» que ya existe cubre la principal del MEN: faltan 2.
+    await userEvent.click(screen.getByRole('button', { name: 'Traer las 2' }));
+
+    // 1) se guarda «Sede Principal», 2) se le pone su código DANE, 3) y 4) se crean las dos que faltan.
+    await waitFor(() => expect(guardarSedeOnboarding).toHaveBeenCalledTimes(4));
+    expect(guardarSedeOnboarding).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ id: 'sede-1', codigoDaneSede: '147555000295' }),
+    );
+    expect(guardarSedeOnboarding).toHaveBeenCalledWith(
+      expect.objectContaining({
+        nombre: 'San José',
+        codigoDaneSede: '147555000040',
+        municipio: 'Plato',
+        departamento: 'Magdalena',
+      }),
+    );
+    expect(guardarSedeOnboarding).toHaveBeenCalledWith(
+      expect.objectContaining({ nombre: 'Los Pozos', municipio: 'Sitionuevo' }),
+    );
+    // Nunca se crea otra «Juana Arias de Benavides»: la principal es la que ya había.
+    expect(guardarSedeOnboarding).not.toHaveBeenCalledWith(
+      expect.objectContaining({ nombre: 'Juana Arias de Benavides' }),
+    );
+    await waitFor(() =>
+      expect(screen.queryByText('El MEN reporta 3 sedes')).not.toBeInTheDocument(),
+    );
+  });
+
+  it('con el colegio sin sedes no duplica la principal: la crea una vez y la completa', async () => {
+    // Colegio sin sedes y con las jornadas del MEN ya marcadas en el paso 1: el
+    // formulario propone «Principal» con MANANA y eso es lo que se guarda.
+    const vacio = {
+      ...estado(3),
+      sedes: [],
+      colegio: { ...estado(3).colegio, jornadasMen: ['MANANA' as const] },
+    };
+    vi.mocked(getOnboarding).mockResolvedValue(vacio);
+    vi.mocked(buscarColegioDane).mockResolvedValue({ ...DANE, sedesMen: [...SEDES_MEN] });
+
+    const conPrincipal: EstadoOnboarding = {
+      ...vacio,
+      sedes: [
+        {
+          id: 'sede-1',
+          nombre: 'Principal',
+          codigoDaneSede: null,
+          direccion: 'CALLE 6A CARRERA 15 ESQUINA',
           municipio: 'Plato',
           departamento: 'Magdalena',
           jornadas: ['MANANA'],
         },
       ],
-    });
+    };
+    const conPrincipalCompletada: EstadoOnboarding = {
+      ...vacio,
+      sedes: [{ ...conPrincipal.sedes[0]!, codigoDaneSede: '147555000295' }],
+    };
+    const conTodo: EstadoOnboarding = {
+      ...vacio,
+      sedes: [
+        ...conPrincipalCompletada.sedes,
+        {
+          id: 'sede-2',
+          nombre: 'San José',
+          codigoDaneSede: '147555000040',
+          direccion: null,
+          municipio: 'Plato',
+          departamento: 'Magdalena',
+          jornadas: ['MANANA', 'TARDE'],
+        },
+        {
+          id: 'sede-3',
+          nombre: 'Los Pozos',
+          codigoDaneSede: '247555001067',
+          direccion: null,
+          municipio: 'Sitionuevo',
+          departamento: 'Magdalena',
+          jornadas: ['MANANA'],
+        },
+      ],
+    };
+    vi.mocked(guardarSedeOnboarding)
+      .mockResolvedValueOnce(conPrincipal) // guarda «Principal» (estaba sin guardar)
+      .mockResolvedValueOnce(conPrincipalCompletada) // la completa con su DANE
+      .mockResolvedValueOnce(conTodo)
+      .mockResolvedValueOnce(conTodo);
+
     renderPagina();
 
-    // La «Principal» ya existe (se reconoce sin el prefijo «Sede»), así que se
-    // ofrecen las dos que faltan.
     expect(await screen.findByText('El MEN reporta 3 sedes')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Traer las 2' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Traer las 3' }));
 
-    await waitFor(() =>
-      expect(guardarSedeOnboarding).toHaveBeenCalledWith(
-        expect.objectContaining({ nombre: 'San José', codigoDaneSede: '147555000040' }),
-      ),
+    await waitFor(() => expect(guardarSedeOnboarding).toHaveBeenCalledTimes(4));
+    // El bug: antes se contaba «falta» la principal porque aún no estaba guardada
+    // y se creaba una «Juana Arias de Benavides» además de «Principal».
+    expect(guardarSedeOnboarding).not.toHaveBeenCalledWith(
+      expect.objectContaining({ nombre: 'Juana Arias de Benavides' }),
     );
-    expect(guardarSedeOnboarding).toHaveBeenCalledWith(
-      expect.objectContaining({ nombre: 'Los Pozos', codigoDaneSede: '247555001067' }),
-    );
-    // Se guardó también la sede abierta antes de crear las del MEN.
-    expect(guardarSedeOnboarding).toHaveBeenCalledTimes(3);
-    await waitFor(() =>
-      expect(screen.queryByText('El MEN reporta 3 sedes')).not.toBeInTheDocument(),
+    expect(guardarSedeOnboarding).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ id: 'sede-1', codigoDaneSede: '147555000295' }),
     );
   });
 
