@@ -283,9 +283,15 @@ export function getOnboarding(): Promise<EstadoOnboarding> {
  * Paso 1: datos del establecimiento en los datos abiertos del MEN por código
  * DANE. La API puede tardar ~1 s (consulta a datos.gov.co) dentro del timeout
  * global de 15 s; un 404 es «código inexistente», no un fallo de red.
+ *
+ * Las listas se normalizan aquí, en la frontera: web (Vercel) y API (Render) se
+ * despliegan por su cuenta, así que una web nueva puede hablar con una API
+ * anterior que no mande `sedesMen` — y `undefined.length` rompía la página al
+ * digitar el DANE.
  */
-export function buscarColegioDane(codigo: string): Promise<ColegioDane> {
-  return request(`/onboarding/dane/${encodeURIComponent(codigo)}`);
+export async function buscarColegioDane(codigo: string): Promise<ColegioDane> {
+  const datos = await request<ColegioDane>(`/onboarding/dane/${encodeURIComponent(codigo)}`);
+  return { ...datos, jornadas: datos.jornadas ?? [], sedesMen: datos.sedesMen ?? [] };
 }
 
 export function guardarColegioOnboarding(dto: ColegioOnboardingRequest): Promise<EstadoOnboarding> {

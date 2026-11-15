@@ -6,6 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ApiError,
+  buscarColegioDane,
   crearMatricula,
   getContextoColegio,
   importarMatriculas,
@@ -170,5 +171,37 @@ describe('lib/api', () => {
         expect.objectContaining({ method: 'DELETE' }),
       );
     });
+  });
+
+  it('buscarColegioDane completa las listas que una API anterior no manda', async () => {
+    // La web (Vercel) y la API (Render) se despliegan por separado: una web
+    // nueva puede recibir el JSON viejo, sin `sedesMen` ni `jornadas`.
+    fetchMock.mockResolvedValue(
+      respuesta(200, {
+        success: true,
+        data: {
+          codigoDane: '147555000295',
+          anio: 2025,
+          nombre: 'INSTITUCION EDUCATIVA TECNICA DEPARTAMENTAL JUANA ARIAS DE BENAVIDES',
+          municipio: 'Plato',
+          departamento: 'Magdalena',
+          direccion: null,
+          telefono: null,
+          email: null,
+          calendario: 'A',
+          sector: 'OFICIAL',
+          caracter: null,
+          rector: null,
+          matricula: 3748,
+          sedes: 7,
+        },
+      }),
+    );
+
+    const datos = await buscarColegioDane('147555000295');
+
+    expect(datos.jornadas).toEqual([]);
+    expect(datos.sedesMen).toEqual([]);
+    expect(datos.codigoDane).toBe('147555000295');
   });
 });
