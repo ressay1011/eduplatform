@@ -37,6 +37,11 @@ export const usuarios = pgTable(
     colegioId: uuid('colegio_id')
       .notNull()
       .references(() => colegios.id, { onDelete: 'restrict' }),
+    /**
+     * Rol único de la persona (módulo Personas). `null` mientras no se migre
+     * una cuenta antigua con permisos individuales.
+     */
+    rolId: uuid('rol_id').references(() => roles.id, { onDelete: 'set null' }),
     usuario: text('usuario').notNull(),
     passwordHash: text('password_hash').notNull(),
     // Los datos personales se pueden completar después: solo la credencial es
@@ -47,11 +52,6 @@ export const usuarios = pgTable(
     numeroDocumento: text('numero_documento'),
     /** Único "rol" fijo: admin del colegio (todos los permisos implícitos). */
     esAdmin: boolean('es_admin').notNull().default(false),
-    /**
-     * Rol único de la persona (módulo Personas). `null` mientras no se migre
-     * una cuenta antigua con permisos individuales.
-     */
-    rolId: uuid('rol_id').references(() => roles.id, { onDelete: 'set null' }),
     /** Alcance sobre sedes: TODAS o solo las listadas en `usuarios_sedes`. */
     alcance: text('alcance', { enum: ['TODAS', 'ESPECIFICAS'] })
       .notNull()

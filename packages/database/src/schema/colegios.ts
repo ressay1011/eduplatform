@@ -36,6 +36,12 @@ export const colegios = pgTable(
     id: uuid('id')
       .primaryKey()
       .default(sql`gen_random_uuid()`),
+    /**
+     * Código estable del colegio: arma los usuarios (`admin@juanaArias`) y es lo
+     * que el login usa para resolver el tenant. Lo crea el administrador de
+     * plataforma y **nunca** se edita; la caja no distingue (`lower()` único).
+     */
+    codigo: text('codigo').notNull(),
     nombre: text('nombre').notNull().default(''),
     /**
      * Nombre completo del establecimiento tal como lo registra el MEN
@@ -48,26 +54,11 @@ export const colegios = pgTable(
     /** Código DANE oficial de la IE (12 dígitos, único a nivel nacional). */
     // Sin DANE el colegio se crea igual; el wizard lo exige en el paso 1.
     codigoDane: text('codigo_dane').unique(),
-    /**
-     * Código estable del colegio: arma los usuarios (`admin@juanaArias`) y es lo
-     * que el login usa para resolver el tenant. Lo crea el administrador de
-     * plataforma y **nunca** se edita; la caja no distingue (`lower()` único).
-     */
-    codigo: text('codigo').notNull(),
-    /**
-     * Dominio de correo institucional (p. ej. `juanaarias.edu.co`).
-     * Único: el login unificado lo usa para saber a qué colegio entra el usuario.
-     */
     municipio: text('municipio').notNull().default(''),
     departamento: text('departamento').notNull().default(''),
     direccion: text('direccion'),
     telefono: text('telefono'),
     email: text('email').notNull().default(''),
-    /**
-     * Jornadas que el MEN publica para el establecimiento. El wizard las usa
-     * como sugerencia del paso de sedes; no son la configuración del colegio.
-     */
-    jornadasMen: text('jornadas_men').array(),
     logoUrl: text('logo_url'),
     /** Calendario A (feb–nov) o B (sep–jun). */
     calendario: text('calendario', { enum: [Calendario.A, Calendario.B] })
@@ -81,6 +72,11 @@ export const colegios = pgTable(
     plan: text('plan', { enum: ['BASICO', 'COMPLETO'] })
       .notNull()
       .default('BASICO'),
+    /**
+     * Jornadas que el MEN publica para el establecimiento. El wizard las usa
+     * como sugerencia del paso de sedes; no son la configuración del colegio.
+     */
+    jornadasMen: text('jornadas_men').array(),
     /** Override del color semilla Material Design 3 por colegio (hex). */
     primaryColor: text('primary_color'),
     /** Segunda y tercera semilla de la paleta del colegio (hex). */

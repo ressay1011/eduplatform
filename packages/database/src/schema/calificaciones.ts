@@ -112,14 +112,14 @@ export const notasPeriodo = pgTable(
     estudianteId: uuid('estudiante_id')
       .notNull()
       .references(() => estudiantes.id, { onDelete: 'cascade' }),
-    /** null cuando el colegio valora por ÁREA. */
-    asignaturaId: uuid('asignatura_id').references(() => asignaturas.id, { onDelete: 'restrict' }),
-    areaId: uuid('area_id')
-      .notNull()
-      .references(() => areas.id, { onDelete: 'restrict' }),
     grupoId: uuid('grupo_id')
       .notNull()
       .references(() => grupos.id, { onDelete: 'restrict' }),
+    areaId: uuid('area_id')
+      .notNull()
+      .references(() => areas.id, { onDelete: 'restrict' }),
+    /** null cuando el colegio valora por ÁREA. */
+    asignaturaId: uuid('asignatura_id').references(() => asignaturas.id, { onDelete: 'restrict' }),
     /** null = "Sin calificar" (período cerrado con notas faltantes). */
     notaFinal: numeric('nota_final', { precision: 4, scale: 2 }),
     /** null en el caso "Sin calificar" (D.1290 exige nivel si hay nota). */

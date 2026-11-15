@@ -125,6 +125,10 @@ export const grupos = pgTable(
     gradoId: uuid('grado_id')
       .notNull()
       .references(() => grados.id, { onDelete: 'restrict' }),
+    /** Docente director de grupo (nullable). */
+    directorGrupoId: uuid('director_grupo_id').references(() => usuarios.id, {
+      onDelete: 'set null',
+    }),
     letra: text('letra').notNull(),
     jornada: text('jornada', {
       enum: [
@@ -136,10 +140,6 @@ export const grupos = pgTable(
         Jornada.FIN_SEMANA,
       ],
     }).notNull(),
-    /** Docente director de grupo (nullable). */
-    directorGrupoId: uuid('director_grupo_id').references(() => usuarios.id, {
-      onDelete: 'set null',
-    }),
     cupoMaximo: integer('cupo_maximo'),
     ...timestamps,
   },
