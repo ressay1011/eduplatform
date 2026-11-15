@@ -241,7 +241,10 @@ describe('DaneService', () => {
     const urlSedes = fetchMock.mock.calls
       .map(([u]) => new URL(String(u)))
       .find((u) => u.pathname.includes('ngw5-c5nw'));
-    expect(urlSedes?.searchParams.get('$where')).toBe('codigo_dane=147555000295');
+    // El año del establecimiento (2025) acota la consulta: dos vigencias.
+    expect(urlSedes?.searchParams.get('$where')).toBe(
+      'codigo_dane=147555000295 AND anno_inf >= 2024',
+    );
     expect(urlSedes?.searchParams.get('$group')).toBe(
       'anno_inf,codigo_dane_sede,nombre_sede,zona,tipo_jornada',
     );

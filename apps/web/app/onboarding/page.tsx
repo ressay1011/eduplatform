@@ -83,6 +83,7 @@ const JORNADAS: { valor: Jornada; texto: string }[] = [
   { valor: Jornada.COMPLETA, texto: 'Completa' },
   { valor: Jornada.UNICA, texto: 'Única' },
   { valor: Jornada.NOCTURNA, texto: 'Noche' },
+  { valor: Jornada.FIN_SEMANA, texto: 'Fin de semana' },
 ];
 
 const NIVELES: { id: string; texto: string; grados: number[] }[] = [
@@ -2635,11 +2636,11 @@ export default function OnboardingPage() {
 
               <p className="onb-nota">
                 Columnas: documento, nombres, apellidos, correo, sede, grado (6 o 6°), letra,
-                jornada (Mañana, Tarde, Noche o Única), fechaNacimiento opcional, condicion opcional
-                (Nuevo, Antiguo, Repitente, Reingreso o Trasladado; se asume Nuevo) y tipoDocumento
-                opcional (CC, TI, CE, RC, PEP o PPT), que solo hace falta si dos cuentas comparten
-                el número. Solo se matriculan cuentas que ya existen; si el estudiante no tiene
-                ficha, agrega la fecha de nacimiento.
+                jornada (Mañana, Tarde, Noche, Única o Sabatina), fechaNacimiento opcional,
+                condicion opcional (Nuevo, Antiguo, Repitente, Reingreso o Trasladado; se asume
+                Nuevo) y tipoDocumento opcional (CC, TI, CE, RC, PEP o PPT), que solo hace falta si
+                dos cuentas comparten el número. Solo se matriculan cuentas que ya existen; si el
+                estudiante no tiene ficha, agrega la fecha de nacimiento.
               </p>
 
               {cursosQ.isLoading && <p className="onb-nota">Cargando cursos del año lectivo…</p>}

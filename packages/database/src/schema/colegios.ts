@@ -175,7 +175,7 @@ export const sedes = pgTable(
     departamento: text('departamento').notNull().default(''),
     activa: boolean('activa').notNull().default(true),
     /**
-     * Jornadas que ofrece la sede (Mañana/Tarde/Noche/Única/Completa).
+     * Jornadas que ofrece la sede (Mañana/Tarde/Noche/Única/Completa/Sabatina).
      * Cada curso elige una de estas; una sede sin jornadas no puede tener cursos.
      */
     jornadas: jsonb('jornadas')

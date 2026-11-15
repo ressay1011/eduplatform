@@ -179,6 +179,11 @@ const JORNADAS: Record<string, string> = {
   unica: 'UNICA',
   completa: 'COMPLETA',
   completo: 'COMPLETA',
+  sabado: 'FIN_SEMANA',
+  sabados: 'FIN_SEMANA',
+  sabatina: 'FIN_SEMANA',
+  findesemana: 'FIN_SEMANA',
+  'fin de semana': 'FIN_SEMANA',
 };
 
 export function normalizarJornada(texto: string): string | null {

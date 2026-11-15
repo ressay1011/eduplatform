@@ -41,6 +41,7 @@ const ORDEN_JORNADAS: Jornada[] = [
   Jornada.COMPLETA,
   Jornada.UNICA,
   Jornada.NOCTURNA,
+  Jornada.FIN_SEMANA,
 ];
 const TTL_MS = 6 * 60 * 60 * 1000;
 /** El admin espera delante del botón: mejor fallar rápido que colgar la UI. */
@@ -87,7 +88,11 @@ export class DaneService {
     const enCache = this.cache.get(codigo);
     if (enCache !== undefined && enCache.expira > Date.now()) return enCache.datos;
 
-    const [fila, men] = await Promise.all([this.consultar(codigo), this.consultarSedes(codigo)]);
+    // En serie y no en paralelo: el año del reporte del establecimiento acota la
+    // consulta de sedes. Sin él, Socrata agrupa todas las vigencias y la petición
+    // se pasa de los 8 s en colegios grandes (medido con el piloto).
+    const fila = await this.consultar(codigo);
+    const men = await this.consultarSedes(codigo, this.numero(fila.a_o) ?? undefined);
     const datos = this.aColegio(codigo, fila, men.jornadas, men.sedesMen);
 
     if (this.cache.size >= MAX_CACHE) this.cache.clear();
@@ -174,10 +179,17 @@ export class DaneService {
    */
   private async consultarSedes(
     codigo: string,
+    anioReporte: number | undefined,
   ): Promise<{ jornadas: Jornada[]; sedesMen: SedeMen[] }> {
     const vacio: { jornadas: Jornada[]; sedesMen: SedeMen[] } = { jornadas: [], sedesMen: [] };
+    // La matrícula puede ir un año por detrás del establecimiento: se piden dos
+    // vigencias y en código se toma la mayor.
+    const desde = anioReporte === undefined ? 0 : anioReporte - 1;
     const url = new URL(URL_SEDES);
-    url.searchParams.set('$where', `codigo_dane=${codigo}`);
+    url.searchParams.set(
+      '$where',
+      desde === 0 ? `codigo_dane=${codigo}` : `codigo_dane=${codigo} AND anno_inf >= ${desde}`,
+    );
     url.searchParams.set(
       '$select',
       'anno_inf,codigo_dane_sede,nombre_sede,zona,tipo_jornada,sum(total_matricula) as matricula',
@@ -258,6 +270,8 @@ export class DaneService {
       UNICA: Jornada.UNICA,
       NOCTURNA: Jornada.NOCTURNA,
       NOCHE: Jornada.NOCTURNA,
+      'FIN DE SEMANA': Jornada.FIN_SEMANA,
+      SABATINA: Jornada.FIN_SEMANA,
     };
     const salida: Jornada[] = [];
     for (const parte of limpio.split(',')) {

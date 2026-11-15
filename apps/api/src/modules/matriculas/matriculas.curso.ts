@@ -35,6 +35,11 @@ const JORNADAS_POR_TEXTO: Record<string, Jornada> = {
   unica: Jornadas.UNICA,
   completa: Jornadas.COMPLETA,
   completo: Jornadas.COMPLETA,
+  sabado: Jornadas.FIN_SEMANA,
+  sabados: Jornadas.FIN_SEMANA,
+  sabatina: Jornadas.FIN_SEMANA,
+  'fin de semana': Jornadas.FIN_SEMANA,
+  findesemana: Jornadas.FIN_SEMANA,
 };
 
 /** «Transición»/«0» → 0; «6»/«6°» → 6. Devuelve null si no es un grado válido. */
@@ -47,7 +52,7 @@ export function numeroDeGrado(texto: string): number | null {
   return Number.isInteger(numero) && numero >= 0 && numero <= 11 ? numero : null;
 }
 
-/** Acepta «Mañana», «MANANA», «am», «Completa»… */
+/** Acepta «Mañana», «MANANA», «am», «Sabatina»… */
 export function jornadaDeTexto(texto: string): Jornada | null {
   const limpio = normalizar(texto);
   return JORNADAS_POR_TEXTO[limpio] ?? null;

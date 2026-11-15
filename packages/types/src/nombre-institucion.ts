@@ -374,12 +374,39 @@ const PREFIJOS_SEDE = new Set([
  * aplica la misma regla de Título, conectores y tildes que al nombre del
  * colegio. Es una sugerencia: el admin la edita en el paso de sedes.
  */
+/** Palabras que solo indican «cuál» sede es, no cómo se llama. */
+const SUFIJOS_SEDE = new Set(['PRINCIPAL', 'UNICA', 'ANEXA', 'ANEXO', 'SEDE']);
+
+/**
+ * Preposiciones que quedan colgando al quitar el tipo de sede («CENTRO
+ * EDUCATIVO **DE** …»). Los artículos NO se tocan: «Los Pozos» y «La Floresta»
+ * empiezan así y son parte del nombre.
+ */
+const INICIOS_HUERFANOS = new Set(['DE', 'DEL']);
+
+/**
+ * Quita un segmento final que solo dice qué sede es: «… - SEDE PRINCIPAL»,
+ * «… - SEDE 2». Sin esto el nombre queda «… - Sede Principal», que no es el
+ * nombre del establecimiento.
+ */
+function sinSufijoDeSede(nombre: string): string {
+  const partes = nombre.split(/\s+[-–]\s+/);
+  if (partes.length < 2) return nombre;
+  const ultima = partes[partes.length - 1] ?? '';
+  const tokens = tokenizar(ultima);
+  const soloTipo = tokens.every((t) => SUFIJOS_SEDE.has(t.clave) || /^\d{1,2}$/.test(t.clave));
+  return soloTipo ? partes.slice(0, -1).join(' - ') : nombre;
+}
+
 export function nombreSedeMen(nombre: string): string {
-  const tokens = tokenizar(nombre);
+  const sinSufijo = sinSufijoDeSede(nombre.replace(/\s+/g, ' ').trim());
+  const tokens = tokenizar(sinSufijo);
   const original = nombre.replace(/\s+/g, ' ').trim();
 
   let i = 0;
   while (i < tokens.length - 1 && PREFIJOS_SEDE.has(tokens[i]?.clave ?? '')) i += 1;
+  // «CENTRO EDUCATIVO DE …» deja un «DE» suelto al quitar el tipo.
+  while (i < tokens.length - 1 && INICIOS_HUERFANOS.has(tokens[i]?.clave ?? '')) i += 1;
   const resto = tokens.slice(i);
 
   const titulo = resto

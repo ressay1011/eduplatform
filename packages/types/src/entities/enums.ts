@@ -68,6 +68,7 @@ export const Jornada = {
   COMPLETA: 'COMPLETA',
   UNICA: 'UNICA',
   NOCTURNA: 'NOCTURNA',
+  FIN_SEMANA: 'FIN_SEMANA',
 } as const;
 export type Jornada = (typeof Jornada)[keyof typeof Jornada];
 

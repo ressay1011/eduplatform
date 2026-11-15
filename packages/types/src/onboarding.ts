@@ -76,7 +76,7 @@ export const ColegioOnboardingSchema = z
      * Jornadas que el MEN publica para el colegio. Se guardan al buscar el código
      * DANE y el wizard las propone en el paso de sedes (también tras recargar).
      */
-    jornadasMen: z.array(z.enum(JORNADAS)).max(5).optional(),
+    jornadasMen: z.array(z.enum(JORNADAS)).max(6).optional(),
     /**
      * Año lectivo del colegio. La ventana (anterior, actual y próximo) se valida
      * abajo, junto con las fechas de los períodos, porque depende del año en curso.
@@ -153,7 +153,7 @@ export const SedeOnboardingSchema = z.object({
   /** Municipio de la sede: puede no ser el del colegio. */
   municipio: z.string().trim().max(80).optional(),
   departamento: z.string().trim().max(80).optional(),
-  jornadas: z.array(z.enum(JORNADAS)).min(1, 'Elige al menos una jornada').max(5),
+  jornadas: z.array(z.enum(JORNADAS)).min(1, 'Elige al menos una jornada').max(6),
 });
 export type SedeOnboardingRequest = z.input<typeof SedeOnboardingSchema>;
 

@@ -112,6 +112,16 @@ describe('nombreSedeMen', () => {
     expect(nombreSedeMen('CENTRO EDUCATIVO RURAL LA FLORESTA')).toBe('La Floresta');
   });
 
+  // Caso real de `ngw5-c5nw` 2025 (Turbo, Antioquia): nombre con siglas, guion
+  // y «Sede Principal» al final. Antes salía «de Estudios Técnicos Ceprodent -
+  // Sede Principal».
+  it('quita el sufijo «- Sede Principal» y la preposición que queda suelta', () => {
+    expect(nombreSedeMen('I.E. CENTRO DE ESTUDIOS TÉCNICOS  CEPRODENT  - SEDE PRINCIPAL')).toBe(
+      'Estudios Técnicos Ceprodent',
+    );
+    expect(nombreSedeMen('COLEGIO SAN JOSE - SEDE 2')).toBe('San José');
+  });
+
   it('si el nombre era solo el tipo de sede, no lo deja vacío', () => {
     expect(nombreSedeMen('ESCUELA RURAL')).toBe('Escuela rural');
   });
