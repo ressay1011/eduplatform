@@ -28,6 +28,7 @@ import {
   type CursoMatricula,
   type EstadoOnboarding,
   type ResultadoImportacionMatriculas,
+  type SedeMen,
   type SedeOnboarding,
   type TipoDocumento,
 } from '@eduplatform/types';
@@ -36,6 +37,7 @@ import { SelectField } from '@/components/SelectField';
 import { TextField } from '@/components/TextField';
 import { Toast } from '@/components/Toast';
 import { esEmailValido, esNitValido, esTelefonoValido } from '@/lib/validacion';
+import { sedesPendientes, yaLaTienes } from '@/lib/onboarding-sedes';
 import { useEmpleados, useRoles, useSedes } from '@/hooks/usePersonas';
 import { SESION_KEY } from '@/hooks/useSesion';
 import { useAnchoMovil } from '@/hooks/useAnchoMovil';
@@ -81,7 +83,6 @@ const JORNADAS: { valor: Jornada; texto: string }[] = [
   { valor: Jornada.COMPLETA, texto: 'Completa' },
   { valor: Jornada.UNICA, texto: 'Única' },
   { valor: Jornada.NOCTURNA, texto: 'Noche' },
-  { valor: Jornada.FIN_SEMANA, texto: 'Fin de semana' },
 ];
 
 const NIVELES: { id: string; texto: string; grados: number[] }[] = [
@@ -252,6 +253,17 @@ export default function OnboardingPage() {
   /** Errores de validación por campo; se pintan bajo cada campo y se limpian al escribir. */
   const [errores, setErrores] = useState<Record<string, string>>({});
   const [periodos, setPeriodos] = useState<PeriodoForm[]>([]);
+  /**
+   * Sedes que publica el MEN para el colegio (sugerencia del paso 3) y el año
+   * del reporte. Llegan con la consulta del DANE; si el asistente se retoma,
+   * se vuelven a pedir al entrar al paso (la API las cachea 6 h).
+   */
+  const [sedesMen, setSedesMen] = useState<SedeMen[]>([]);
+  const [anioMen, setAnioMen] = useState(0);
+  /** La lista de sedes del MEN se despliega solo si el admin la pide. */
+  const [verSedesMen, setVerSedesMen] = useState(false);
+  /** Código DANE con el que ya se pidieron las sedes (evita repetir la consulta). */
+  const sedesMenPedidasRef = useRef('');
   /**
    * Último calendario que el servidor aceptó (o el que trajo la carga).
    *
@@ -438,7 +450,35 @@ export default function OnboardingPage() {
     }
   }, [data]);
 
+  /**
+   * Paso 3: las sedes del MEN llegan con la consulta del DANE del paso 1. Si el
+   * asistente se retoma más tarde, esa consulta no se repite, así que aquí se
+   * piden una sola vez por código al abrir el paso. Sin datos (o con el portal
+   * caído) el paso sigue igual: las sedes se escriben a mano.
+   */
+  useEffect(() => {
+    if (paso !== 3) return;
+    const codigo = data?.colegio.codigoDane ?? '';
+    if (codigo === '' || sedesMen.length > 0 || sedesMenPedidasRef.current === codigo) return;
+    sedesMenPedidasRef.current = codigo;
+    void buscarColegioDane(codigo)
+      .then((datos) => {
+        setSedesMen(datos.sedesMen);
+        setAnioMen(datos.anio);
+      })
+      .catch(() => {
+        // Sin respuesta del MEN no se bloquea nada: el paso funciona a mano.
+      });
+  }, [paso, sedesMen.length, data?.colegio.codigoDane]);
+
   const cursosPrevistos = useMemo(() => grados.length * letras.length, [grados, letras]);
+  /** Sedes del MEN que todavía no están creadas en el colegio. */
+  const sedesMenPendientes = useMemo(
+    () => sedesPendientes(sedesMen, data?.sedes ?? []),
+    [sedesMen, data?.sedes],
+  );
+  /** Texto de la jornada como se lee en la UI («Noche», no «NOCTURNA»). */
+  const textoJornada = (j: Jornada): string => JORNADAS.find((x) => x.valor === j)?.texto ?? j;
   const sedeActual = data?.sedes.find((s) => s.id === sedeId) ?? data?.sedes[0];
 
   /**
@@ -862,6 +902,9 @@ export default function OnboardingPage() {
       const datos = await buscarColegioDane(codigo);
       if (id !== busquedaRef.current) return;
       setCodigoBuscado(codigo);
+      sedesMenPedidasRef.current = codigo;
+      setSedesMen(datos.sedesMen);
+      setAnioMen(datos.anio);
       // El MEN manda «INSTITUCION EDUCATIVA TECNICA DEPARTAMENTAL …»: lo
       // dejamos en «I.E.T.D. …» antes de prellenar, y el admin ajusta si quiere.
       const nombre = nombreSaneado(datos.nombre);
@@ -918,6 +961,8 @@ export default function OnboardingPage() {
         setPeriodos([]);
         setErrores({});
         setCodigoBuscado(null);
+        setSedesMen([]);
+        setAnioMen(0);
       }
     } finally {
       if (id === busquedaRef.current) {
@@ -1078,6 +1123,64 @@ export default function OnboardingPage() {
       setGuardando(false);
     }
     nuevaSede();
+  }
+
+  /**
+   * «Traer las N»: guarda lo que haya en el formulario (casi siempre la sede
+   * «Principal» con la dirección del colegio) y crea las sedes del MEN que
+   * falten, cada una con su código DANE y sus jornadas. Se hace una por una con
+   * el mismo endpoint del alta: todas pasan por la misma validación.
+   */
+  async function traerSedesMen(): Promise<void> {
+    const pendientes = sedesPendientes(sedesMen, data?.sedes ?? []);
+    if (pendientes.length === 0) return;
+
+    const municipioColegio = data?.colegio.municipio ?? '';
+    const departamentoColegio = data?.colegio.departamento ?? '';
+    setGuardando(true);
+    setAviso(null);
+    try {
+      let estado: EstadoOnboarding | null = null;
+      let idPrincipal: string | null = null;
+
+      const nombreActual = sede.nombre.trim();
+      if (nombreActual !== '' && sede.jornadas.length > 0) {
+        estado = await guardarSedeOnboarding({
+          id: sedeId === '' ? undefined : sedeId,
+          nombre: nombreActual,
+          direccion: sede.direccion === '' ? undefined : sede.direccion,
+          municipio: sede.municipio === '' ? undefined : sede.municipio,
+          departamento: sede.departamento === '' ? undefined : sede.departamento,
+          jornadas: sede.jornadas,
+        });
+        if (sedeId === '') idPrincipal = estado.sedes.at(-1)?.id ?? null;
+      }
+
+      for (const propuesta of pendientes) {
+        estado = await guardarSedeOnboarding({
+          nombre: propuesta.nombre,
+          codigoDaneSede: propuesta.codigoDaneSede,
+          municipio: municipioColegio === '' ? undefined : municipioColegio,
+          departamento: departamentoColegio === '' ? undefined : departamentoColegio,
+          jornadas: propuesta.jornadas,
+        });
+      }
+
+      if (estado !== null) aplicar(estado);
+      // Si la sede abierta era nueva, queda abierta la que se acaba de guardar:
+      // así «Continuar» no la vuelve a crear.
+      if (idPrincipal !== null) setSedeId(idPrincipal);
+      setVerSedesMen(false);
+      setExito(
+        pendientes.length === 1
+          ? 'Sede del MEN agregada.'
+          : `${pendientes.length} sedes del MEN agregadas.`,
+      );
+    } catch (e) {
+      setAviso(e instanceof ApiError ? e.message : 'No se pudieron agregar las sedes del MEN.');
+    } finally {
+      setGuardando(false);
+    }
   }
 
   /** Elimina la sede abierta: el primer clic pide confirmación. */
@@ -2082,6 +2185,58 @@ export default function OnboardingPage() {
                   </button>
                 )}
               </div>
+              {sedesMen.length > 0 && sedesMenPendientes.length > 0 && (
+                <div className="onb-men">
+                  <div className="onb-men-cab">
+                    <div>
+                      <p className="onb-men-tit">
+                        El MEN reporta {sedesMen.length} {sedesMen.length === 1 ? 'sede' : 'sedes'}
+                      </p>
+                      <p className="onb-men-sub">
+                        {anioMen > 0 ? `Reporte ${anioMen} · ` : ''}
+                        se crean con su código DANE y sus jornadas
+                      </p>
+                    </div>
+                    <div className="onb-men-acciones">
+                      <button
+                        type="button"
+                        className="onb-men-ver"
+                        aria-expanded={verSedesMen}
+                        onClick={() => setVerSedesMen((v) => !v)}
+                      >
+                        {verSedesMen ? 'Ocultar' : `Ver las ${sedesMen.length}`}
+                      </button>
+                      <M3Button onClick={() => void traerSedesMen()} disabled={guardando}>
+                        {sedesMenPendientes.length === 1
+                          ? 'Traer la que falta'
+                          : `Traer las ${sedesMenPendientes.length}`}
+                      </M3Button>
+                    </div>
+                  </div>
+                  {verSedesMen && (
+                    <ul className="onb-men-lista">
+                      {sedesMen.map((s) => (
+                        <li key={s.codigoDaneSede}>
+                          <span>
+                            <span className="onb-men-nombre">{s.nombre}</span>
+                            <span className="onb-men-meta">
+                              {s.jornadas.map(textoJornada).join(' · ')}
+                              {s.zona === null ? '' : ` · ${s.zona}`}
+                              {s.matricula > 0 ? ` · ${s.matricula} estudiantes` : ''}
+                            </span>
+                          </span>
+                          <span className="onb-men-estado">
+                            {yaLaTienes(s, data.sedes) ? 'Ya la tienes' : 'Falta'}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <p className="onb-men-nota">
+                    Se agregan las que faltan; la sede abierta se guarda tal como está.
+                  </p>
+                </div>
+              )}
               <div className="onb-grid">
                 <TextField
                   id="onb-sede-nombre"
@@ -2480,11 +2635,11 @@ export default function OnboardingPage() {
 
               <p className="onb-nota">
                 Columnas: documento, nombres, apellidos, correo, sede, grado (6 o 6°), letra,
-                jornada (Mañana, Tarde, Noche, Única o Sabatina), fechaNacimiento opcional,
-                condicion opcional (Nuevo, Antiguo, Repitente, Reingreso o Trasladado; se asume
-                Nuevo) y tipoDocumento opcional (CC, TI, CE, RC, PEP o PPT), que solo hace falta si
-                dos cuentas comparten el número. Solo se matriculan cuentas que ya existen; si el
-                estudiante no tiene ficha, agrega la fecha de nacimiento.
+                jornada (Mañana, Tarde, Noche o Única), fechaNacimiento opcional, condicion opcional
+                (Nuevo, Antiguo, Repitente, Reingreso o Trasladado; se asume Nuevo) y tipoDocumento
+                opcional (CC, TI, CE, RC, PEP o PPT), que solo hace falta si dos cuentas comparten
+                el número. Solo se matriculan cuentas que ya existen; si el estudiante no tiene
+                ficha, agrega la fecha de nacimiento.
               </p>
 
               {cursosQ.isLoading && <p className="onb-nota">Cargando cursos del año lectivo…</p>}

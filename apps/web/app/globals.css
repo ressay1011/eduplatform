@@ -3007,6 +3007,101 @@ body {
   background: var(--md-sys-color-error-container);
   font-weight: 600;
 }
+/* Paso 3: sedes que publica el MEN. Bloque compacto con la lista bajo demanda
+   (maqueta `docs/diseno/onboarding/sedes-men.html`, variante B). */
+.onb-men {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px dashed var(--md-sys-color-outline);
+  border-radius: 12px;
+  background: var(--md-sys-color-surface-container-lowest);
+}
+.onb-men-cab {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.onb-men-tit {
+  margin: 0;
+  font: 600 14px/20px var(--md-ref-typeface-plain);
+}
+.onb-men-sub {
+  margin: 2px 0 0;
+  color: var(--md-sys-color-on-surface-variant);
+  font: 400 12px/17px var(--md-ref-typeface-plain);
+}
+.onb-men-acciones {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+.onb-men-ver {
+  height: 40px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--md-sys-color-primary);
+  font: 500 13px/18px var(--md-ref-typeface-plain);
+  cursor: pointer;
+}
+.onb-men-ver:hover {
+  background: var(--md-sys-color-surface-container-high);
+}
+.onb-men-lista {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--md-sys-color-surface-container-high);
+}
+.onb-men-lista li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--md-sys-color-surface-container-high);
+}
+.onb-men-lista li:last-child {
+  border-bottom: 0;
+}
+.onb-men-nombre {
+  display: block;
+  font: 500 13px/18px var(--md-ref-typeface-plain);
+}
+.onb-men-meta {
+  display: block;
+  color: var(--md-sys-color-on-surface-variant);
+  font: 400 12px/16px var(--md-ref-typeface-plain);
+}
+.onb-men-estado {
+  flex: 0 0 auto;
+  color: var(--md-sys-color-on-surface-variant);
+  font: 500 12px/16px var(--md-ref-typeface-plain);
+}
+.onb-men-nota {
+  margin: 0;
+  color: var(--md-sys-color-on-surface-variant);
+  font: 400 11px/16px var(--md-ref-typeface-plain);
+}
+/* Teléfono: el bloque pasa a una columna y la acción ocupa el ancho. */
+@media (max-width: 600px) {
+  .onb-men-cab {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .onb-men-acciones {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+  .onb-men-acciones .m3-btn {
+    flex: 1 1 100%;
+  }
+}
 /* Paso 2 en el teléfono: calendario y año a todo el ancho, y el contador con
    sitio para leerse (antes iba apretado junto al botón). */
 @media (max-width: 600px) {

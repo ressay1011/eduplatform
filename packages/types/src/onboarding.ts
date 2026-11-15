@@ -76,7 +76,7 @@ export const ColegioOnboardingSchema = z
      * Jornadas que el MEN publica para el colegio. Se guardan al buscar el código
      * DANE y el wizard las propone en el paso de sedes (también tras recargar).
      */
-    jornadasMen: z.array(z.enum(JORNADAS)).max(6).optional(),
+    jornadasMen: z.array(z.enum(JORNADAS)).max(5).optional(),
     /**
      * Año lectivo del colegio. La ventana (anterior, actual y próximo) se valida
      * abajo, junto con las fechas de los períodos, porque depende del año en curso.
@@ -153,7 +153,7 @@ export const SedeOnboardingSchema = z.object({
   /** Municipio de la sede: puede no ser el del colegio. */
   municipio: z.string().trim().max(80).optional(),
   departamento: z.string().trim().max(80).optional(),
-  jornadas: z.array(z.enum(JORNADAS)).min(1, 'Elige al menos una jornada').max(6),
+  jornadas: z.array(z.enum(JORNADAS)).min(1, 'Elige al menos una jornada').max(5),
 });
 export type SedeOnboardingRequest = z.input<typeof SedeOnboardingSchema>;
 
@@ -173,6 +173,24 @@ export const EstructuraOnboardingSchema = z.object({
     .max(10),
 });
 export type EstructuraOnboardingRequest = z.input<typeof EstructuraOnboardingSchema>;
+
+/**
+ * Sede que publica el MEN para el establecimiento (dataset de matrícula por
+ * sede y jornada). Es una SUGERENCIA para el paso de sedes: el admin decide
+ * cuáles crear y edita después nombre, dirección y municipio.
+ */
+export interface SedeMen {
+  /** Código DANE de la sede; el del colegio cuando es la principal. */
+  codigoDaneSede: string;
+  /** Nombre saneado («EUM SAN JOSE» → «San José»). */
+  nombre: string;
+  jornadas: Jornada[];
+  /** «Urbana» / «Rural», tal como lo publica el MEN. */
+  zona: string | null;
+  matricula: number;
+  /** Su código coincide con el del colegio: es la sede principal. */
+  esPrincipal: boolean;
+}
 
 /**
  * Datos del establecimiento que devuelve la consulta por código DANE
@@ -202,6 +220,11 @@ export interface ColegioDane {
    * el dataset no lo tiene: son una sugerencia para el paso 2, no un requisito.
    */
   jornadas: Jornada[];
+  /**
+   * Sedes que publica el MEN con sus jornadas, zona y matrícula. Llega vacía
+   * cuando el dataset no responde: el paso de sedes sigue funcionando a mano.
+   */
+  sedesMen: SedeMen[];
 }
 
 /** Sede tal como la devuelve la API. */

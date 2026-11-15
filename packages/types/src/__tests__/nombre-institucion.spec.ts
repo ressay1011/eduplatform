@@ -5,7 +5,7 @@
  * ejemplos inventados: si uno de estos cambia de forma, es una regresión.
  */
 import { describe, expect, it } from 'vitest';
-import { nombreOficialMen, nombreSaneado } from '../index';
+import { nombreOficialMen, nombreSaneado, nombreSedeMen } from '../index';
 
 describe('nombreSaneado', () => {
   it.each([
@@ -90,5 +90,29 @@ describe('nombreOficialMen', () => {
   it('no inventa nada sobre un nombre ya correcto', () => {
     expect(nombreOficialMen('COLEGIO SAN JOSÉ DE CALASANZ')).toBe('COLEGIO SAN JOSÉ DE CALASANZ');
     expect(nombreOficialMen('')).toBe('');
+  });
+});
+
+describe('nombreSedeMen', () => {
+  // Los siete nombres reales que publica el MEN para el colegio del piloto.
+  it.each([
+    ['EUM SAN JOSE', 'San José'],
+    ['CENT EDUC JUANA ARIAS DE BENAVIDES', 'Juana Arias de Benavides'],
+    ['EUM RODRIGO VIVES DE ANDREIS', 'Rodrigo Vives de Andreis'],
+    ['ERM  SAN ANTONIO DEL RIO', 'San Antonio del Río'],
+    ['ERM LOS POZOS', 'Los Pozos'],
+    ['ERM CARMEN DEL MAGDALENA', 'Carmen del Magdalena'],
+    ['ERM SAN JOSE DEL PURGATORIO', 'San José del Purgatorio'],
+  ])('«%s» → «%s»', (men, esperado) => {
+    expect(nombreSedeMen(men)).toBe(esperado);
+  });
+
+  it('quita el tipo de sede también cuando viene escrito completo', () => {
+    expect(nombreSedeMen('SEDE PRINCIPAL')).toBe('Principal');
+    expect(nombreSedeMen('CENTRO EDUCATIVO RURAL LA FLORESTA')).toBe('La Floresta');
+  });
+
+  it('si el nombre era solo el tipo de sede, no lo deja vacío', () => {
+    expect(nombreSedeMen('ESCUELA RURAL')).toBe('Escuela rural');
   });
 });

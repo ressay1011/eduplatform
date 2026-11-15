@@ -127,16 +127,36 @@ describe('DaneService', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it('propone las jornadas del año más reciente y descarta las históricas', async () => {
+  it('propone las sedes del MEN con su nombre saneado, sus jornadas y su matrícula', async () => {
     fetchMock.mockImplementation((url: string) =>
       Promise.resolve(
         String(url).includes('ngw5-c5nw')
           ? json([
-              { anno_inf: '2025', tipo_jornada: 'Mañana' },
-              { anno_inf: '2025', tipo_jornada: 'Tarde' },
-              { anno_inf: '2025', tipo_jornada: 'Nocturna' },
-              // Jornada retirada: solo aparece en el histórico (2010).
-              { anno_inf: '2010', tipo_jornada: 'Fin de Semana' },
+              // Principal (mismo DANE del colegio), dos jornadas.
+              {
+                anno_inf: '2025',
+                codigo_dane_sede: '147555000295',
+                nombre_sede: 'CENT EDUC JUANA ARIAS DE BENAVIDES',
+                zona: 'Urbana',
+                tipo_jornada: 'Mañana',
+                matricula: '850',
+              },
+              {
+                anno_inf: '2025',
+                codigo_dane_sede: '147555000295',
+                nombre_sede: 'CENT EDUC JUANA ARIAS DE BENAVIDES',
+                zona: 'Urbana',
+                tipo_jornada: 'Nocturna',
+                matricula: '192',
+              },
+              {
+                anno_inf: '2025',
+                codigo_dane_sede: '247555001067',
+                nombre_sede: 'ERM LOS POZOS',
+                zona: 'Rural',
+                tipo_jornada: 'Mañana',
+                matricula: '47',
+              },
             ])
           : json([FILA]),
       ),
@@ -144,29 +164,91 @@ describe('DaneService', () => {
 
     const datos = await servicio.buscar('147555000295');
 
-    expect(datos.jornadas).toEqual(['MANANA', 'TARDE', 'NOCTURNA']);
+    expect(datos.sedesMen).toEqual([
+      {
+        codigoDaneSede: '147555000295',
+        nombre: 'Juana Arias de Benavides',
+        jornadas: ['MANANA', 'NOCTURNA'],
+        zona: 'Urbana',
+        matricula: 1042,
+        esPrincipal: true,
+      },
+      {
+        codigoDaneSede: '247555001067',
+        nombre: 'Los Pozos',
+        jornadas: ['MANANA'],
+        zona: 'Rural',
+        matricula: 47,
+        esPrincipal: false,
+      },
+    ]);
+    // Las jornadas del colegio salen de la unión de sus sedes, en orden de enum.
+    expect(datos.jornadas).toEqual(['MANANA', 'NOCTURNA']);
   });
 
-  it('pide las jornadas agrupadas por año y jornada, sin clavar el año', async () => {
+  it('descarta las sedes y jornadas de años anteriores', async () => {
     fetchMock.mockImplementation((url: string) =>
       Promise.resolve(
         String(url).includes('ngw5-c5nw')
-          ? json([{ anno_inf: '2025', tipo_jornada: 'Mañana' }])
+          ? json([
+              {
+                anno_inf: '2025',
+                codigo_dane_sede: '147555000295',
+                nombre_sede: 'SAN JOSE',
+                zona: 'Urbana',
+                tipo_jornada: 'Tarde',
+                matricula: '10',
+              },
+              // Sede que ya no aparece en el reporte vigente.
+              {
+                anno_inf: '2010',
+                codigo_dane_sede: '247555009999',
+                nombre_sede: 'ERM VIEJA',
+                zona: 'Rural',
+                tipo_jornada: 'Fin de Semana',
+                matricula: '5',
+              },
+            ])
+          : json([FILA]),
+      ),
+    );
+
+    const datos = await servicio.buscar('147555000295');
+
+    expect(datos.sedesMen.map((s) => s.codigoDaneSede)).toEqual(['147555000295']);
+    expect(datos.jornadas).toEqual(['TARDE']);
+  });
+
+  it('pide las sedes agrupadas por año, sede y jornada, sin clavar el año', async () => {
+    fetchMock.mockImplementation((url: string) =>
+      Promise.resolve(
+        String(url).includes('ngw5-c5nw')
+          ? json([
+              {
+                anno_inf: '2025',
+                codigo_dane_sede: '147555000295',
+                nombre_sede: 'SAN JOSE',
+                tipo_jornada: 'Mañana',
+                matricula: '1',
+              },
+            ])
           : json([FILA]),
       ),
     );
 
     await servicio.buscar('147555000295');
 
-    const urlJornadas = fetchMock.mock.calls
+    const urlSedes = fetchMock.mock.calls
       .map(([u]) => new URL(String(u)))
       .find((u) => u.pathname.includes('ngw5-c5nw'));
-    expect(urlJornadas?.searchParams.get('$where')).toBe('codigo_dane=147555000295');
-    expect(urlJornadas?.searchParams.get('$group')).toBe('anno_inf,tipo_jornada');
-    expect(urlJornadas?.searchParams.get('$order')).toBe('anno_inf DESC');
+    expect(urlSedes?.searchParams.get('$where')).toBe('codigo_dane=147555000295');
+    expect(urlSedes?.searchParams.get('$group')).toBe(
+      'anno_inf,codigo_dane_sede,nombre_sede,zona,tipo_jornada',
+    );
+    expect(urlSedes?.searchParams.get('$order')).toBe('anno_inf DESC');
   });
 
-  it('si el dataset de jornadas falla, la búsqueda sigue y las deja vacías', async () => {
+  it('si el dataset de sedes falla, la búsqueda sigue y no propone ninguna', async () => {
     fetchMock.mockImplementation((url: string) =>
       String(url).includes('ngw5-c5nw')
         ? Promise.resolve(json({ message: 'boom' }, 500))
@@ -175,6 +257,7 @@ describe('DaneService', () => {
 
     const datos = await servicio.buscar('147555000295');
 
+    expect(datos.sedesMen).toEqual([]);
     expect(datos.jornadas).toEqual([]);
     expect(datos.codigoDane).toBe('147555000295');
   });

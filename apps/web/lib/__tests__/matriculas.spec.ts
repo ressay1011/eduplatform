@@ -84,7 +84,6 @@ describe('resolución de curso y motivo', () => {
     expect(numeroDeGrado('6°')).toBe(6);
     expect(numeroDeGrado('Transición')).toBe(0);
     expect(normalizarJornada('mañana')).toBe('MANANA');
-    expect(normalizarJornada('Sabatina')).toBe('FIN_SEMANA');
     expect(normalizarJornada('Completa')).toBe('COMPLETA');
     expect(normalizarJornada('madrugada')).toBeNull();
   });

@@ -234,6 +234,7 @@ const TILDES: Readonly<Record<string, string>> = {
   pacifico: 'Pacífico',
   america: 'América',
   espana: 'España',
+  rio: 'Río',
 };
 
 /** Quita tildes y diéresis para comparar. */
@@ -334,4 +335,61 @@ export function nombreSaneado(nombre: string): string {
   if (titulo === '') return siglas;
   if (siglas === '') return titulo;
   return `${siglas} ${titulo}`;
+}
+
+/**
+ * Prefijos con que el MEN nombra el tipo de sede. No son parte del nombre:
+ * «EUM SAN JOSE» es la sede «San José» y «CENT EDUC JUANA ARIAS DE BENAVIDES»
+ * es «Juana Arias de Benavides».
+ */
+const PREFIJOS_SEDE = new Set([
+  'EUM',
+  'ERM',
+  'ESC',
+  'CENT',
+  'CENTRO',
+  'EDUCATIVA',
+  'EDUCATIVO',
+  'ESCUELA',
+  'RURAL',
+  'URBANA',
+  'URBANO',
+  'MIXTA',
+  'MIXTO',
+  'SEDE',
+  'ANEXA',
+  'ANEXO',
+  'INSTITUCION',
+  'INSTITUTO',
+  'COLEGIO',
+  'JARDIN',
+  'LICEO',
+]);
+
+/**
+ * Nombre de SEDE saneado a partir del que publica el MEN.
+ *
+ * «EUM SAN JOSE» → «San José»; «CENT EDUC JUANA ARIAS DE BENAVIDES» →
+ * «Juana Arias de Benavides». Se consumen los prefijos de tipo de sede y se
+ * aplica la misma regla de Título, conectores y tildes que al nombre del
+ * colegio. Es una sugerencia: el admin la edita en el paso de sedes.
+ */
+export function nombreSedeMen(nombre: string): string {
+  const tokens = tokenizar(nombre);
+  const original = nombre.replace(/\s+/g, ' ').trim();
+
+  let i = 0;
+  while (i < tokens.length - 1 && PREFIJOS_SEDE.has(tokens[i]?.clave ?? '')) i += 1;
+  const resto = tokens.slice(i);
+
+  const titulo = resto
+    .map((token, indice) => enTitulo(token.texto, resto[indice - 1]?.texto.toLowerCase() ?? ''))
+    .join(' ')
+    .trim();
+
+  // Un nombre que era solo el tipo de sede («ESCUELA RURAL»): se deja entero.
+  if (titulo === '' || (resto.length === 1 && PREFIJOS_SEDE.has(resto[0]?.clave ?? ''))) {
+    return capitalizar(original.toLowerCase());
+  }
+  return titulo;
 }

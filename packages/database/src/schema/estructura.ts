@@ -131,14 +131,7 @@ export const grupos = pgTable(
     }),
     letra: text('letra').notNull(),
     jornada: text('jornada', {
-      enum: [
-        Jornada.MANANA,
-        Jornada.TARDE,
-        Jornada.COMPLETA,
-        Jornada.UNICA,
-        Jornada.NOCTURNA,
-        Jornada.FIN_SEMANA,
-      ],
+      enum: [Jornada.MANANA, Jornada.TARDE, Jornada.COMPLETA, Jornada.UNICA, Jornada.NOCTURNA],
     }).notNull(),
     cupoMaximo: integer('cupo_maximo'),
     ...timestamps,

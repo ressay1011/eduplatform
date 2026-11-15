@@ -232,6 +232,8 @@ beforeEach(() => {
   vi.mocked(listarEmpleados).mockResolvedValue(personal([]));
   vi.mocked(listarCursosMatricula).mockResolvedValue([CURSO]);
   vi.mocked(guardarPasoOnboarding).mockResolvedValue(estado(6));
+  // El paso 3 pide las sedes del MEN al abrirse: por defecto, sin sedes.
+  vi.mocked(buscarColegioDane).mockResolvedValue(DANE);
 });
 
 const DANE: ColegioDane = {
@@ -251,6 +253,7 @@ const DANE: ColegioDane = {
   matricula: 3748,
   sedes: 7,
   jornadas: ['MANANA', 'COMPLETA', 'TARDE'],
+  sedesMen: [],
 };
 
 /** Colegio recién creado: todavía no tiene código DANE guardado. */
@@ -1214,6 +1217,84 @@ describe('Onboarding · paso 3 (varias sedes)', () => {
     await userEvent.click(screen.getByRole('button', { name: '¿Eliminar esta sede?' }));
 
     await waitFor(() => expect(eliminarSedeOnboarding).toHaveBeenCalledWith('sede-2'));
+  });
+
+  it('trae las sedes del MEN que faltan y esconde el bloque cuando ya están', async () => {
+    const actual = estado(3);
+    vi.mocked(getOnboarding).mockResolvedValue(actual);
+    vi.mocked(buscarColegioDane).mockResolvedValue({
+      ...DANE,
+      sedesMen: [
+        {
+          codigoDaneSede: '147555000295',
+          nombre: 'Juana Arias de Benavides',
+          jornadas: ['MANANA', 'TARDE', 'NOCTURNA'],
+          zona: 'Urbana',
+          matricula: 1703,
+          esPrincipal: true,
+        },
+        {
+          codigoDaneSede: '147555000040',
+          nombre: 'San José',
+          jornadas: ['MANANA', 'TARDE'],
+          zona: 'Urbana',
+          matricula: 421,
+          esPrincipal: false,
+        },
+        {
+          codigoDaneSede: '247555001067',
+          nombre: 'Los Pozos',
+          jornadas: ['MANANA'],
+          zona: 'Rural',
+          matricula: 47,
+          esPrincipal: false,
+        },
+      ],
+    });
+    vi.mocked(guardarSedeOnboarding).mockResolvedValue({
+      ...actual,
+      sedes: [
+        ...actual.sedes,
+        {
+          id: 'sede-2',
+          nombre: 'San José',
+          codigoDaneSede: '147555000040',
+          direccion: null,
+          municipio: 'Plato',
+          departamento: 'Magdalena',
+          jornadas: ['MANANA', 'TARDE'],
+        },
+        {
+          id: 'sede-3',
+          nombre: 'Los Pozos',
+          codigoDaneSede: '247555001067',
+          direccion: null,
+          municipio: 'Plato',
+          departamento: 'Magdalena',
+          jornadas: ['MANANA'],
+        },
+      ],
+    });
+    renderPagina();
+
+    // La «Principal» ya existe (se reconoce sin el prefijo «Sede»), así que se
+    // ofrecen las dos que faltan.
+    expect(await screen.findByText('El MEN reporta 3 sedes')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Traer las 2' }));
+
+    await waitFor(() =>
+      expect(guardarSedeOnboarding).toHaveBeenCalledWith(
+        expect.objectContaining({ nombre: 'San José', codigoDaneSede: '147555000040' }),
+      ),
+    );
+    expect(guardarSedeOnboarding).toHaveBeenCalledWith(
+      expect.objectContaining({ nombre: 'Los Pozos', codigoDaneSede: '247555001067' }),
+    );
+    // Se guardó también la sede abierta antes de crear las del MEN.
+    expect(guardarSedeOnboarding).toHaveBeenCalledTimes(3);
+    await waitFor(() =>
+      expect(screen.queryByText('El MEN reporta 3 sedes')).not.toBeInTheDocument(),
+    );
   });
 
   it('con una sola sede, eliminar está deshabilitado', async () => {

@@ -15,18 +15,33 @@
  *    código se consulta desde el navegador del admin.
  */
 import { Injectable, Logger } from '@nestjs/common';
-import { Calendario, ErrorCodes, Jornada, type ColegioDane } from '@eduplatform/types';
+import {
+  Calendario,
+  ErrorCodes,
+  Jornada,
+  nombreSedeMen,
+  type ColegioDane,
+  type SedeMen,
+} from '@eduplatform/types';
 import { env } from '../../config/env';
 import { apiError } from '../../shared/api-error';
 
 /** Dataset «ESTABLECIMIENTOS EDUCATIVOS» del MEN (Socrata). */
 const URL_DATASET = 'https://www.datos.gov.co/resource/cfw5-qzt5.json';
 /**
- * Matrícula por sede/jornada. El dataset de establecimientos no trae jornadas y
- * el DEPA (`emd6-ef7x`) solo cubre Boyacá —fuera de allí devuelve `[]`—, así que
- * la fuente que sirve en todo el país es esta, agrupada por año y jornada.
+ * Matrícula por sede/jornada/grado. El dataset de establecimientos no trae ni
+ * sedes ni jornadas, y el DEPA (`emd6-ef7x`) solo cubre Boyacá —fuera de allí
+ * devuelve `[]`—, así que la fuente que sirve en todo el país es esta.
  */
-const URL_JORNADAS = 'https://www.datos.gov.co/resource/ngw5-c5nw.json';
+const URL_SEDES = 'https://www.datos.gov.co/resource/ngw5-c5nw.json';
+/** Orden en que la UI muestra las jornadas (el del enum, sin «Fin de semana»). */
+const ORDEN_JORNADAS: Jornada[] = [
+  Jornada.MANANA,
+  Jornada.TARDE,
+  Jornada.COMPLETA,
+  Jornada.UNICA,
+  Jornada.NOCTURNA,
+];
 const TTL_MS = 6 * 60 * 60 * 1000;
 /** El admin espera delante del botón: mejor fallar rápido que colgar la UI. */
 const TIMEOUT_MS = 8_000;
@@ -51,6 +66,16 @@ interface FilaEstablecimiento {
   cantidad_sedes?: string;
 }
 
+/** Fila cruda del dataset de sedes (todo llega como texto). */
+interface FilaSede {
+  anno_inf?: string;
+  codigo_dane_sede?: string;
+  nombre_sede?: string;
+  zona?: string;
+  tipo_jornada?: string;
+  matricula?: string;
+}
+
 @Injectable()
 export class DaneService {
   private readonly logger = new Logger(DaneService.name);
@@ -62,11 +87,8 @@ export class DaneService {
     const enCache = this.cache.get(codigo);
     if (enCache !== undefined && enCache.expira > Date.now()) return enCache.datos;
 
-    const [fila, jornadas] = await Promise.all([
-      this.consultar(codigo),
-      this.consultarJornadas(codigo),
-    ]);
-    const datos = this.aColegio(codigo, fila, jornadas);
+    const [fila, men] = await Promise.all([this.consultar(codigo), this.consultarSedes(codigo)]);
+    const datos = this.aColegio(codigo, fila, men.jornadas, men.sedesMen);
 
     if (this.cache.size >= MAX_CACHE) this.cache.clear();
     this.cache.set(codigo, { datos, expira: Date.now() + TTL_MS });
@@ -140,19 +162,27 @@ export class DaneService {
   }
 
   /**
-   * Jornadas que el MEN publica para el establecimiento. Es una sugerencia: si
-   * el dataset no responde, no tiene la fila o trae valores desconocidos, se
-   * devuelve lo legible (quizá nada) y el paso 1 sigue funcionando igual.
+   * Sedes que el MEN publica para el establecimiento, con sus jornadas, su zona
+   * y su matrícula; y, de ahí, las jornadas que ofrece el colegio.
    *
-   * Se agrupa por (año, jornada) y se toma **solo el año más reciente**: la
-   * unión histórica arrastra jornadas que ya no se usan («Fin de Semana» solo
-   * aparece en 2010) y propondría ofertas que el colegio no tiene.
+   * Es una sugerencia: si el dataset no responde o no tiene la fila, se devuelve
+   * vacío y el wizard sigue funcionando a mano.
+   *
+   * Se agrupa por (año, sede, jornada) y se toma **solo el año más reciente**: la
+   * unión histórica arrastra jornadas retiradas («Fin de Semana» solo aparece en
+   * 2010) y sedes que ya no existen.
    */
-  private async consultarJornadas(codigo: string): Promise<Jornada[]> {
-    const url = new URL(URL_JORNADAS);
+  private async consultarSedes(
+    codigo: string,
+  ): Promise<{ jornadas: Jornada[]; sedesMen: SedeMen[] }> {
+    const vacio: { jornadas: Jornada[]; sedesMen: SedeMen[] } = { jornadas: [], sedesMen: [] };
+    const url = new URL(URL_SEDES);
     url.searchParams.set('$where', `codigo_dane=${codigo}`);
-    url.searchParams.set('$select', 'anno_inf,tipo_jornada');
-    url.searchParams.set('$group', 'anno_inf,tipo_jornada');
+    url.searchParams.set(
+      '$select',
+      'anno_inf,codigo_dane_sede,nombre_sede,zona,tipo_jornada,sum(total_matricula) as matricula',
+    );
+    url.searchParams.set('$group', 'anno_inf,codigo_dane_sede,nombre_sede,zona,tipo_jornada');
     url.searchParams.set('$order', 'anno_inf DESC');
 
     const cabeceras: Record<string, string> = { Accept: 'application/json' };
@@ -165,21 +195,55 @@ export class DaneService {
         headers: cabeceras,
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
-      if (!respuesta.ok) return [];
+      if (!respuesta.ok) return vacio;
       const cuerpo: unknown = await respuesta.json().catch(() => null);
-      if (!Array.isArray(cuerpo) || cuerpo.length === 0) return [];
+      if (!Array.isArray(cuerpo) || cuerpo.length === 0) return vacio;
 
-      const filas = cuerpo as { anno_inf?: string; tipo_jornada?: string }[];
+      const filas = cuerpo as FilaSede[];
       const ultimoAnio = filas.reduce((max, f) => Math.max(max, this.numero(f.anno_inf) ?? 0), 0);
-      const delAnio = filas
-        .filter((f) => (this.numero(f.anno_inf) ?? 0) === ultimoAnio)
-        .map((f) => f.tipo_jornada ?? '');
-      return this.aJornadas(delAnio.join(','));
+
+      const porSede = new Map<
+        string,
+        { nombre: string; zona: string | null; jornadas: Set<Jornada>; matricula: number }
+      >();
+      for (const fila of filas) {
+        if ((this.numero(fila.anno_inf) ?? 0) !== ultimoAnio) continue;
+        const codigoSede = this.texto(fila.codigo_dane_sede);
+        if (codigoSede === null) continue;
+        const actual = porSede.get(codigoSede) ?? {
+          nombre: this.texto(fila.nombre_sede) ?? '',
+          zona: this.texto(fila.zona),
+          jornadas: new Set<Jornada>(),
+          matricula: 0,
+        };
+        for (const jornada of this.aJornadas(this.texto(fila.tipo_jornada) ?? '')) {
+          actual.jornadas.add(jornada);
+        }
+        actual.matricula += this.numero(fila.matricula) ?? 0;
+        porSede.set(codigoSede, actual);
+      }
+
+      const sedesMen: SedeMen[] = [...porSede.entries()]
+        .map(([codigoDaneSede, sede]) => ({
+          codigoDaneSede,
+          nombre: nombreSedeMen(sede.nombre),
+          jornadas: ORDEN_JORNADAS.filter((j) => sede.jornadas.has(j)),
+          zona: sede.zona,
+          matricula: sede.matricula,
+          esPrincipal: codigoDaneSede === codigo,
+        }))
+        // La principal primero (es la que más matrícula tiene) y luego por tamaño.
+        .sort((a, b) => b.matricula - a.matricula);
+
+      return {
+        sedesMen,
+        jornadas: ORDEN_JORNADAS.filter((j) => sedesMen.some((s) => s.jornadas.includes(j))),
+      };
     } catch (error) {
       this.logger.warn(
-        `No se pudieron leer las jornadas del MEN para el código ${codigo}: ${error instanceof Error ? error.message : String(error)}`,
+        `No se pudieron leer las sedes del MEN para el código ${codigo}: ${error instanceof Error ? error.message : String(error)}`,
       );
-      return [];
+      return vacio;
     }
   }
 
@@ -194,8 +258,6 @@ export class DaneService {
       UNICA: Jornada.UNICA,
       NOCTURNA: Jornada.NOCTURNA,
       NOCHE: Jornada.NOCTURNA,
-      'FIN DE SEMANA': Jornada.FIN_SEMANA,
-      SABATINA: Jornada.FIN_SEMANA,
     };
     const salida: Jornada[] = [];
     for (const parte of limpio.split(',')) {
@@ -213,7 +275,12 @@ export class DaneService {
   }
 
   /** Normaliza la fila del MEN al contrato de la web. */
-  private aColegio(codigo: string, fila: FilaEstablecimiento, jornadas: Jornada[]): ColegioDane {
+  private aColegio(
+    codigo: string,
+    fila: FilaEstablecimiento,
+    jornadas: Jornada[],
+    sedesMen: SedeMen[],
+  ): ColegioDane {
     return {
       codigoDane: codigo,
       anio: this.numero(fila.a_o) ?? 0,
@@ -230,6 +297,7 @@ export class DaneService {
       matricula: this.numero(fila.total_matricula) ?? 0,
       sedes: this.numero(fila.cantidad_sedes) ?? 0,
       jornadas,
+      sedesMen,
     };
   }
 
